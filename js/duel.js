@@ -455,82 +455,154 @@ export function maakDuel(opts) {
     c.translate(x + richting * lunge * 26 * S, grond);
     c.scale(richting * S, S);
 
-    // Benen.
+    // Benen: iets meer dynamisch bij een uitval.
+    const beenVoor = lunge > 0.3 ? -20 - lunge * 22 : -14 - lunge * 10;
+    const beenAchter = lunge > 0.3 ? 10 + lunge * 8 : 6 + lunge * 12;
     c.fillStyle = '#3a2c1c';
-    c.fillRect(-14 - lunge * 10, -34, 11, 34);
-    c.fillRect(6 + lunge * 12, -34, 11, 34);
+    c.fillRect(beenVoor, -34, 11, 34);
+    c.fillRect(beenAchter, -34, 11, 34);
+
     // Laarzen.
     c.fillStyle = '#241a10';
-    c.fillRect(-18 - lunge * 10, -8, 17, 8);
-    c.fillRect(4 + lunge * 12, -8, 18, 8);
+    c.fillRect(beenVoor - 4, -8, 17, 9);
+    c.fillRect(beenAchter - 2, -8, 18, 9);
 
-    // Romp en jas.
+    // Romp/jas met vorm.
     c.fillStyle = o.kleding;
     c.beginPath();
-    c.moveTo(-13, -34);
-    c.lineTo(-11, -74);
-    c.lineTo(12, -74);
-    c.lineTo(14, -34);
+    c.moveTo(-15, -34);
+    c.quadraticCurveTo(-14, -54, -12, -76);
+    c.lineTo(14, -76);
+    c.quadraticCurveTo(16, -54, 15, -34);
+    c.closePath();
+    c.fill();
+    // Jas-open/kraag.
+    c.fillStyle = '#e8e0cc';
+    c.beginPath();
+    c.moveTo(-2, -76);
+    c.lineTo(2, -76);
+    c.lineTo(4, -50);
+    c.lineTo(-4, -50);
     c.closePath();
     c.fill();
     // Sjerp.
     c.fillStyle = '#d9a441';
-    c.fillRect(-13, -48, 27, 7);
-    // Hemd.
-    c.fillStyle = '#e8e0cc';
-    c.fillRect(-4, -74, 9, 26);
+    c.fillRect(-15, -54, 30, 7);
+    // Gordel.
+    c.fillStyle = '#4a3520';
+    c.fillRect(-14, -42, 28, 4);
+    // Gesp.
+    c.fillStyle = '#d9a441';
+    c.fillRect(-3, -43, 6, 6);
 
     // Hoofd.
     c.fillStyle = '#e0b489';
     c.beginPath();
-    c.arc(2, -84, 11, 0, TAU);
+    c.ellipse(2, -86, 12, 13, 0, 0, TAU);
     c.fill();
+    // Neus.
+    c.fillStyle = '#c99a70';
+    c.beginPath();
+    c.moveTo(2, -84);
+    c.lineTo(0, -78);
+    c.lineTo(5, -78);
+    c.closePath();
+    c.fill();
+    // Ogen.
     c.fillStyle = '#2b1d12';
     c.beginPath();
-    c.arc(7, -86, 1.8, 0, TAU);
+    c.arc(6, -87, 1.8, 0, TAU);
     c.fill();
-    // Hoed.
+    // Snor.
+    c.strokeStyle = '#5a3a24';
+    c.lineWidth = 1.2;
+    c.beginPath();
+    c.moveTo(-1, -80);
+    c.quadraticCurveTo(2, -78, 8, -80);
+    c.stroke();
+
+    // Hoed (tricorn-achtig).
     c.fillStyle = o.hoed;
     c.beginPath();
-    c.ellipse(2, -92, 20, 6, 0, 0, TAU);
+    c.ellipse(2, -96, 22, 7, 0, 0, TAU);
     c.fill();
     c.beginPath();
-    c.ellipse(2, -96, 11, 8, 0, 0, TAU);
+    c.moveTo(-10, -96);
+    c.quadraticCurveTo(2, -116, 14, -96);
+    c.quadraticCurveTo(2, -106, -10, -96);
+    c.fill();
+    // Hoedband.
+    c.strokeStyle = '#d9a441';
+    c.lineWidth = 1.5;
+    c.beginPath();
+    c.moveTo(-10, -98);
+    c.quadraticCurveTo(2, -104, 14, -98);
+    c.stroke();
+
+    // Vrije arm (links) op de rug / zij.
+    c.strokeStyle = o.kleding;
+    c.lineWidth = 8;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(-12, -72);
+    c.quadraticCurveTo(-22, -60, -18, -46);
+    c.stroke();
+    c.fillStyle = '#e0b489';
+    c.beginPath();
+    c.arc(-18, -44, 3.5, 0, TAU);
     c.fill();
 
     // Arm en degen op de gekozen hoogte.
-    const doelY = o.hoogte === HOOG ? -92 : o.hoogte === MIDDEN ? -62 : -34;
-    const schouderX = 8,
-      schouderY = -68;
-    const handX = 26 + lunge * 16,
-      handY = doelY + (o.hoogte === HOOG ? 8 : 0);
+    const doelY = o.hoogte === HOOG ? -104 : o.hoogte === MIDDEN ? -64 : -30;
+    const schouderX = 12,
+      schouderY = -72;
+    const handX = 30 + lunge * 24,
+      handY = doelY + (o.hoogte === HOOG ? 6 : 0);
     c.strokeStyle = o.kleding;
-    c.lineWidth = 9;
+    c.lineWidth = 8;
     c.lineCap = 'round';
     c.beginPath();
     c.moveTo(schouderX, schouderY);
     c.lineTo(handX, handY);
     c.stroke();
 
-    // Kling.
+    // Hand.
+    c.fillStyle = '#e0b489';
+    c.beginPath();
+    c.arc(handX, handY, 4, 0, TAU);
+    c.fill();
+
+    // Kling en gevest.
     const hoek = Math.atan2(doelY - handY - 6, 46);
     c.save();
     c.translate(handX, handY);
-    c.rotate(hoek + (o.hoogte === HOOG ? -0.5 : o.hoogte === LAAG ? 0.45 : 0));
+    c.rotate(hoek + (o.hoogte === HOOG ? -0.55 : o.hoogte === LAAG ? 0.5 : 0));
+    // Gevest.
     c.fillStyle = '#3a2a18';
-    c.fillRect(-6, -3, 10, 6);
-    const kling = c.createLinearGradient(0, 0, 52, 0);
+    c.fillRect(-7, -4, 12, 8);
+    c.fillStyle = '#d9a441';
+    c.fillRect(-2, -6, 6, 12);
+    // Kling.
+    const kling = c.createLinearGradient(0, 0, 56, 0);
     kling.addColorStop(0, '#e9edf2');
-    kling.addColorStop(1, '#a9b4c0');
+    kling.addColorStop(0.5, '#ffffff');
+    kling.addColorStop(1, '#7a8796');
     c.fillStyle = kling;
     c.beginPath();
-    c.moveTo(2, -2.2);
-    c.lineTo(52, -0.9);
-    c.lineTo(56, 0);
-    c.lineTo(52, 0.9);
-    c.lineTo(2, 2.2);
+    c.moveTo(3, -2.4);
+    c.lineTo(56, -1);
+    c.lineTo(60, 0);
+    c.lineTo(56, 1);
+    c.lineTo(3, 2.4);
     c.closePath();
     c.fill();
+    // Middengroef in kling.
+    c.strokeStyle = 'rgba(120,140,160,0.4)';
+    c.lineWidth = 0.6;
+    c.beginPath();
+    c.moveTo(6, 0);
+    c.lineTo(54, 0);
+    c.stroke();
     c.restore();
 
     c.restore();
@@ -542,7 +614,7 @@ export function maakDuel(opts) {
     c.textBaseline = 'alphabetic';
     c.lineWidth = 3.5;
     c.strokeStyle = 'rgba(0,0,0,0.7)';
-    const ny = grond - 112 * S;
+    const ny = grond - 118 * S;
     c.strokeText(o.naam, x, ny);
     c.fillStyle = o.waarschuwing ? '#ffcf6a' : '#f0e3c4';
     c.fillText(o.naam, x, ny);

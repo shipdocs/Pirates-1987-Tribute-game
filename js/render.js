@@ -274,9 +274,10 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
 
   // Romp.
   const grad = ctx.createLinearGradient(0, -B / 2, 0, B / 2);
-  grad.addColorStop(0, '#7d5a33');
-  grad.addColorStop(0.5, '#5c4023');
-  grad.addColorStop(1, '#42301b');
+  grad.addColorStop(0, '#8f6840');
+  grad.addColorStop(0.45, '#5c4023');
+  grad.addColorStop(0.55, '#4a331b');
+  grad.addColorStop(1, '#3b2715');
   ctx.fillStyle = grad;
   romPad(ctx, L, B);
   ctx.fill();
@@ -284,25 +285,79 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
   ctx.strokeStyle = '#2a1d10';
   ctx.stroke();
 
+  // Walen (dikke planken langs de zijkant).
+  ctx.strokeStyle = 'rgba(60,42,22,0.55)';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(L * 0.42, -B * 0.28);
+  ctx.quadraticCurveTo(0, -B * 0.48, -L * 0.44, -B * 0.30);
+  ctx.moveTo(L * 0.40, B * 0.28);
+  ctx.quadraticCurveTo(0, B * 0.48, -L * 0.44, B * 0.30);
+  ctx.stroke();
+
   // Dek.
-  ctx.fillStyle = '#a2814f';
-  romPad(ctx, L * 0.78, B * 0.56);
+  ctx.fillStyle = '#b08d58';
+  romPad(ctx, L * 0.80, B * 0.56);
   ctx.fill();
+  ctx.strokeStyle = 'rgba(60,42,22,0.4)';
+  ctx.lineWidth = 0.6;
+  romPad(ctx, L * 0.80, B * 0.56);
+  ctx.stroke();
+
+  // Dekplanken.
+  ctx.strokeStyle = 'rgba(60,42,22,0.18)';
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i < 4; i++) {
+    const py = -B * 0.18 + i * B * 0.12;
+    ctx.beginPath();
+    ctx.moveTo(-L * 0.35, py);
+    ctx.lineTo(L * 0.35, py);
+    ctx.stroke();
+  }
 
   // Achterkasteel.
   ctx.fillStyle = '#6b4a28';
   ctx.beginPath();
-  ctx.ellipse(-L * 0.34, 0, L * 0.13, B * 0.38, 0, 0, TAU);
+  ctx.ellipse(-L * 0.34, 0, L * 0.14, B * 0.40, 0, 0, TAU);
   ctx.fill();
+  // Balkon/railing achter.
+  ctx.strokeStyle = '#3a2a18';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-L * 0.47, -B * 0.28);
+  ctx.lineTo(-L * 0.47, -B * 0.38);
+  ctx.moveTo(-L * 0.47, B * 0.28);
+  ctx.lineTo(-L * 0.47, B * 0.38);
+  ctx.stroke();
+  for (let i = 0; i < 4; i++) {
+    const yy = -B * 0.33 + i * B * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(-L * 0.47, yy);
+    ctx.lineTo(-L * 0.50, yy);
+    ctx.stroke();
+  }
+
+  // Boegspriet / galjoen.
+  ctx.strokeStyle = '#5c4023';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(L * 0.48, 0);
+  ctx.quadraticCurveTo(L * 0.62, -B * 0.08, L * 0.70, -B * 0.02);
+  ctx.stroke();
 
   // Kanonspoorten.
   if (opts.kanonnen !== 0) {
-    ctx.fillStyle = '#241809';
-    const n = Math.min(6, Math.max(2, Math.round(L / 6)));
+    ctx.fillStyle = '#1a1209';
+    const n = Math.min(7, Math.max(2, Math.round(L / 5)));
     for (let i = 0; i < n; i++) {
-      const px = lerp(-L * 0.3, L * 0.32, i / Math.max(1, n - 1));
-      ctx.fillRect(px - 1, -B / 2 + 0.4, 2, 1.6);
-      ctx.fillRect(px - 1, B / 2 - 2, 2, 1.6);
+      const px = lerp(-L * 0.25, L * 0.30, i / Math.max(1, n - 1));
+      ctx.fillRect(px - 1.2, -B / 2 + 0.5, 2.4, 1.8);
+      ctx.fillRect(px - 1.2, B / 2 - 2.3, 2.4, 1.8);
+      // Kannonmonden.
+      ctx.fillStyle = '#0d0a06';
+      ctx.fillRect(px - 1, -B / 2 + 2.4, 2, 1);
+      ctx.fillRect(px - 1, B / 2 - 3.4, 2, 1);
+      ctx.fillStyle = '#1a1209';
     }
   }
 
@@ -311,7 +366,7 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
     const rel = normAngle(windRichting - koers);
     const trim = clamp(rel * 0.42, -0.95, 0.95);
     for (let m = 0; m < masten; m++) {
-      const px = lerp(L * 0.3, -L * 0.24, masten === 1 ? 0 : m / (masten - 1));
+      const px = lerp(L * 0.32, -L * 0.22, masten === 1 ? 0 : m / (masten - 1));
       const grootte = (m === 1 || masten === 1 ? 1 : 0.82) * zeilen;
       ctx.save();
       ctx.translate(px, 0);
@@ -325,54 +380,128 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
       ctx.strokeStyle = 'rgba(90,75,50,0.55)';
       ctx.lineWidth = 0.8;
       ctx.beginPath();
-      const zb = B * 1.6 * grootte;
-      const zl = L * 0.3 * grootte;
+      const zb = B * 1.7 * grootte;
+      const zl = L * 0.34 * grootte;
       // Bol staand zeil: de buik staat naar lij.
-      ctx.moveTo(-zl * 0.3, -zb);
-      ctx.quadraticCurveTo(zl * 1.15, 0, -zl * 0.3, zb);
-      ctx.quadraticCurveTo(zl * 0.1, 0, -zl * 0.3, -zb);
+      ctx.moveTo(-zl * 0.25, -zb);
+      ctx.quadraticCurveTo(zl * 1.25, 0, -zl * 0.25, zb);
+      ctx.quadraticCurveTo(zl * 0.12, 0, -zl * 0.25, -zb);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+      // Reeflijnen / naden.
+      ctx.strokeStyle = 'rgba(90,75,50,0.35)';
+      ctx.lineWidth = 0.5;
+      for (let r = 1; r < 4; r++) {
+        const ry = -zb + r * (zb * 2 / 4);
+        ctx.beginPath();
+        ctx.moveTo(-zl * 0.15, ry);
+        ctx.quadraticCurveTo(zl * 0.55, ry * 0.9, -zl * 0.05, ry);
+        ctx.stroke();
+      }
       // Ra.
       ctx.strokeStyle = '#3a2a18';
-      ctx.lineWidth = 1.1;
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.moveTo(0, -zb);
-      ctx.lineTo(0, zb);
+      ctx.moveTo(0, -zb - 2);
+      ctx.lineTo(0, zb + 2);
+      ctx.stroke();
+      // Raar (dwars).
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-zl * 0.4, -zb);
+      ctx.lineTo(zl * 0.15, -zb);
+      ctx.moveTo(-zl * 0.4, zb);
+      ctx.lineTo(zl * 0.15, zb);
       ctx.stroke();
       ctx.restore();
-      // Mast.
+      // Mast met mars (het ronde platform, van bovenaf een schijfje om de mast).
+      ctx.fillStyle = 'rgba(58,42,24,0.5)';
+      ctx.beginPath();
+      ctx.arc(px, 0, 3.4 * grootte, 0, TAU);
+      ctx.fill();
       ctx.fillStyle = '#3a2a18';
       ctx.beginPath();
-      ctx.arc(px, 0, 1.5, 0, TAU);
+      ctx.ellipse(px, 0, 1.8, 2.2, 0, 0, TAU);
       ctx.fill();
+    }
+
+    // Wanten / tuigage tussen masten.
+    if (masten > 1) {
+      ctx.strokeStyle = 'rgba(60,45,30,0.35)';
+      ctx.lineWidth = 0.4;
+      const mastX = [];
+      for (let m = 0; m < masten; m++) {
+        mastX.push(lerp(L * 0.32, -L * 0.22, m / (masten - 1)));
+      }
+      // Tuigage staat vast aan de romp: de offset hangt niet van de zeilstand af.
+      const wy = B * 0.62;
+      for (let i = 0; i < mastX.length - 1; i++) {
+        const x1 = mastX[i], x2 = mastX[i + 1];
+        ctx.beginPath();
+        ctx.moveTo(x1, -wy);
+        ctx.lineTo(x2, -wy);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x1, wy);
+        ctx.lineTo(x2, wy);
+        ctx.stroke();
+      }
     }
   }
 
+  // Anker, plat tegen de boeg gesjord. Alle maten in rompeenheden, zodat het
+  // op een pinas net zo goed binnen de romp valt als op een linieschip.
+  ctx.save();
+  ctx.translate(L * 0.28, B * 0.1);
+  const ak = B * 0.055;
+  ctx.strokeStyle = '#241a10';
+  ctx.lineWidth = Math.max(0.6, ak * 0.5);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, ak * 2.4);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-ak * 1.1, ak * 0.7);
+  ctx.lineTo(ak * 1.1, ak * 0.7);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, ak * 2.1, ak * 1.1, Math.PI, 0, true);
+  ctx.stroke();
+  ctx.restore();
+
   // Vlag aan de achtersteven.
   ctx.save();
-  ctx.translate(-L * 0.48, 0);
-  const fl = 9,
-    fh = 6;
-  const wapper = Math.sin((opts.tijd || 0) * 6 + x * 0.05) * 0.9;
+  ctx.translate(-L * 0.50, 0);
+  const fl = 10,
+    fh = 6.5;
+  const wapper = Math.sin((opts.tijd || 0) * 6 + x * 0.05) * 1.1;
   ctx.rotate(normAngle(windRichting - koers) * 0.25);
   for (let i = 0; i < 3; i++) {
     ctx.fillStyle = natie.vlag[i];
     ctx.beginPath();
     ctx.moveTo(0, -fh / 2 + (i * fh) / 3);
-    ctx.lineTo(-fl, -fh / 2 + (i * fh) / 3 + wapper);
-    ctx.lineTo(-fl, -fh / 2 + ((i + 1) * fh) / 3 + wapper);
+    ctx.lineTo(-fl, -fh / 2 + (i * fh) / 3 + wapper * (i + 1) / 3);
+    ctx.lineTo(-fl, -fh / 2 + ((i + 1) * fh) / 3 + wapper * (i + 1) / 3);
     ctx.lineTo(0, -fh / 2 + ((i + 1) * fh) / 3);
     ctx.closePath();
     ctx.fill();
   }
   if (natieId === 'piraat') {
-    // Doodskop op de zwarte vlag.
+    // Doodskop en gekruiste knekels op de zwarte vlag.
     ctx.fillStyle = '#e9e4d6';
     ctx.beginPath();
-    ctx.arc(-fl * 0.55, wapper * 0.5, 1.5, 0, TAU);
+    ctx.arc(-fl * 0.55, wapper * 0.3, 1.7, 0, TAU);
     ctx.fill();
+    ctx.fillRect(-fl * 0.68, wapper * 0.3 + 1.2, 2.8, 1.2);
+    ctx.strokeStyle = '#e9e4d6';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-fl * 0.72, wapper * 0.3 - 0.5);
+    ctx.lineTo(-fl * 0.38, wapper * 0.3 + 2);
+    ctx.moveTo(-fl * 0.38, wapper * 0.3 - 0.5);
+    ctx.lineTo(-fl * 0.72, wapper * 0.3 + 2);
+    ctx.stroke();
   }
   ctx.restore();
 
@@ -397,7 +526,7 @@ export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
   ctx.translate(stad.x, stad.y);
   ctx.scale(s, s);
 
-  const r = 7 + stad.grootte * 2.2;
+  const r = 7 + stad.grootte * 2.4;
 
   // Grondvlak van de stad.
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
@@ -409,38 +538,77 @@ export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
   ctx.ellipse(0, 0, r, r * 0.78, 0, 0, TAU);
   ctx.fill();
 
-  // Huisjes.
-  ctx.fillStyle = '#f0e3c4';
+  // Huisjes in een ring.
   const n = 3 + stad.grootte;
   for (let i = 0; i < n; i++) {
     const a = (i / n) * TAU + stad.id;
-    const px = Math.cos(a) * r * 0.5,
-      py = Math.sin(a) * r * 0.42;
-    ctx.fillRect(px - 2.2, py - 2.2, 4.4, 4);
-    ctx.fillStyle = '#b3502f';
-    ctx.fillRect(px - 2.8, py - 3.2, 5.6, 1.6);
+    const px = Math.cos(a) * r * 0.5;
+    const py = Math.sin(a) * r * 0.42;
+    const breed = 4 + (stad.id * 37 + i * 13) % 3;
+    const hoog = 4 + (stad.id * 19 + i * 7) % 3;
     ctx.fillStyle = '#f0e3c4';
+    ctx.fillRect(px - breed / 2, py - hoog / 2, breed, hoog);
+    // Dakje.
+    ctx.fillStyle = '#b3502f';
+    ctx.beginPath();
+    ctx.moveTo(px - breed / 2 - 0.6, py - hoog / 2);
+    ctx.lineTo(px, py - hoog / 2 - 1.8);
+    ctx.lineTo(px + breed / 2 + 0.6, py - hoog / 2);
+    ctx.closePath();
+    ctx.fill();
+    // Deurtje of raampje.
+    ctx.fillStyle = '#241a10';
+    ctx.fillRect(px - 0.6, py, 1.2, hoog / 2);
+  }
+
+  // Grotere steden krijgen een toren/kerk of fort.
+  if (stad.grootte >= 4) {
+    ctx.fillStyle = '#9a9184';
+    ctx.fillRect(-r * 0.18, -r * 1.15, r * 0.36, r * 0.75);
+    ctx.fillStyle = '#6e6558';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.22, -r * 1.15);
+    ctx.lineTo(0, -r * 1.45);
+    ctx.lineTo(r * 0.22, -r * 1.15);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#241a10';
+    ctx.fillRect(-r * 0.06, -r * 0.95, r * 0.12, r * 0.18);
   }
 
   // Fort met vlaggenmast.
   ctx.fillStyle = '#8d8375';
-  ctx.fillRect(-r * 0.25, -r * 0.95, r * 0.5, r * 0.55);
+  ctx.fillRect(-r * 0.22, -r * 0.95, r * 0.44, r * 0.55);
+  ctx.fillStyle = '#6e6558';
+  ctx.fillRect(-r * 0.26, -r * 0.98, r * 0.52, r * 0.10);
   ctx.strokeStyle = '#3a2a18';
   ctx.lineWidth = 1.2;
   ctx.beginPath();
   ctx.moveTo(0, -r * 0.95);
-  ctx.lineTo(0, -r * 2.1);
+  ctx.lineTo(0, -r * 2.2);
   ctx.stroke();
-  const wapper = Math.sin(tijd * 4 + stad.id) * 1.4;
+  // Vlag.
+  const wapper = Math.sin(tijd * 4 + stad.id) * 1.6;
   for (let i = 0; i < 3; i++) {
     ctx.fillStyle = natie.vlag[i];
     ctx.beginPath();
-    ctx.moveTo(0, -r * 2.1 + i * 2.2);
-    ctx.lineTo(9, -r * 2.1 + i * 2.2 + wapper);
-    ctx.lineTo(9, -r * 2.1 + (i + 1) * 2.2 + wapper);
-    ctx.lineTo(0, -r * 2.1 + (i + 1) * 2.2);
+    ctx.moveTo(0, -r * 2.2 + i * 2.4);
+    ctx.lineTo(10, -r * 2.2 + i * 2.4 + wapper * (i + 1) / 3);
+    ctx.lineTo(10, -r * 2.2 + (i + 1) * 2.4 + wapper * (i + 1) / 3);
+    ctx.lineTo(0, -r * 2.2 + (i + 1) * 2.4);
     ctx.closePath();
     ctx.fill();
+  }
+
+  // Palissade/muur rond sommige steden.
+  if (stad.soort === 'fort' || stad.soort === 'schatkamer') {
+    ctx.strokeStyle = '#6e6558';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 1.15, r * 0.88, 0, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 
   if (gemarkeerd) {
@@ -448,7 +616,7 @@ export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
     ctx.lineWidth = 2;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
-    ctx.arc(0, 0, r + 8 + Math.sin(tijd * 3) * 2, 0, TAU);
+    ctx.arc(0, 0, r + 10 + Math.sin(tijd * 3) * 2, 0, TAU);
     ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -459,9 +627,9 @@ export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
     ctx.textAlign = 'center';
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(6,24,38,0.85)';
-    ctx.strokeText(stad.naam, 0, r + 14);
+    ctx.strokeText(stad.naam, 0, r + 15);
     ctx.fillStyle = natie.kleur;
-    ctx.fillText(stad.naam, 0, r + 14);
+    ctx.fillText(stad.naam, 0, r + 15);
   }
   ctx.restore();
 }

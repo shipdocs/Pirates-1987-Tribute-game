@@ -351,7 +351,7 @@ export class Wereld {
       }
     }
 
-    const marine = !isPiraat && rng() < 0.28;
+    const marine = !isPiraat && rng() < 0.14;
     const vloot = {
       natie: isPiraat ? 'piraat' : natie,
       marine,
@@ -394,15 +394,15 @@ export class Wereld {
       // het de moeite waard lijkt (relatie + sterkte). Ze haken af als je ze
       // ver genoeg wegloopt of achter een kaap/eiland uit het zicht raakt.
       const vijandig = v.natie === 'piraat' || v.marine;
-      const jaagBereik = 560;
+      const jaagBereik = 420;
       const zichtOpen = !this.#zichtGeblokkeerd(v.x, v.y, speler.x, speler.y);
       let jaagt = false;
       if (vijandig && dSpeler < jaagBereik && v.aggroKoeling <= 0) {
         if (v.jaagt) {
-          // Eenmaal ingezet blijven ze jagen, tot je ze definitief kwijt bent.
-          if (dSpeler > jaagBereik * 1.9 || !zichtOpen) {
+          // Eenmaal ingezet blijven ze jagen, maar niet oneindig.
+          if (dSpeler > jaagBereik * 1.5 || !zichtOpen) {
             v.jaagt = false;
-            v.aggroKoeling = 20 + rng() * 15;
+            v.aggroKoeling = 18 + rng() * 12;
           }
           jaagt = v.jaagt;
         } else {
@@ -468,17 +468,29 @@ export class Wereld {
 
     let kans;
     if (v.natie === 'piraat') {
-      kans = 0.78;
+      // Piraten zijn gretig, maar laten sterke tegenstanders liever gaan.
+      kans = 0.55;
     } else {
+      // Marineschepen handelen op politieke verhoudingen.
       const rel = speler.relatie ? speler.relatie[v.natie] : 0;
-      kans = rel < -25 ? 0.7 : rel < 15 ? 0.3 : 0.08;
+      if (rel <= -25) kans = 0.45;
+      else if (rel < 15) kans = 0.08;
+      else kans = 0; // Vriendelijke naties laten je met rust.
     }
-    // Zwakkere schepen zoeken een machtiger kapitein maar zelden op.
-    if (sterkteV < sterkteS * 0.75) kans *= 0.3;
-    else if (sterkteV > sterkteS * 1.4) kans = Math.min(1, kans + 0.15);
-    // Bekendheid trekt piraten aan.
-    kans *= clamp(0.8 + (speler.roem || 0) / 600, 0.8, 1.5);
-    return clamp(kans, 0.05, 1);
+    // Sterkteverschil is doorslaggevend: zwakke schepen jagen zelden op een sterkere.
+    if (sterkteV < sterkteS * 0.65) kans *= 0.15;
+    else if (sterkteV < sterkteS * 0.95) kans *= 0.6;
+    else if (sterkteV > sterkteS * 1.5) kans = Math.min(1, kans + 0.12);
+    // Bekendheid trekt piraten aan, maar afschrikt kleine bendejes.
+    const roem = speler.roem || 0;
+    if (v.natie === 'piraat') {
+      if (sterkteV < sterkteS * 0.85) {
+        kans *= clamp(1.1 - roem / 800, 0.35, 1.1);
+      } else {
+        kans *= clamp(0.8 + roem / 800, 0.8, 1.35);
+      }
+    }
+    return clamp(kans, 0, 1);
   }
 
   /** Kijkt of een rechte lijn tussen twee punten over land loopt. */

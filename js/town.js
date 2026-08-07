@@ -103,28 +103,119 @@ function havenPrent(stad) {
   const natie = NATIES[stad.natie];
   const d = el('div', 'haven-prent');
   d.innerHTML = `<svg viewBox="0 0 400 130" preserveAspectRatio="none">
-    <defs><linearGradient id="lucht" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2f5a80"/><stop offset="1" stop-color="#e0a06a"/></linearGradient></defs>
-    <rect width="400" height="130" fill="url(#lucht)"/>
-    <circle cx="330" cy="34" r="16" fill="#ffe6b0" opacity="0.85"/>
-    <path d="M0 78 L60 52 L110 78 Z" fill="#3f6b46"/>
-    <path d="M70 82 L140 44 L210 82 Z" fill="#4a7a4e"/>
-    <rect x="0" y="80" width="400" height="50" fill="#1d4763"/>
-    <g fill="#e8dcc0">
-      <rect x="150" y="62" width="26" height="20"/><rect x="182" y="56" width="30" height="26"/>
-      <rect x="218" y="64" width="22" height="18"/><rect x="246" y="58" width="28" height="24"/></g>
-    <g fill="#b3502f">
-      <path d="M148 62 L163 52 L178 62 Z"/><path d="M180 56 L197 44 L214 56 Z"/>
-      <path d="M216 64 L229 55 L242 64 Z"/><path d="M244 58 L260 47 L276 58 Z"/></g>
-    <rect x="290" y="52" width="46" height="30" fill="#9a9184"/>
-    <rect x="310" y="24" width="2.5" height="28" fill="#3a2a18"/>
-    <rect x="312" y="24" width="18" height="6" fill="${natie.vlag[0]}"/>
-    <rect x="312" y="30" width="18" height="6" fill="${natie.vlag[1]}"/>
-    <rect x="312" y="36" width="18" height="6" fill="${natie.vlag[2]}"/>
-    <g stroke="#2a1d10" stroke-width="2" fill="none">
-      <path d="M40 82 L40 30 M40 30 L74 44 L40 52"/><path d="M100 82 L100 40 M100 40 L70 52 L100 58"/></g>
-    <path d="M18 82 q22 -10 44 0 l-8 12 q-14 5 -28 0 Z" fill="#5c4324"/>
-    <path d="M82 82 q20 -9 40 0 l-7 11 q-13 5 -26 0 Z" fill="#4a3520"/>
+    <defs>
+      <linearGradient id="hp-lucht" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#1e3f63"/>
+        <stop offset="0.45" stop-color="#4a6b8a"/>
+        <stop offset="0.78" stop-color="#c98a5a"/>
+        <stop offset="1" stop-color="#e0a06a"/>
+      </linearGradient>
+      <linearGradient id="hp-water" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#246080"/>
+        <stop offset="1" stop-color="#153d5a"/>
+      </linearGradient>
+      <linearGradient id="hp-gevel" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f0e3c4"/>
+        <stop offset="1" stop-color="#d9c99e"/>
+      </linearGradient>
+      <linearGradient id="hp-dak" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#b3502f"/>
+        <stop offset="1" stop-color="#8f3b22"/>
+      </linearGradient>
+    </defs>
+
+    <!-- Lucht -->
+    <rect width="400" height="130" fill="url(#hp-lucht)"/>
+
+    <!-- Zon -->
+    <circle cx="340" cy="28" r="18" fill="#ffe6b0" opacity="0.75"/>
+    <circle cx="340" cy="28" r="28" fill="#ffe6b0" opacity="0.18"/>
+
+    <!-- Wolken -->
+    <g fill="#f0e3c4" opacity="0.22">
+      <ellipse cx="70" cy="28" rx="22" ry="7"/>
+      <ellipse cx="85" cy="30" rx="16" ry="6"/>
+      <ellipse cx="55" cy="30" rx="14" ry="5"/>
+      <ellipse cx="270" cy="22" rx="28" ry="8"/>
+      <ellipse cx="290" cy="24" rx="18" ry="6"/>
+      <ellipse cx="250" cy="24" rx="14" ry="5"/>
+    </g>
+
+    <!-- Verre bergen -->
+    <path d="M0 80 L50 50 L90 72 L130 46 L180 78 L220 58 L260 80 Z" fill="#3a5a40" opacity="0.8"/>
+    <path d="M30 80 L85 56 L125 74 L170 54 L215 76 L260 62 L300 80 Z" fill="#4a7a4e" opacity="0.9"/>
+
+    <!-- Water: loopt door tot de kade op y=108, zodat er een echte vaarstrook is -->
+    <rect x="0" y="78" width="400" height="52" fill="url(#hp-water)"/>
+    <g stroke="rgba(255,255,255,0.12)" stroke-width="0.8" fill="none">
+      <path d="M0 84 q20 -3 40 0 t40 0"/>
+      <path d="M110 92 q24 -3 48 0 t48 0"/>
+      <path d="M260 88 q18 -3 36 0 t36 0"/>
+      <path d="M40 100 q28 -3 56 0 t56 0"/>
+      <path d="M200 104 q22 -3 44 0 t44 0"/>
+    </g>
+
+    <!-- Gebouwen achter -->
+    <g fill="url(#hp-gevel)" stroke="#a08a5c" stroke-width="0.6">
+      <rect x="142" y="60" width="22" height="22"/>
+      <rect x="170" y="54" width="26" height="28"/>
+      <rect x="204" y="62" width="20" height="20"/>
+      <rect x="230" y="56" width="24" height="26"/>
+      <rect x="258" y="64" width="18" height="18"/>
+    </g>
+    <g fill="url(#hp-dak)">
+      <path d="M140 60 L153 50 L166 60 Z"/>
+      <path d="M168 54 L183 43 L198 54 Z"/>
+      <path d="M202 62 L214 54 L226 62 Z"/>
+      <path d="M228 56 L242 46 L256 56 Z"/>
+      <path d="M256 64 L267 56 L278 64 Z"/>
+    </g>
+    <!-- Vensters -->
+    <g fill="#2a2a35" opacity="0.75">
+      <rect x="147" y="65" width="4" height="5"/><rect x="156" y="65" width="4" height="5"/>
+      <rect x="177" y="60" width="4" height="5"/><rect x="187" y="60" width="4" height="5"/>
+      <rect x="209" y="67" width="4" height="5"/><rect x="217" y="67" width="4" height="5"/>
+      <rect x="237" y="62" width="4" height="5"/><rect x="245" y="62" width="4" height="5"/>
+    </g>
+
+    <!-- Fort/toren rechts -->
+    <rect x="292" y="48" width="42" height="34" fill="#8d8375"/>
+    <rect x="288" y="44" width="50" height="6" fill="#6e6558"/>
+    <rect x="310" y="22" width="3" height="22" fill="#3a2a18"/>
+    <rect x="313" y="24" width="18" height="6" fill="${natie.vlag[0]}"/>
+    <rect x="313" y="30" width="18" height="6" fill="${natie.vlag[1]}"/>
+    <rect x="313" y="36" width="18" height="6" fill="${natie.vlag[2]}"/>
+    <rect x="302" y="58" width="6" height="10" rx="3" fill="#241a10"/>
+    <rect x="320" y="58" width="6" height="10" rx="3" fill="#241a10"/>
+
+    <!-- Gemeerde schepen: masten staan in het water, voor de kade -->
+    <g stroke="#3a2a18" stroke-width="2.5" fill="none">
+      <path d="M36 104 L36 52 M36 52 L72 66 L36 74"/>
+      <path d="M96 104 L96 58 M96 58 L66 70 L96 76"/>
+    </g>
+
+    <!-- Voorste bootjes, drijvend op de waterlijn -->
+    <path d="M14 92 q24 -10 48 0 l-8 10 q-16 6 -32 0 Z" fill="#6b4e2e"/>
+    <path d="M14 92 l48 0" stroke="#3a2a18" stroke-width="1"/>
+    <path d="M26 92 L26 68 L42 92 Z" fill="#e8dcc0" opacity="0.9"/>
+    <path d="M78 94 q22 -9 44 0 l-7 9 q-15 5 -30 0 Z" fill="#5a4324"/>
+    <path d="M78 94 l44 0" stroke="#3a2a18" stroke-width="1"/>
+
+    <!-- Kade op de voorgrond; dekt alles wat eronder uitsteekt af -->
+    <rect x="0" y="108" width="400" height="10" fill="#5c4324"/>
+    <rect x="0" y="118" width="400" height="12" fill="#4a3520"/>
+    <g stroke="#3a2a18" stroke-width="1" opacity="0.5">
+      <line x1="0" y1="114" x2="400" y2="114"/>
+      <line x1="0" y1="122" x2="400" y2="122"/>
+      <line x1="0" y1="127" x2="400" y2="127"/>
+    </g>
+
+    <!-- Vogels -->
+    <g stroke="#241a10" stroke-width="1" fill="none" opacity="0.6">
+      <path d="M120 24 q4 -4 8 0 q-4 4 -8 0"/>
+      <path d="M135 20 q3 -3 6 0 q-3 3 -6 0"/>
+      <path d="M320 38 q4 -4 8 0 q-4 4 -8 0"/>
+    </g>
   </svg>`;
   return d;
 }

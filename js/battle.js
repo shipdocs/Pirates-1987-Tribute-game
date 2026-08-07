@@ -207,7 +207,9 @@ export function maakZeeslag(vloot, opts) {
 
   function stuurSpeler(dt) {
     const t = SCHIP_INDEX[mij.type];
-    const wend = t.wend * (0.5 + 0.5 * mij.zeilstand) * mij.tuigage;
+    // Het schipstype bepaalt het grootste deel van de wendbaarheid;
+    // zeilstand heeft nog wel invloed, maar minder dominant.
+    const wend = t.wend * (0.30 + 0.70 * mij.zeilstand) * mij.tuigage;
     if (Game.toets('ArrowLeft') || Game.toets('KeyA')) mij.koers = normAngle(mij.koers - wend * dt);
     if (Game.toets('ArrowRight') || Game.toets('KeyD')) mij.koers = normAngle(mij.koers + wend * dt);
     if (Game.toets('ArrowUp') || Game.toets('KeyW')) mij.zeilstand = clamp(mij.zeilstand + dt, 0, 1);
@@ -216,7 +218,7 @@ export function maakZeeslag(vloot, opts) {
 
   function stuurVijand(dt) {
     const t = SCHIP_INDEX[vijand.type];
-    const wend = t.wend * (0.5 + 0.5 * vijand.zeilstand) * vijand.tuigage * 0.9;
+    const wend = t.wend * (0.30 + 0.70 * vijand.zeilstand) * vijand.tuigage * 0.85;
     const naarMij = Math.atan2(mij.y - vijand.y, mij.x - vijand.x);
     const afstand = dist(mij.x, mij.y, vijand.x, vijand.y);
 
@@ -288,8 +290,11 @@ export function maakZeeslag(vloot, opts) {
     // groot schip de speler in één salvo naar de kelder jagen.
     const stukken = Math.min(Math.max(1, Math.round(schutter.kanonnen / 2)), 8);
     const kanonnierBonus = schutter.speler ? 0.12 * talentBonus(speler, 'kanonnier') : 0;
-    let herlaadTijd = (3.4 - (schutter.speler ? 0.6 * talentBonus(speler, 'kanonnier') : 0)) *
-      clamp(1.4 - schutter.bemanning / Math.max(1, schutter.startBemanning), 0.85, 1.5);
+    const t = SCHIP_INDEX[schutter.type];
+    // Herlaadtijd hangt af van schipsgrootte (klein = snel) en bemanning.
+    let herlaadTijd = (3.4 * t.herlaad - (schutter.speler ? 0.5 * talentBonus(speler, 'kanonnier') : 0)) *
+      clamp(1.45 - schutter.bemanning / Math.max(1, schutter.startBemanning), 0.8, 1.6);
+    herlaadTijd = Math.max(0.8, herlaadTijd);
     // Moeilijkheid: vijandelijke kanonniers laden sneller op hogere standen.
     if (!schutter.speler) herlaadTijd *= clamp(1.55 - vijandKracht * 0.42, 0.95, 1.6);
     schutter.herlaad = herlaadTijd;

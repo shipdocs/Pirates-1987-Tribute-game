@@ -161,7 +161,7 @@ export class Wereld {
     this.windTimer = 0;
 
     this.vloten = [];
-    for (let i = 0; i < 34; i++) this.spawnVloot(true);
+    for (let i = 0; i < 24; i++) this.spawnVloot(true);
 
     this.tijd = 0;
   }
@@ -372,27 +372,54 @@ export class Wereld {
       ),
       gezien: false,
       leeftijd: 0,
+      // Achtervolgingstoestand: jaagt houdt de inzet vast, aggroKoeling
+      // voorkomt dat een losgelaten achtervolging meteen opnieuw begint.
+      jaagt: false,
+      aggroKoeling: 0,
     };
     this.vloten.push(vloot);
     return vloot;
   }
 
   vlotenTik(dt, speler) {
+    const rng = this.rng;
     for (let i = this.vloten.length - 1; i >= 0; i--) {
       const v = this.vloten[i];
       v.leeftijd += dt;
       const type = SCHIP_INDEX[v.type];
+      const dSpeler = dist(v.x, v.y, speler.x, speler.y);
+      v.aggroKoeling = Math.max(0, (v.aggroKoeling || 0) - dt);
 
-      // Piraten en marineschepen jagen; kooplui vluchten.
+      // Wie jaagt er? Piraten en marineschepen alleen dichtbij, en alleen als
+      // het de moeite waard lijkt (relatie + sterkte). Ze haken af als je ze
+      // ver genoeg wegloopt of achter een kaap/eiland uit het zicht raakt.
+      const vijandig = v.natie === 'piraat' || v.marine;
+      const jaagBereik = 560;
+      const zichtOpen = !this.#zichtGeblokkeerd(v.x, v.y, speler.x, speler.y);
+      let jaagt = false;
+      if (vijandig && dSpeler < jaagBereik && v.aggroKoeling <= 0) {
+        if (v.jaagt) {
+          // Eenmaal ingezet blijven ze jagen, tot je ze definitief kwijt bent.
+          if (dSpeler > jaagBereik * 1.9 || !zichtOpen) {
+            v.jaagt = false;
+            v.aggroKoeling = 20 + rng() * 15;
+          }
+          jaagt = v.jaagt;
+        } else {
+          v.jaagt = zichtOpen && rng() < this.#jachtKans(v, speler);
+          jaagt = v.jaagt;
+        }
+      } else {
+        v.jaagt = false;
+      }
+
       let doelX = v.doel.ankerX,
         doelY = v.doel.ankerY;
-      const dSpeler = dist(v.x, v.y, speler.x, speler.y);
-      const jaagt = (v.natie === 'piraat' || v.marine) && dSpeler < 900;
-      const vlucht = !jaagt && dSpeler < 520 && !v.marine;
       if (jaagt) {
         doelX = speler.x;
         doelY = speler.y;
-      } else if (vlucht) {
+      } else if (!vijandig && dSpeler < 820) {
+        // Kooplui en neutrale schepen mijden de speler ruim van tevoren.
         doelX = v.x + (v.x - speler.x);
         doelY = v.y + (v.y - speler.y);
       }
@@ -424,8 +451,46 @@ export class Wereld {
         v.doel = pick(this.rng, this.steden.filter((s) => s !== v.doel));
       }
     }
-    // Voorraad aanvullen zodat de zee nooit leeg raakt.
-    while (this.vloten.length < 34) this.spawnVloot(true);
+    // Voorraad aanvullen zodat de zee levendig blijft maar niet overvol raakt.
+    while (this.vloten.length < 24) this.spawnVloot(true);
+  }
+
+  /**
+   * Hoe graag een vloot de speler opzoekt: piraten zijn gretig, marineschepen
+   * hangen af van de relatie, en zwakkere schepen mijden een machtigere kapitein.
+   */
+  #jachtKans(v, speler) {
+    const vType = SCHIP_INDEX[v.type];
+    const eigen = speler.schepen && speler.schepen[0];
+    const eType = SCHIP_INDEX[eigen ? eigen.type : 'sloep'];
+    const sterkteV = vType.snelheid * (1 + (vType.kanonnen + vType.bemanning / 6) / 60);
+    const sterkteS = eType.snelheid * (1 + ((eigen ? eigen.kanonnen : 0) + speler.bemanning / 6) / 60);
+
+    let kans;
+    if (v.natie === 'piraat') {
+      kans = 0.78;
+    } else {
+      const rel = speler.relatie ? speler.relatie[v.natie] : 0;
+      kans = rel < -25 ? 0.7 : rel < 15 ? 0.3 : 0.08;
+    }
+    // Zwakkere schepen zoeken een machtiger kapitein maar zelden op.
+    if (sterkteV < sterkteS * 0.75) kans *= 0.3;
+    else if (sterkteV > sterkteS * 1.4) kans = Math.min(1, kans + 0.15);
+    // Bekendheid trekt piraten aan.
+    kans *= clamp(0.8 + (speler.roem || 0) / 600, 0.8, 1.5);
+    return clamp(kans, 0.05, 1);
+  }
+
+  /** Kijkt of een rechte lijn tussen twee punten over land loopt. */
+  #zichtGeblokkeerd(x1, y1, x2, y2) {
+    const dx = x2 - x1,
+      dy = y2 - y1;
+    const n = Math.max(3, Math.round(Math.hypot(dx, dy) / 60));
+    for (let i = 1; i < n; i++) {
+      const t = i / n;
+      if (this.isLand(x1 + dx * t, y1 + dy * t)) return true;
+    }
+    return false;
   }
 
   /** Simpele koersvoorspelling: kijk vooruit en wijk uit voor land. */

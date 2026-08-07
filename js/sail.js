@@ -340,6 +340,15 @@ export function maakZeilScene() {
           if (uitslag.ontsnapt && i >= 0) {
             vloot.x += Math.cos(vloot.koers) * 300;
             vloot.y += Math.sin(vloot.koers) * 300;
+            // Even niet opnieuw jagen na een ontsnapping.
+            vloot.jaagt = false;
+            vloot.aggroKoeling = 18;
+          }
+          // Na het strijken van de vlag kabbelt de vijand door; laat hem even
+          // met rust zodat je niet meteen weer in een gevecht wordt gezogen.
+          if (uitslag.overgegeven) {
+            vloot.jaagt = false;
+            vloot.aggroKoeling = 22;
           }
           ontmoetingKoeling = 6;
         },

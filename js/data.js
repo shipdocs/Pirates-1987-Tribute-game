@@ -59,19 +59,19 @@ export const WAAR_INDEX = Object.fromEntries(WAREN.map((w, i) => [w.id, i]));
  * wind kan varen (0 = alleen voor de wind, 1 = maakt niet uit).
  */
 export const SCHEPEN = [
-  { id: 'pinas', naam: 'Pinas', romp: 40, kanonnen: 4, ruim: 40, bemanning: 40, snelheid: 92, wend: 1.5, hoogte: 0.42, prijs: 1200, lidwoord: 'de' },
-  { id: 'sloep', naam: 'Sloep', romp: 48, kanonnen: 6, ruim: 48, bemanning: 60, snelheid: 100, wend: 1.6, hoogte: 0.46, prijs: 1800, lidwoord: 'de' },
-  { id: 'oorlogssloep', naam: 'Oorlogssloep', romp: 64, kanonnen: 10, ruim: 56, bemanning: 90, snelheid: 104, wend: 1.55, hoogte: 0.46, prijs: 3600, lidwoord: 'de' },
-  { id: 'bark', naam: 'Bark', romp: 56, kanonnen: 6, ruim: 80, bemanning: 60, snelheid: 82, wend: 1.25, hoogte: 0.34, prijs: 2000, lidwoord: 'de' },
-  { id: 'brigantijn', naam: 'Brigantijn', romp: 72, kanonnen: 12, ruim: 96, bemanning: 110, snelheid: 88, wend: 1.3, hoogte: 0.38, prijs: 4200, lidwoord: 'de' },
-  { id: 'koopvaarder', naam: 'Koopvaarder', romp: 80, kanonnen: 10, ruim: 160, bemanning: 90, snelheid: 74, wend: 1.0, hoogte: 0.28, prijs: 4000, lidwoord: 'de' },
-  { id: 'grote_koopvaarder', naam: 'Grote koopvaarder', romp: 100, kanonnen: 16, ruim: 220, bemanning: 130, snelheid: 70, wend: 0.92, hoogte: 0.26, prijs: 6500, lidwoord: 'de' },
-  { id: 'fluit', naam: 'Fluitschip', romp: 76, kanonnen: 8, ruim: 200, bemanning: 80, snelheid: 78, wend: 1.05, hoogte: 0.3, prijs: 4500, lidwoord: 'het' },
-  { id: 'vrachtfluit', naam: 'Vrachtfluit', romp: 92, kanonnen: 10, ruim: 280, bemanning: 100, snelheid: 72, wend: 0.95, hoogte: 0.28, prijs: 6800, lidwoord: 'de' },
-  { id: 'fregat', naam: 'Fregat', romp: 120, kanonnen: 32, ruim: 160, bemanning: 200, snelheid: 84, wend: 1.1, hoogte: 0.32, prijs: 11000, lidwoord: 'het' },
-  { id: 'galjoen', naam: 'Galjoen', romp: 130, kanonnen: 24, ruim: 260, bemanning: 200, snelheid: 66, wend: 0.82, hoogte: 0.22, prijs: 10500, lidwoord: 'het' },
-  { id: 'oorlogsgaljoen', naam: 'Oorlogsgaljoen', romp: 160, kanonnen: 40, ruim: 240, bemanning: 260, snelheid: 68, wend: 0.85, hoogte: 0.24, prijs: 16000, lidwoord: 'het' },
-  { id: 'linieschip', naam: 'Linieschip', romp: 200, kanonnen: 48, ruim: 200, bemanning: 320, snelheid: 70, wend: 0.8, hoogte: 0.26, prijs: 22000, lidwoord: 'het' },
+  { id: 'pinas', naam: 'Pinas', romp: 68, kanonnen: 4, ruim: 40, bemanning: 40, snelheid: 92, wend: 1.5, hoogte: 0.42, prijs: 1200, lidwoord: 'de' },
+  { id: 'sloep', naam: 'Sloep', romp: 82, kanonnen: 6, ruim: 48, bemanning: 60, snelheid: 100, wend: 1.6, hoogte: 0.46, prijs: 1800, lidwoord: 'de' },
+  { id: 'oorlogssloep', naam: 'Oorlogssloep', romp: 106, kanonnen: 10, ruim: 56, bemanning: 90, snelheid: 104, wend: 1.55, hoogte: 0.46, prijs: 3600, lidwoord: 'de' },
+  { id: 'bark', naam: 'Bark', romp: 96, kanonnen: 6, ruim: 80, bemanning: 60, snelheid: 82, wend: 1.25, hoogte: 0.34, prijs: 2000, lidwoord: 'de' },
+  { id: 'brigantijn', naam: 'Brigantijn', romp: 126, kanonnen: 12, ruim: 96, bemanning: 110, snelheid: 88, wend: 1.3, hoogte: 0.38, prijs: 4200, lidwoord: 'de' },
+  { id: 'koopvaarder', naam: 'Koopvaarder', romp: 136, kanonnen: 10, ruim: 160, bemanning: 90, snelheid: 74, wend: 1.0, hoogte: 0.28, prijs: 4000, lidwoord: 'de' },
+  { id: 'grote_koopvaarder', naam: 'Grote koopvaarder', romp: 168, kanonnen: 16, ruim: 220, bemanning: 130, snelheid: 70, wend: 0.92, hoogte: 0.26, prijs: 6500, lidwoord: 'de' },
+  { id: 'fluit', naam: 'Fluitschip', romp: 130, kanonnen: 8, ruim: 200, bemanning: 80, snelheid: 78, wend: 1.05, hoogte: 0.3, prijs: 4500, lidwoord: 'het' },
+  { id: 'vrachtfluit', naam: 'Vrachtfluit', romp: 158, kanonnen: 10, ruim: 280, bemanning: 100, snelheid: 72, wend: 0.95, hoogte: 0.28, prijs: 6800, lidwoord: 'de' },
+  { id: 'fregat', naam: 'Fregat', romp: 206, kanonnen: 32, ruim: 160, bemanning: 200, snelheid: 84, wend: 1.1, hoogte: 0.32, prijs: 11000, lidwoord: 'het' },
+  { id: 'galjoen', naam: 'Galjoen', romp: 222, kanonnen: 24, ruim: 260, bemanning: 200, snelheid: 66, wend: 0.82, hoogte: 0.22, prijs: 10500, lidwoord: 'het' },
+  { id: 'oorlogsgaljoen', naam: 'Oorlogsgaljoen', romp: 270, kanonnen: 40, ruim: 240, bemanning: 260, snelheid: 68, wend: 0.85, hoogte: 0.24, prijs: 16000, lidwoord: 'het' },
+  { id: 'linieschip', naam: 'Linieschip', romp: 340, kanonnen: 48, ruim: 200, bemanning: 320, snelheid: 70, wend: 0.8, hoogte: 0.26, prijs: 22000, lidwoord: 'het' },
 ];
 
 export const SCHIP_INDEX = Object.fromEntries(SCHEPEN.map((s) => [s.id, s]));

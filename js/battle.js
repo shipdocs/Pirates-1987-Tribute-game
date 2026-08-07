@@ -1,6 +1,6 @@
 // Zeeslag: laveren, de wind uitbuiten en de volle laag geven.
 import { clamp, lerp, normAngle, dist, TAU, turnToward, fmtGold } from './util.js';
-import { WAREN, SCHIP_INDEX, scheepsAanduiding, metLidwoord } from './data.js';
+import { WAREN, SCHIP_INDEX, scheepsAanduiding, metLidwoord, MOEILIJKHEDEN } from './data.js';
 import { zeilEfficiëntie } from './world.js';
 import { Game, roundRect, vlaggenschip, nieuwSchip, talentBonus } from './game.js';
 import * as R from './render.js';
@@ -22,6 +22,11 @@ export function maakZeeslag(vloot, opts) {
   const speler = Game.speler;
   const eigenSchip = vlaggenschip(speler);
 
+  // Moeilijkheid schaalt alleen de vijand (niet de eigen romp), zodat een
+  // hogere stand meer tegenstand betekent zonder dat de speler fragieler is.
+  const moe = MOEILIJKHEDEN.find((m) => m.id === speler.moeilijkheid) || MOEILIJKHEDEN[1];
+  const vijandKracht = moe ? moe.mult : 1;
+
   const mij = maakStrijder({
     type: eigenSchip.type,
     natie: 'piraat',
@@ -36,17 +41,24 @@ export function maakZeeslag(vloot, opts) {
   });
 
   const type = SCHIP_INDEX[vloot.type];
+  const startBemanning = Math.round(vloot.bemanning);
+  const startKanonnen = Math.round(vloot.kanonnen);
   const vijand = maakStrijder({
     type: vloot.type,
     natie: vloot.natie,
     romp: vloot.romp,
     maxRomp: type.romp,
-    kanonnen: vloot.kanonnen,
-    bemanning: vloot.bemanning,
+    kanonnen: startKanonnen,
+    // Moeilijkheid geeft de vijand meer (of minder) bemanning.
+    bemanning: Math.round(startBemanning * Math.sqrt(vijandKracht)),
     x: 250,
     y: -110,
     koers: Math.PI,
   });
+  // Streepjes voor overgave: hoe zwaarder de vijand, hoe meer je moet slopen.
+  vijand.startBemanning = Math.round(startBemanning * Math.sqrt(vijandKracht));
+  vijand.startKanonnen = startKanonnen;
+  mij.startKanonnen = mij.kanonnen;
 
   let kogels = [];
   let deeltjes = [];
@@ -272,10 +284,14 @@ export function maakZeeslag(vloot, opts) {
     }
 
     const soort = MUNITIE[schutter.speler ? munitie : schutter.munitie || 0];
-    const stukken = Math.max(1, Math.round(schutter.kanonnen / 2));
+    // Een breedzij schiet hooguit een redelijk aantal kogels — anders zou een
+    // groot schip de speler in één salvo naar de kelder jagen.
+    const stukken = Math.min(Math.max(1, Math.round(schutter.kanonnen / 2)), 8);
     const kanonnierBonus = schutter.speler ? 0.12 * talentBonus(speler, 'kanonnier') : 0;
-    const herlaadTijd = (3.4 - (schutter.speler ? 0.6 * talentBonus(speler, 'kanonnier') : 0)) *
+    let herlaadTijd = (3.4 - (schutter.speler ? 0.6 * talentBonus(speler, 'kanonnier') : 0)) *
       clamp(1.4 - schutter.bemanning / Math.max(1, schutter.startBemanning), 0.85, 1.5);
+    // Moeilijkheid: vijandelijke kanonniers laden sneller op hogere standen.
+    if (!schutter.speler) herlaadTijd *= clamp(1.55 - vijandKracht * 0.42, 0.95, 1.6);
     schutter.herlaad = herlaadTijd;
 
     const kant = peiling > 0 ? 1 : -1;
@@ -316,19 +332,25 @@ export function maakZeeslag(vloot, opts) {
         doel,
         soort,
         kracht: 1,
+        schutterKanonnen: schutter.kanonnen,
+        vijandelijk: !schutter.speler,
       });
     }
   }
 
   function treffer(s, k) {
     const zwaar = 1 + Math.random() * 0.8;
+    // Kaliber van de schutter = wat zwaarder treft dan een klein kanon.
+    const kaliber = 0.9 + (k.schutterKanonnen || 0) * 0.012;
+    // Moeilijkheidsschaling op vijandelijk vuur (niet op dat van de speler).
+    const kracht = k.vijandelijk ? 0.7 + 0.3 * vijandKracht : 1;
     if (k.soort.doel === 'romp') {
-      s.romp -= 2.6 * zwaar;
-      if (Math.random() < 0.06) s.brand += 0.5;
+      s.romp -= (0.55 + kaliber * 0.35) * zwaar * kracht;
+      if (Math.random() < 0.05) s.brand += 0.4;
     } else if (k.soort.doel === 'zeilen') {
-      s.tuigage = clamp(s.tuigage - 0.045 * zwaar, 0.15, 1);
+      s.tuigage = clamp(s.tuigage - 0.035 * zwaar, 0.15, 1);
     } else {
-      const dood = Math.max(1, Math.round(1.6 * zwaar));
+      const dood = Math.max(1, Math.round(1.1 * zwaar * kracht));
       s.bemanning = Math.max(0, s.bemanning - dood);
     }
     if (s.speler) Game.melding(`Treffer! ${k.soort.naam.toLowerCase()} in de ${k.soort.doel}.`, 'rood');
@@ -393,22 +415,51 @@ export function maakZeeslag(vloot, opts) {
   async function probeerVluchten() {
     const mijnType = SCHIP_INDEX[mij.type];
     const hunType = SCHIP_INDEX[vijand.type];
+    // Positioneel: hoe verder je al weg bent en hoe sneller je schip, hoe beter.
+    const afstand = dist(mij.x, mij.y, vijand.x, vijand.y);
+    const snelheidV = mijnType.snelheid * mij.tuigage;
+    const snelheidVijand = hunType.snelheid * vijand.tuigage;
     const kans = clamp(
-      0.4 + (mijnType.snelheid * mij.tuigage - hunType.snelheid * vijand.tuigage) / 50,
-      0.1,
-      0.92
+      0.3 + (afstand / 500) * 0.35 + (snelheidV - snelheidVijand) / 90,
+      0.12,
+      0.95
     );
     afgelopen = true;
     const ja = await UI.vraag(
       'Het gevecht opgeven?',
-      `Je stuurman schat de kans om weg te komen op ongeveer ${Math.round(kans * 100)}%.`,
+      `Je stuurman schat de kans om weg te komen op ongeveer ${Math.round(kans * 100)}%.` +
+        (mij.bemanning < mij.startBemanning * 0.4 || mij.romp < mij.maxRomp * 0.3
+          ? ' (Je schip is er slecht aan toe — strijken is veiliger.)'
+          : ''),
       [
-        { label: 'Alle zeilen bij!', waarde: true },
+        { label: 'Alle zeilen bij!', waarde: 'weg' },
         { label: 'Doorvechten', waarde: false, soort: 'gevaar' },
+        ...(mij.bemanning < mij.startBemanning * 0.45 || mij.romp < mij.maxRomp * 0.35
+          ? [{ label: 'De vlag strijken', waarde: 'strijk', soort: 'gevaar' }]
+          : []),
       ]
     );
     if (!ja) {
       afgelopen = false;
+      return;
+    }
+    if (ja === 'strijk') {
+      // Proactieve overgave: zachter dan een nederlaag, maar je verliest je lading en wat roem.
+      afgelopen = true;
+      await UI.vraag(
+        'Je strijkt de vlag',
+        'Je geeft je over. De vijand neemt je lading en laat je met je schip gaan.',
+        [{ label: 'De dag overleefd', waarde: 'ok' }],
+        { figuur: 'zeeman' }
+      );
+      speler.moraal = clamp(speler.moraal - 12, 0, 100);
+      speler.roem = Math.max(0, speler.roem - 4);
+      for (const n of Object.keys(speler.relatie)) {
+        if (n === vloot.natie && vloot.natie !== 'piraat') {
+          speler.relatie[n] = clamp(speler.relatie[n] - 6, -100, 100);
+        }
+      }
+      beëindig({ verloren: true, overgegeven: true });
       return;
     }
     if (Math.random() < kans) {
@@ -417,8 +468,8 @@ export function maakZeeslag(vloot, opts) {
       beëindig({ ontsnapt: true });
     } else {
       Game.melding('Ze zitten je op de hielen!', 'rood');
-      vijand.x = mij.x + Math.cos(mij.koers + Math.PI) * 180;
-      vijand.y = mij.y + Math.sin(mij.koers + Math.PI) * 180;
+      vijand.x = mij.x + Math.cos(mij.koers + Math.PI) * 140;
+      vijand.y = mij.y + Math.sin(mij.koers + Math.PI) * 140;
       afgelopen = false;
     }
   }
@@ -427,19 +478,32 @@ export function maakZeeslag(vloot, opts) {
 
   function controleerEinde() {
     if (afgelopen) return;
-    if (mij.romp <= 0 || mij.bemanning <= 0) {
+    // Je schip is verloren als de romp óf de bemanning op is — maar
+    // voordat de romp nul bereikt krijg je de kans om je over te geven,
+    // precies zoals de kapiteins in het origineel doen.
+    if (mij.bemanning <= 0) {
+      afgelopen = true;
+      audio.sfx.ramp();
+      nederlaag('Je bemanning is gedund tot de laatste man.');
+      return;
+    }
+    if (mij.romp <= 0) {
       afgelopen = true;
       audio.sfx.ramp();
       nederlaag('Je schip zinkt onder je voeten weg.');
       return;
     }
+    // Vijand zinkt pas echt als de romp nul is; eerder geeft hij zich over.
     if (vijand.romp <= 0) {
       afgelopen = true;
       audio.sfx.ramp();
       gezonken();
       return;
     }
-    if (vijand.bemanning <= 0 || (vijandMoraal < 14 && dist(mij.x, mij.y, vijand.x, vijand.y) < 320)) {
+    // Overgave: wil gebroken én bemanning gedund, ruim vóór de romp op is.
+    const afstand = dist(mij.x, mij.y, vijand.x, vijand.y);
+    if (vijand.bemanning <= 0 ||
+        (vijandMoraal < (vijandKracht > 1.4 ? 16 : 22) && afstand < 340)) {
       afgelopen = true;
       strijkVlag();
       return;
@@ -563,12 +627,14 @@ export function maakZeeslag(vloot, opts) {
 
   async function nederlaag(tekst) {
     slaSchadeOp();
-    const verloren = Math.round(speler.goud * 0.7);
+    // Zachtere nederlaag dan voorheen: je houdt je vlaggenschip (als wrak),
+    // en je verliest een deel van goud en bemanning — maar lang niet alles.
+    const verloren = Math.round(speler.goud * 0.45);
     speler.goud -= verloren;
-    speler.bemanning = Math.max(8, Math.round(speler.bemanning * 0.55));
-    speler.moraal = clamp(speler.moraal - 22, 0, 100);
+    speler.bemanning = Math.max(8, Math.round(speler.bemanning * (mij.bemanning > 0 ? mij.bemanning / mij.startBemanning : 0.4)));
+    speler.moraal = clamp(speler.moraal - 18, 0, 100);
     const eigen = vlaggenschip(speler);
-    eigen.romp = Math.max(8, Math.round(eigen.maxRomp * 0.3));
+    eigen.romp = Math.max(10, Math.round(eigen.maxRomp * 0.45));
     // Bijschepen gaan verloren.
     speler.schepen.length = 1;
 
@@ -589,7 +655,15 @@ export function maakZeeslag(vloot, opts) {
   }
 
   function beëindig(uitslag) {
-    if (!uitslag.verloren && !uitslag.gewonnen) slaSchadeOp();
+    // Bij vrijwillige overgave blijf je met je schip (en je bemanning) zitten;
+    // alleen bij een echte nederlaag of een gewonnen gevecht wordt de schade
+    // opgeslagen. Ontsnappen zonder schade = ook geen wijzigingen.
+    if (uitslag.overgegeven) {
+      const eigen = vlaggenschip(speler);
+      eigen.romp = clamp(mij.romp, 8, eigen.maxRomp);
+    } else if (!uitslag.verloren && !uitslag.gewonnen && !uitslag.ontsnapt) {
+      slaSchadeOp();
+    }
     opts.terug(uitslag);
   }
 
@@ -736,6 +810,7 @@ function maakStrijder(o) {
     romp: o.romp,
     maxRomp: o.maxRomp,
     kanonnen: o.kanonnen,
+    startKanonnen: Math.max(1, o.kanonnen),
     bemanning: o.bemanning,
     startBemanning: Math.max(1, o.bemanning),
     x: o.x,

@@ -2,6 +2,7 @@
 import { TAU, clamp, lerp, el, pick, makeRng, sierTijd } from './util.js';
 import { NATIES, NATIE_IDS, TALENTEN, MOEILIJKHEDEN } from './data.js';
 import { Wereld } from './world.js';
+import { ENTERAFSTAND } from './gevechtsmodel.js';
 import { Game, maakSpeler, heeftOpslag, laad, wisOpslag } from './game.js';
 import { maakZeilScene } from './sail.js';
 import * as R from './render.js';
@@ -218,11 +219,11 @@ function toonHulp() {
       );
       body.appendChild(
         blok('In het zeegevecht', [
-          ['← →', 'sturen'],
+          ['← →', 'sturen — hiermee richt je'],
           ['↑ ↓', 'zeil bijzetten of minderen'],
           ['spatie', 'de volle laag geven'],
           ['1 2 3', 'rondkogel · kettingkogel · schroot'],
-          ['B', 'enteren (binnen 70 meter)'],
+          ['B', `enteren (binnen ${ENTERAFSTAND} meter)`],
           ['Esc', 'proberen te vluchten'],
         ])
       );
@@ -240,6 +241,18 @@ function toonHulp() {
         'Koop goedkoop in plantagesteden, verkoop duur in forten en schatkamers. Verdeel op tijd de buit, ' +
         'want een bemanning zonder uitzicht op goud loopt weg. En hoe langer je vaart, hoe ouder je wordt.';
       body.appendChild(p);
+
+      const g = el('p', 'verhaal');
+      g.innerHTML =
+        '<b>Over het geschut:</b> de stukken staan in rijen langs de zijkant en kunnen dus alleen ' +
+        'dwarsuit vuren, nooit over de boeg of de spiegel. Je richt met het roer: draai je breedzij ' +
+        'naar de vijand toe en houd vóór, want een kogel is onderweg. Hoe meer stukken, hoe breder de ' +
+        'waaier — dichtbij dekt die het hele schip af, ver weg gaat het meeste in zee. ' +
+        '<br><br>Tegen een zwaardere tegenstander vecht je niet zijn romp kapot, maar zijn batterij: ' +
+        'rondkogels slaan stukken uit hun affuiten, en wie niet meer terug kan schieten strijkt de vlag ' +
+        'zodra je langszij komt. Kettingkogel maakt hem eerst onbestuurbaar, schroot dunt zijn bemanning ' +
+        'uit voor je entert. Let wel op de dracht: schroot draagt nog geen kwart van een rondkogel.';
+      body.appendChild(g);
     },
     knoppen: (sch) => [{ label: 'Terug', actie: () => { sch.sluit(); toonTitelmenu(); } }],
   });

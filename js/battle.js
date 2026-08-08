@@ -7,15 +7,20 @@ import * as R from './render.js';
 import * as UI from './ui.js';
 import * as audio from './audio.js';
 import { maakDuel } from './duel.js';
+import {
+  MUNITIE, KOGEL_SNELHEID, ENTERAFSTAND, KANS_GESCHUT, SCHROOT_KOPPEN, KETTING_TUIGAGE,
+  salvoStukken, spreiding, schootsafstand, voorhoudpunt, salvoRichting, inSchootsveld,
+  raaktRomp, herlaadTijd, schadePerTreffer, strijdlust, geschutVerlies, geeftOp,
+} from './gevechtsmodel.js';
 
 const ARENA_X = 1150;
 const ARENA_Y = 820;
 
-const MUNITIE = [
-  { id: 'rond', naam: 'Rondkogel', kort: 'ROND', doel: 'romp', omschrijving: 'Beukt de romp aan splinters.' },
-  { id: 'ketting', naam: 'Kettingkogel', kort: 'KETTING', doel: 'zeilen', omschrijving: 'Scheurt zeilen en tuigage.' },
-  { id: 'schroot', naam: 'Schroot', kort: 'SCHROOT', doel: 'bemanning', omschrijving: 'Maait het dek schoon.' },
-];
+/** Halve lengte en breedte van een romp, op de schaal waarop we in de slag tekenen. */
+function rompMaat(typeId) {
+  const [L, B] = R.scheepMaat(typeId);
+  return [L * 0.95, B * 0.95];
+}
 
 export function maakZeeslag(vloot, opts) {
   const wereld = Game.wereld;
@@ -105,22 +110,43 @@ export function maakZeeslag(vloot, opts) {
       beweeg(mij, dt);
       beweeg(vijand, dt);
 
-      // Kogels.
+      // Kogels vliegen echt: ze raken wat ze onderweg tegenkomen, en anders
+      // vallen ze aan het eind van hun dracht in zee.
       for (let i = kogels.length - 1; i >= 0; i--) {
         const k = kogels[i];
-        k.t += dt;
-        k.x += k.vx * dt;
-        k.y += k.vy * dt;
-        if (k.t >= k.vlucht) {
-          const doel = k.doel;
-          if (k.raak) {
-            treffer(doel, k);
-            audio.sfx.treffer();
-            spatDeeltjes(k.x, k.y, '#ffb45a', 7);
-          } else {
-            audio.sfx.plons();
-            deeltjes.push({ x: k.x, y: k.y, t: 0, duur: 0.6, r: 4, kleur: '#cfe9f2', vx: 0, vy: 0 });
+        const vx = k.vx * dt;
+        const vy = k.vy * dt;
+        const lengte = Math.hypot(vx, vy);
+        const [hl, hb] = rompMaat(k.doel.type);
+
+        // In stappen langslopen, anders schiet een snelle kogel dwars door een
+        // smalle sloep heen zonder hem te raken.
+        let geraakt = false;
+        const stappen = Math.max(1, Math.ceil(lengte / 5));
+        for (let n = 1; n <= stappen && !geraakt; n++) {
+          const px = k.x + (vx * n) / stappen;
+          const py = k.y + (vy * n) / stappen;
+          if (raaktRomp(px, py, k.doel, hl, hb)) {
+            k.x = px;
+            k.y = py;
+            geraakt = true;
           }
+        }
+
+        if (geraakt) {
+          treffer(k.doel, k);
+          audio.sfx.treffer();
+          spatDeeltjes(k.x, k.y, '#ffb45a', 7);
+          kogels.splice(i, 1);
+          continue;
+        }
+
+        k.x += vx;
+        k.y += vy;
+        k.afgelegd += lengte;
+        if (k.afgelegd >= k.bereik) {
+          audio.sfx.plons();
+          deeltjes.push({ x: k.x, y: k.y, t: 0, duur: 0.6, r: 4, kleur: '#cfe9f2', vx: 0, vy: 0 });
           kogels.splice(i, 1);
         }
       }
@@ -159,10 +185,9 @@ export function maakZeeslag(vloot, opts) {
       const gewenst = clamp(Math.min(Game.breedte, Game.hoogte * 1.5) / (spreiding + 420), 0.42, 1.05);
       cam.zoom = lerp(cam.zoom, gewenst, clamp(dt * 1.5, 0, 1));
 
-      // Vijandelijke moraal: minder bemanning en een lekke romp breken de wil.
-      const rompDeel = vijand.romp / vijand.maxRomp;
-      const volkDeel = vijand.bemanning / Math.max(1, vijand.startBemanning);
-      vijandMoraal = clamp(rompDeel * 60 + volkDeel * 40, 0, 100);
+      // Vijandelijke moraal: een lekke romp, gevallen kameraden en vooral
+      // zwijgend geschut breken de wil om door te vechten.
+      vijandMoraal = strijdlust(vijand);
 
       controleerEinde();
     },
@@ -186,7 +211,7 @@ export function maakZeeslag(vloot, opts) {
 
       // Kogels, met hun schaduw op het water zodat de boog leesbaar wordt.
       for (const k of kogels) {
-        const p = k.t / k.vlucht;
+        const p = clamp(k.afgelegd / k.bereik, 0, 1);
         const hoogte = Math.sin(p * Math.PI) * 10;
         c.fillStyle = 'rgba(6,28,44,0.32)';
         c.beginPath();
@@ -240,14 +265,22 @@ export function maakZeeslag(vloot, opts) {
     }
     vijand.koers = turnToward(vijand.koers, doelKoers, wend * dt);
 
-    // Vuren zodra de speler in het schootsveld ligt.
-    if (vijand.herlaad <= 0 && afstand < schootsafstand(vijand)) {
-      const peiling = Math.abs(normAngle(Math.atan2(mij.y - vijand.y, mij.x - vijand.x) - vijand.koers));
-      const dwars = Math.abs(peiling - Math.PI / 2);
-      if (dwars < 0.65) {
-        vijand.munitie = mij.bemanning > vijand.bemanning * 1.4 ? 2 : afstand > 260 ? 1 : 0;
-        vuur(vijand, mij);
-      }
+    // Munitie kiezen op wat binnen dracht ligt en wat het meeste pijn doet.
+    const kettingBereik = bereikVan(vijand, MUNITIE[1]);
+    const schrootBereik = bereikVan(vijand, MUNITIE[2]);
+    if (afstand < schrootBereik && mij.bemanning > vijand.bemanning * 1.1) vijand.munitie = 2;
+    else if (afstand < kettingBereik && mij.tuigage > 0.55 && (tijd | 0) % 3 === 0) vijand.munitie = 1;
+    else vijand.munitie = 0;
+
+    // Vuren zodra de speler goed dwars ligt; te schuin is zonde van het kruit.
+    const veld = inSchootsveld(vijand, mij);
+    if (
+      vijand.herlaad <= 0 &&
+      vijand.kanonnen > 0 &&
+      afstand < bereikVan(vijand, munitieVan(vijand)) &&
+      veld.dwars < 0.3
+    ) {
+      vuur(vijand, mij);
     }
   }
 
@@ -261,84 +294,92 @@ export function maakZeeslag(vloot, opts) {
     s.y += Math.sin(s.koers) * s.snelheid * dt;
   }
 
-  function schootsafstand(s) {
-    return 300 + SCHIP_INDEX[s.type].kanonnen * 6;
+  /** Dracht van dit schip met de munitie die er nu in zit. */
+  function bereikVan(s, soort) {
+    return schootsafstand(SCHIP_INDEX[s.type], soort);
+  }
+
+  function munitieVan(s) {
+    return MUNITIE[s.speler ? munitie : s.munitie || 0];
   }
 
   // --- Vuren --------------------------------------------------------------
 
   function vuur(schutter, doel) {
     if (schutter.herlaad > 0) return;
+    const soort = munitieVan(schutter);
+    const t = SCHIP_INDEX[schutter.type];
+    const stukken = salvoStukken(schutter.kanonnen);
+
+    if (stukken <= 0) {
+      if (schutter.speler) {
+        Game.melding('Al je geschut is uit de affuiten geslagen.', 'rood');
+        audio.sfx.fout();
+      }
+      return;
+    }
+
     const afstand = dist(schutter.x, schutter.y, doel.x, doel.y);
-    const bereik = schootsafstand(schutter);
-    const peiling = normAngle(Math.atan2(doel.y - schutter.y, doel.x - schutter.x) - schutter.koers);
-    const dwars = Math.abs(Math.abs(peiling) - Math.PI / 2);
+    const bereik = bereikVan(schutter, soort);
+    const veld = inSchootsveld(schutter, doel);
 
     if (schutter.speler) {
       if (afstand > bereik) {
-        Game.melding('Te ver weg — de kogels vallen in zee.', 'rood');
+        Game.melding(`Te ver voor ${soort.naam.toLowerCase()} — de kogels vallen in zee.`, 'rood');
         audio.sfx.fout();
         return;
       }
-      if (dwars > 0.8) {
+      if (!veld.binnen) {
         Game.melding('Geen schootsveld! Draai je breedzij naar ze toe.', 'rood');
         audio.sfx.fout();
         return;
       }
     }
 
-    const soort = MUNITIE[schutter.speler ? munitie : schutter.munitie || 0];
-    // Een breedzij schiet hooguit een redelijk aantal kogels — anders zou een
-    // groot schip de speler in één salvo naar de kelder jagen.
-    const stukken = Math.min(Math.max(1, Math.round(schutter.kanonnen / 2)), 8);
-    const kanonnierBonus = schutter.speler ? 0.12 * talentBonus(speler, 'kanonnier') : 0;
-    const t = SCHIP_INDEX[schutter.type];
-    // Herlaadtijd hangt af van schipsgrootte (klein = snel) en bemanning.
-    let herlaadTijd = (3.4 * t.herlaad - (schutter.speler ? 0.5 * talentBonus(speler, 'kanonnier') : 0)) *
-      clamp(1.45 - schutter.bemanning / Math.max(1, schutter.startBemanning), 0.8, 1.6);
-    herlaadTijd = Math.max(0.8, herlaadTijd);
-    // Moeilijkheid: vijandelijke kanonniers laden sneller op hogere standen.
-    if (!schutter.speler) herlaadTijd *= clamp(1.55 - vijandKracht * 0.42, 0.95, 1.6);
-    schutter.herlaad = herlaadTijd;
+    const volkDeel = clamp(schutter.bemanning / Math.max(1, schutter.startBemanning), 0, 1);
+    const kanonnier = schutter.speler ? talentBonus(speler, 'kanonnier') : 0;
+    schutter.herlaadVol = herlaadTijd(t, volkDeel, kanonnier) *
+      (schutter.speler ? 1 : clamp(1.55 - vijandKracht * 0.42, 0.95, 1.6));
+    schutter.herlaad = schutter.herlaadVol;
 
-    const kant = peiling > 0 ? 1 : -1;
+    // Waar het doel straks zal zijn. De stukken staan dwars vast en mogen maar
+    // een streek meedraaien, dus de rest moet je met het roer goedmaken.
+    const snelheid = KOGEL_SNELHEID * soort.snelheid;
+    const mik = voorhoudpunt(schutter.x, schutter.y, doel, snelheid);
+    const richtfout = (Math.random() - 0.5) * 2 * (0.045 + 0.075 * (1 - volkDeel)) *
+      (schutter.speler ? 1 - 0.4 * kanonnier : clamp(1.5 - 0.4 * vijandKracht, 0.6, 1.5));
+    const richting = salvoRichting(schutter, veld.kant, mik.x, mik.y) + richtfout;
+
+    const sp = spreiding(stukken);
+    const [hl, hb] = rompMaat(schutter.type);
+    const dwarsHoek = schutter.koers + (veld.kant * Math.PI) / 2;
     audio.sfx.kanon();
 
     for (let i = 0; i < stukken; i++) {
-      const spreid = (i / Math.max(1, stukken - 1) - 0.5) * 1.4;
-      const bron = {
-        x: schutter.x + Math.cos(schutter.koers) * spreid * 16 + Math.cos(schutter.koers + (kant * Math.PI) / 2) * 8,
-        y: schutter.y + Math.sin(schutter.koers) * spreid * 16 + Math.sin(schutter.koers + (kant * Math.PI) / 2) * 8,
-      };
+      // De stukken staan verdeeld over de lengte van het boord.
+      const langs = (stukken === 1 ? 0 : i / (stukken - 1) - 0.5) * hl * 1.1;
+      const bx = schutter.x + Math.cos(schutter.koers) * langs + Math.cos(dwarsHoek) * hb;
+      const by = schutter.y + Math.sin(schutter.koers) * langs + Math.sin(dwarsHoek) * hb;
+
       deeltjes.push({
-        x: bron.x, y: bron.y, t: 0, duur: 0.9, r: 6, kleur: '#dcd8cf',
-        vx: Math.cos(schutter.koers + (kant * Math.PI) / 2) * 40,
-        vy: Math.sin(schutter.koers + (kant * Math.PI) / 2) * 40,
+        x: bx, y: by, t: 0, duur: 0.9, r: 6, kleur: '#dcd8cf',
+        vx: Math.cos(dwarsHoek) * 40,
+        vy: Math.sin(dwarsHoek) * 40,
       });
 
-      const nauwkeurig = clamp(
-        0.72 - (afstand / bereik) * 0.42 - dwars * 0.25 + kanonnierBonus +
-          (schutter.bemanning / Math.max(1, schutter.startBemanning)) * 0.12,
-        0.06,
-        0.95
-      );
-      const raak = Math.random() < nauwkeurig;
-      const mik = {
-        x: doel.x + (raak ? 0 : (Math.random() - 0.5) * 90),
-        y: doel.y + (raak ? 0 : (Math.random() - 0.5) * 90),
-      };
-      const vlucht = clamp(afstand / 620, 0.18, 1.2);
+      // Waaier: dichtbij dekt hij het hele doel af, ver weg gaat het meeste
+      // in zee. Meer stukken betekent een bredere waaier.
+      const f = stukken === 1 ? 0 : (i / (stukken - 1)) * 2 - 1;
+      const hoek = richting + f * sp + (Math.random() - 0.5) * sp * 0.6;
       kogels.push({
-        x: bron.x,
-        y: bron.y,
-        vx: (mik.x - bron.x) / vlucht,
-        vy: (mik.y - bron.y) / vlucht,
-        t: 0,
-        vlucht,
-        raak,
+        x: bx,
+        y: by,
+        vx: Math.cos(hoek) * snelheid,
+        vy: Math.sin(hoek) * snelheid,
+        afgelegd: 0,
+        bereik,
         doel,
         soort,
-        kracht: 1,
         schutterKanonnen: schutter.kanonnen,
         vijandelijk: !schutter.speler,
       });
@@ -346,21 +387,38 @@ export function maakZeeslag(vloot, opts) {
   }
 
   function treffer(s, k) {
-    const zwaar = 1 + Math.random() * 0.8;
-    // Kaliber van de schutter = wat zwaarder treft dan een klein kanon.
-    const kaliber = 0.9 + (k.schutterKanonnen || 0) * 0.012;
+    const zwaar = 1 + Math.random() * 0.6;
     // Moeilijkheidsschaling op vijandelijk vuur (niet op dat van de speler).
     const kracht = k.vijandelijk ? 0.7 + 0.3 * vijandKracht : 1;
     if (k.soort.doel === 'romp') {
-      s.romp -= (0.55 + kaliber * 0.35) * zwaar * kracht;
-      if (Math.random() < 0.05) s.brand += 0.4;
+      // Een deel van de rondkogels slaat tussen de stukken in plaats van in de
+      // romp. Zo snoert een licht schip een zwaardere tegenstander de mond:
+      // schiet zijn batterij stil en hij strijkt de vlag zodra je langszij komt.
+      if (s.kanonnen > 0 && Math.random() < KANS_GESCHUT) {
+        s.geschutSchade += geschutVerlies(s.startKanonnen);
+        const kwijt = Math.floor(s.geschutSchade);
+        if (kwijt >= 1) {
+          s.geschutSchade -= kwijt;
+          s.kanonnen = Math.max(0, s.kanonnen - kwijt);
+          if (s.speler) Game.melding('Geschut uit de affuiten geslagen!', 'rood');
+          else if (s.kanonnen <= 0) Game.melding('Hun batterij zwijgt — kom langszij!');
+          else Game.melding(`Raak op het geschutsdek — nog ${s.kanonnen} stukken.`);
+        }
+      } else {
+        s.romp -= schadePerTreffer(k.schutterKanonnen) * zwaar * kracht;
+        if (Math.random() < 0.05) s.brand += 0.4;
+      }
     } else if (k.soort.doel === 'zeilen') {
-      s.tuigage = clamp(s.tuigage - 0.035 * zwaar, 0.15, 1);
+      s.tuigage = clamp(s.tuigage - KETTING_TUIGAGE * zwaar, 0.15, 1);
     } else {
-      const dood = Math.max(1, Math.round(1.1 * zwaar * kracht));
+      const dood = Math.max(1, Math.round(SCHROOT_KOPPEN * zwaar * kracht));
       s.bemanning = Math.max(0, s.bemanning - dood);
     }
-    if (s.speler) Game.melding(`Treffer! ${k.soort.naam.toLowerCase()} in de ${k.soort.doel}.`, 'rood');
+    if (s.speler && k.soort.doel !== 'romp') {
+      Game.melding(`Treffer! ${k.soort.naam.toLowerCase()} in de ${k.soort.doel}.`, 'rood');
+    } else if (s.speler) {
+      Game.melding('Treffer in de romp!', 'rood');
+    }
   }
 
   function spatDeeltjes(x, y, kleur, n) {
@@ -377,7 +435,7 @@ export function maakZeeslag(vloot, opts) {
 
   async function probeerEnteren() {
     const afstand = dist(mij.x, mij.y, vijand.x, vijand.y);
-    if (afstand > 95) {
+    if (afstand > ENTERAFSTAND) {
       Game.melding('Te ver om te enteren — vaar langszij!', 'rood');
       audio.sfx.fout();
       return;
@@ -507,10 +565,10 @@ export function maakZeeslag(vloot, opts) {
       gezonken();
       return;
     }
-    // Overgave: wil gebroken én bemanning gedund, ruim vóór de romp op is.
+    // Overgave: wil gebroken, óf geen stuk geschut meer over en jij ligt
+    // langszij. Dat laatste is de beloning voor het stilleggen van zijn batterij.
     const afstand = dist(mij.x, mij.y, vijand.x, vijand.y);
-    if (vijand.bemanning <= 0 ||
-        (vijandMoraal < (vijandKracht > 1.4 ? 16 : 22) && afstand < 340)) {
+    if (geeftOp(vijand, afstand, vijandKracht > 1.4 ? 16 : 22)) {
       afgelopen = true;
       strijkVlag();
       return;
@@ -659,6 +717,9 @@ export function maakZeeslag(vloot, opts) {
     const eigen = vlaggenschip(speler);
     eigen.romp = clamp(mij.romp, 1, eigen.maxRomp);
     speler.bemanning = Math.max(1, Math.round(mij.bemanning));
+    // Stukgeschoten geschut blijft stuk; de werf zet er nieuwe stukken in.
+    // Eén kanon houd je altijd over, anders sta je machteloos op zee.
+    eigen.kanonnen = clamp(mij.kanonnen, 1, SCHIP_INDEX[eigen.type].kanonnen);
   }
 
   function beëindig(uitslag) {
@@ -745,11 +806,15 @@ export function maakZeeslag(vloot, opts) {
       c.strokeStyle = gekozen ? '#f5e2b0' : 'rgba(217,164,65,0.4)';
       c.lineWidth = 1.3;
       c.stroke();
-      c.font = '600 12px Georgia, serif';
-      c.fillStyle = gekozen ? '#22160a' : '#e6d9b8';
       c.textAlign = 'left';
       c.textBaseline = 'middle';
-      c.fillText(`${i + 1}  ${m.naam}`, px + 10, py + bh / 2);
+      c.font = '600 12px Georgia, serif';
+      c.fillStyle = gekozen ? '#22160a' : '#e6d9b8';
+      c.fillText(`${i + 1}  ${m.naam}`, px + 10, py + bh / 2 - 5);
+      // De dracht erbij, want die verschilt sterk per soort.
+      c.font = '10px Georgia, serif';
+      c.fillStyle = gekozen ? 'rgba(34,22,10,0.75)' : 'rgba(230,217,184,0.6)';
+      c.fillText(`dracht ${Math.round(bereikVan(mij, m))} m`, px + 10, py + bh / 2 + 8);
     }
 
     // Herlaadbalk.
@@ -758,7 +823,7 @@ export function maakZeeslag(vloot, opts) {
     roundRect(c, vw / 2 - hw / 2, vh - 52, hw, 22, 6);
     c.fill();
     const klaar = mij.herlaad <= 0;
-    const f = klaar ? 1 : 1 - mij.herlaad / 3.4;
+    const f = klaar ? 1 : 1 - mij.herlaad / Math.max(0.1, mij.herlaadVol);
     c.fillStyle = klaar ? '#7bb36a' : '#8a6a3a';
     roundRect(c, vw / 2 - hw / 2 + 2, vh - 50, (hw - 4) * clamp(f, 0, 1), 18, 5);
     c.fill();
@@ -769,7 +834,7 @@ export function maakZeeslag(vloot, opts) {
 
     // Eigen toestand.
     c.fillStyle = 'rgba(10,28,44,0.82)';
-    roundRect(c, 16, 16, 236, 84, 8);
+    roundRect(c, 16, 16, 236, 102, 8);
     c.fill();
     c.strokeStyle = 'rgba(217,164,65,0.4)';
     c.lineWidth = 1.2;
@@ -781,10 +846,11 @@ export function maakZeeslag(vloot, opts) {
     balkje(c, 28, 44, 212, 12, mij.romp / mij.maxRomp, '#7bb36a', 'romp');
     balkje(c, 28, 62, 212, 12, mij.tuigage, '#cfc3a6', 'tuig');
     balkje(c, 28, 80, 212, 12, mij.bemanning / mij.startBemanning, '#d98a41', 'volk');
+    balkje(c, 28, 98, 212, 12, mij.kanonnen / mij.startKanonnen, '#b8b2a4', 'stuk');
 
     // Vijandtoestand.
     c.fillStyle = 'rgba(10,28,44,0.82)';
-    roundRect(c, vw - 252, 16, 236, 84, 8);
+    roundRect(c, vw - 252, 16, 236, 102, 8);
     c.fill();
     c.strokeStyle = 'rgba(198,91,69,0.5)';
     c.stroke();
@@ -793,15 +859,22 @@ export function maakZeeslag(vloot, opts) {
     balkje(c, vw - 240, 44, 212, 12, vijand.romp / vijand.maxRomp, '#c65b45', 'romp');
     balkje(c, vw - 240, 62, 212, 12, vijand.tuigage, '#cfc3a6', 'tuig');
     balkje(c, vw - 240, 80, 212, 12, vijandMoraal / 100, '#d98a41', 'moed');
+    balkje(c, vw - 240, 98, 212, 12, vijand.kanonnen / vijand.startKanonnen, '#b8b2a4', 'stuk');
 
-    R.tekenWindroos(c, vw - 62, 132, 38, wereld.windRichting, wereld.windKracht, Game.tijd);
+    R.tekenWindroos(c, vw - 62, 150, 38, wereld.windRichting, wereld.windKracht, Game.tijd);
 
     const afstand = Math.round(dist(mij.x, mij.y, vijand.x, vijand.y));
+    const dracht = Math.round(bereikVan(mij, MUNITIE[munitie]));
+    const veld = inSchootsveld(mij, vijand);
     c.textAlign = 'center';
     c.font = '11px Georgia, serif';
-    c.fillStyle = 'rgba(220,208,180,0.6)';
+    // Rood zodra je buiten dracht ligt of te schuin staat om te vuren.
+    const kanVuren = afstand <= dracht && veld.binnen;
+    c.fillStyle = kanVuren ? 'rgba(220,208,180,0.6)' : 'rgba(226,140,120,0.85)';
     c.fillText(
-      `afstand ${afstand}m · B = enteren (< 95m) · 1-3 munitie · Esc = vluchten`,
+      `afstand ${afstand} m · dracht ${dracht} m · ` +
+        (veld.binnen ? 'breedzij vrij' : 'geen schootsveld') +
+        ` · B = enteren (< ${ENTERAFSTAND} m) · 1-3 munitie · Esc = vluchten`,
       vw / 2,
       vh - 66
     );
@@ -849,6 +922,8 @@ function maakStrijder(o) {
     zeilstand: 0.8,
     tuigage: 1,
     herlaad: 1.2,
+    herlaadVol: 3.4,
+    geschutSchade: 0,
     brand: 0,
     speler: !!o.speler,
     munitie: 0,

@@ -37,11 +37,22 @@ liggen dan een zwaar galjoen. De wind draait en wakkert aan, dus je route is
 nooit twee keer hetzelfde. Onderweg eten je mannen proviand op en zakt de
 moraal — te lang wachten met de buit verdelen levert deserteurs of muiterij op.
 
-**Zeegevechten.** Laveren om je breedzij op de vijand te krijgen, met
-rondkogels de romp aan splinters beuken, met kettingkogels de tuigage
-neerhalen zodat ze niet meer kunnen vluchten, of met schroot het dek
-leegvegen voordat je entert. Schepen kunnen zich overgeven, in brand vliegen
-en zinken; een prijs die nog zeewaardig is kun je bij je vloot voegen.
+**Zeegevechten.** Het geschut staat in rijen langs de zijkant en vuurt dus
+alleen dwarsuit, nooit over de boeg of de spiegel — je richt met het roer.
+De helft van je stukken staat aan elk boord, en hoe meer stukken, hoe breder
+de waaier: dichtbij dekt die het hele schip af, ver weg gaat het meeste in zee.
+Kogels vliegen echt door de ruimte en missen ook echt, dus je moet vóórhouden
+op koers en vaart van je tegenstander. Een groot schip is daarmee vanzelf een
+groter doel dan een sloep.
+
+Tegen een zwaardere tegenstander vecht je niet zijn romp kapot maar zijn
+batterij: rondkogels slaan stukken uit hun affuiten, en wie niet meer terug kan
+schieten strijkt de vlag zodra je langszij komt. Kettingkogel maakt hem eerst
+onbestuurbaar, schroot dunt zijn bemanning uit voor je entert — let daarbij op
+de dracht, want schroot draagt nog geen kwart van een rondkogel. Schepen kunnen
+zich overgeven, in brand vliegen en zinken; een prijs die nog zeewaardig is kun
+je bij je vloot voegen. Geschut dat je zelf verliest blijft stuk tot de werf er
+nieuwe stukken in zet.
 
 **Duels.** Enteren en het bestormen van steden eindigt met de degen in de hand:
 hoog, midden of laag pareren en meteen terugstoten. Wie de ander over de reling
@@ -64,7 +75,8 @@ loopbaan.
 | **Op zee** | ← → sturen · ↑ ↓ zeil bij- of minderen · klik = koers uitzetten |
 | | `M` zeekaart · `S` vloot en ruim · `C` bemanning · `Esc` scheepsraad |
 | | scrollen of `+` `-` = in- en uitzoomen |
-| **Zeegevecht** | ← → sturen · ↑ ↓ zeil · `spatie` vuren · `1` `2` `3` munitie |
+| **Zeegevecht** | ← → sturen — hiermee richt je · ↑ ↓ zeil · `spatie` vuren |
+| | `1` `2` `3` rondkogel, kettingkogel, schroot |
 | | `B` enteren (binnen 95 m) · `Esc` proberen te vluchten |
 | **Duel** | ↑ hoog · → midden · ↓ laag — pareer op de hoogte waarop hij uithaalt |
 
@@ -81,12 +93,19 @@ js/
   render.js           zee, kustlijnen, schepen, steden, windroos
   sail.js             overzichtsscène (varen)
   battle.js           zeeslag
+  gevechtsmodel.js    ballistiek, schade en overgave — zonder canvas of DOM
   duel.js             degengevecht
   town.js             havenschermen
   ui.js               perkamentpanelen en dialogen
   util.js             wiskunde- en opmaakhulpjes
   audio.js            geluid en muziek uit de Web Audio API
 ```
+
+`gevechtsmodel.js` raakt bewust geen canvas, geluid of DOM aan. Daardoor is het
+gevecht ook buiten de browser door te rekenen, wat nodig is om de balans eerlijk
+te houden: hoe lang doet een sloep erover om de batterij van een linieschip stil
+te leggen, en hoe lang doet dat linieschip erover om de sloep te zinken. Wie aan
+de getallen sleutelt, kan dat verschil meten in plaats van schatten.
 
 Het spel wordt in `localStorage` bewaard onder de sleutel
 `zeeroverij.opslag.v1`; opgeslagen wordt het wereldzaadje plus de

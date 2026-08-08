@@ -154,146 +154,229 @@ export const sfx = {
     toon(523, 0.4, 'triangle', 0.16, 0.14);
   },
 };
-
 // --- Muziek ---------------------------------------------------------------
 //
-// Een eigen zeemansdeun in 6/8 — het wiegende maatsoort van de hoornpijp, twee
-// tellen van drie per maat, precies het ritme waarop een gangspil rondgaat.
-// D-dorisch: mineur, maar met een grote sext, waardoor het klaagt noch triomfeert.
+// Een tropische deun voor de Caraïben, op de tresillo: het 3+3+2-ritme met
+// Afro-Caribische wortels dat later de bodem werd van zowat alle eilandmuziek.
+// De bas valt op één, op de tweede helft van twee, en op vier; de akkoorden
+// vallen er telkens náást, op de tegentel. Dat schuren van de twee tegen
+// elkaar is wat de maat laat wiegen zonder dat er iets hard hoeft te slaan.
 //
-// Alles wordt hier opgewekt: melodie, tegenstem, baslijn, akkoorden en een
-// trommeltje van geruis. Geen enkel geluidsbestand, net als de rest van het spel.
+// F-groot, rustig tempo, en alles wordt geplukt in plaats van aangehouden —
+// korte aanslagen met een boventoon die sneller uitdooft dan de grondtoon,
+// waardoor het naar hout klinkt in plaats van naar een orgel.
+//
+// Alles wordt hier opgewekt: melodie, bas, akkoorden, schudritme en de meeuw.
+// Geen enkel geluidsbestand, net als de rest van het spel.
 
 /** Middelbare toonhoogte (MIDI) naar frequentie. */
 const mf = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
-/** Duur van een achtste noot. Zes daarvan vullen een maat. */
-const ACHTSTE = 0.17;
-const MAAT = ACHTSTE * 6;
+/** Duur van een zestiende. Zestien daarvan vullen een maat van vier tellen. */
+const ZESTIENDE = 0.145;
+const MAAT = ZESTIENDE * 16;
 
 /**
- * De melodie als [toon, lengte-in-achtsten]. Zestien maten in twee helften: een
- * A-deel dat laag begint en terugzakt, en een B-deel dat het thema een octaaf
- * hoger opneemt en pas in de laatste maat weer thuiskomt.
+ * De melodie als [toon, lengte-in-zestienden]; `null` is een rust. De ruimte zit
+ * hier niet in de rusten maar in de aanslag: geplukte noten doven uit, dus een
+ * lange noot is grotendeels stilte met een naklank. De meeste zinnen beginnen
+ * bovendien op de tegentel in plaats van op de tel — dat is de syncope die het
+ * geheel laat wiegen.
  */
+const R = null;
 const MELODIE = [
-  // A-deel: uitvaren.
-  [62, 2], [65, 1], [69, 2], [74, 1],
-  [72, 3], [69, 3],
-  [71, 2], [67, 1], [71, 2], [72, 1],
-  [67, 6],
-  [62, 2], [65, 1], [69, 2], [72, 1],
-  [74, 3], [72, 1], [69, 2],
-  [71, 2], [69, 1], [67, 2], [65, 1],
-  [62, 6],
-  // B-deel: ruime zee.
-  [69, 1], [72, 1], [77, 2], [76, 1], [74, 1],
-  [76, 2], [72, 1], [67, 3],
-  [74, 1], [76, 1], [77, 2], [81, 2],
-  [79, 3], [77, 3],
-  [76, 2], [77, 1], [76, 2], [74, 1],
-  [72, 3], [71, 3],
-  [69, 2], [74, 1], [72, 2], [69, 1],
-  [74, 6],
+  // A-deel: I - vi - ii - V, de zonnige omkeer, twee keer rond.
+  [R, 2], [69, 3], [72, 3], [77, 6], [R, 2],
+  [R, 2], [76, 3], [74, 3], [69, 6], [R, 2],
+  [R, 2], [74, 3], [72, 3], [70, 4], [67, 4],
+  [72, 6], [R, 2], [67, 4], [72, 4],
+  [R, 2], [69, 3], [72, 3], [77, 4], [79, 4],
+  [77, 3], [76, 3], [74, 6], [R, 4],
+  [R, 2], [70, 3], [72, 3], [74, 4], [72, 4],
+  [72, 4], [76, 4], [74, 4], [72, 4],
+  // B-deel: naar de onderdominant en langs de zesde weer terug.
+  [R, 2], [70, 3], [74, 3], [77, 8],
+  [79, 4], [77, 4], [76, 4], [74, 4],
+  [R, 2], [72, 3], [76, 3], [81, 8],
+  [79, 4], [77, 4], [74, 8],
+  [R, 2], [70, 3], [74, 3], [79, 4], [77, 4],
+  [76, 4], [74, 4], [72, 6], [R, 2],
+  [R, 2], [69, 3], [72, 3], [77, 4], [76, 4],
+  [74, 4], [72, 4], [69, 8],
 ];
 
-/** Eén akkoord per maat; `bas` is de grondtoon, `vijfde` de tegenhanger erop. */
-const Dm = { bas: 38, vijfde: 45, drieklank: [62, 65, 69] };
-const C = { bas: 36, vijfde: 43, drieklank: [60, 64, 67] };
-const F = { bas: 41, vijfde: 48, drieklank: [65, 69, 72] };
-const AKKOORDEN = [Dm, Dm, C, C, Dm, Dm, C, Dm, F, C, Dm, Dm, F, C, Dm, Dm];
+/**
+ * Eén akkoord per maat. `bas` en `vijfde` dragen de tresillo, `greep` is de
+ * viertonige ligging die op de tegentel wordt aangeslagen.
+ */
+const Fmaj = { bas: 41, vijfde: 48, greep: [65, 69, 72, 76] };
+const Dm7 = { bas: 38, vijfde: 45, greep: [62, 65, 69, 72] };
+const Gm7 = { bas: 43, vijfde: 50, greep: [67, 70, 74, 77] };
+const C7 = { bas: 36, vijfde: 43, greep: [60, 64, 67, 70] };
+const Bbmaj = { bas: 46, vijfde: 53, greep: [58, 62, 65, 69] };
+const Am7 = { bas: 45, vijfde: 52, greep: [57, 60, 64, 67] };
+const AKKOORDEN = [
+  Fmaj, Dm7, Gm7, C7, Fmaj, Dm7, Gm7, C7,
+  Bbmaj, Bbmaj, Am7, Dm7, Gm7, C7, Fmaj, C7,
+];
 
 const MATEN = AKKOORDEN.length;
-const ACHTSTEN_TOTAAL = MATEN * 6;
+const ZESTIENDEN_TOTAAL = MATEN * 16;
 
-/** Melodie omgerekend naar: op welke achtste begint welke noot. */
+/** De tresillo: 3+3+2, hier in zestienden dus op 0, 6 en 12. */
+const TRESILLO = [0, 6, 12];
+/** De tegentel waarop het akkoord wordt aangeslagen — telkens náást de bas. */
+const TEGENTEL = [2, 6, 10, 14];
+
+/** Melodie omgerekend naar: op welke zestiende begint welke noot. */
 const MELODIE_OP = new Map();
 {
   let pos = 0;
   for (const [toon, lengte] of MELODIE) {
-    MELODIE_OP.set(pos, [toon, lengte]);
+    if (toon !== null) MELODIE_OP.set(pos, [toon, lengte]);
     pos += lengte;
   }
 }
 
 /**
- * Een gestemde noot op de muziekbus. `stem` bepaalt het karakter: de melodie
- * klinkt als een tinnen fluit, de bas als een gestreken snaar.
+ * Een geplukte noot. Een marimba is in de kern een sinus met een boventoon die
+ * veel sneller uitdooft dan de grondtoon; dat verschil in uitdoving is wat het
+ * naar hout laat klinken. `helder` regelt hoeveel boventoon er mee mag.
  */
-function muziekNoot(toon, start, duur, vorm, vol, naarGalm = false) {
+function pluk(toon, start, duur, vol, helder = 0.3, naarGalm = false) {
   const c = state.ctx;
+  const f = mf(toon);
+  // Een geplukte noot klinkt uit op eigen tempo, niet op de genoteerde lengte —
+  // maar nooit zo lang dat hij over de volgende heen blijft hangen.
+  const uit = Math.min(duur * 1.5, 1.3);
+
   const osc = c.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(f, start);
   const g = c.createGain();
-  osc.type = vorm;
-  osc.frequency.setValueAtTime(mf(toon), start);
-  // Een klein aanzetje omhoog geeft de noot een aangeblazen begin.
-  osc.frequency.linearRampToValueAtTime(mf(toon), start + 0.03);
   g.gain.setValueAtTime(0.0001, start);
-  g.gain.exponentialRampToValueAtTime(vol, start + 0.025);
-  g.gain.exponentialRampToValueAtTime(vol * 0.6, start + duur * 0.5);
-  g.gain.exponentialRampToValueAtTime(0.0001, start + duur * 0.98);
+  g.gain.exponentialRampToValueAtTime(vol, start + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, start + uit);
   osc.connect(g);
   g.connect(state.muziekGain);
   if (naarGalm && state.galm) g.connect(state.galm);
   osc.start(start);
-  osc.stop(start + duur);
+  osc.stop(start + uit + 0.02);
+
+  if (helder <= 0) return;
+  const bov = c.createOscillator();
+  bov.type = 'sine';
+  bov.frequency.setValueAtTime(f * 4, start);
+  const bg = c.createGain();
+  bg.gain.setValueAtTime(0.0001, start);
+  bg.gain.exponentialRampToValueAtTime(vol * helder, start + 0.004);
+  bg.gain.exponentialRampToValueAtTime(0.0001, start + uit * 0.28);
+  bov.connect(bg);
+  bg.connect(state.muziekGain);
+  bov.start(start);
+  bov.stop(start + uit * 0.3 + 0.02);
 }
 
-/** Trommeltje: een doffe slag of een licht tikje, allebei uit geruis. */
-function muziekSlag(start, laag) {
+/** Schudritme: een kort ruisje, hoog weggefilterd. Zacht, het is geen dansvloer. */
+function schud(start, sterk) {
   const c = state.ctx;
-  const duur = laag ? 0.16 : 0.05;
+  const duur = sterk ? 0.055 : 0.035;
   const len = Math.max(1, Math.floor(c.sampleRate * duur));
   const buf = c.createBuffer(1, len, c.sampleRate);
   const d = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, laag ? 2 : 3);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
   const src = c.createBufferSource();
   src.buffer = buf;
   const f = c.createBiquadFilter();
-  f.type = laag ? 'lowpass' : 'bandpass';
-  f.frequency.value = laag ? 190 : 5200;
+  f.type = 'highpass';
+  f.frequency.value = 6200;
   const g = c.createGain();
-  g.gain.value = laag ? 0.5 : 0.1;
+  g.gain.value = sterk ? 0.085 : 0.045;
   src.connect(f);
   f.connect(g);
   g.connect(state.muziekGain);
   src.start(start);
 }
 
-/** Plant alles wat op deze achtste noot begint. */
-function planAchtste(index, start) {
-  const inLus = ((index % ACHTSTEN_TOTAAL) + ACHTSTEN_TOTAAL) % ACHTSTEN_TOTAAL;
-  const maat = Math.floor(inLus / 6);
-  const tel = inLus % 6;
+/**
+ * Een meeuw. De roep is een nasaal "kie-auw": de toon schiet omhoog en zakt dan
+ * langzamer terug, door een smalle band gehaald zodat het schril wordt in plaats
+ * van muzikaal. Twee tot vier kreten achter elkaar, want één meeuw roept nooit
+ * één keer. Hij gaat naar de echo, zodat hij van ver over het water lijkt te komen.
+ */
+function meeuw(start) {
+  const c = state.ctx;
+  const kreten = 2 + Math.floor(Math.random() * 3);
+  const hoog = 780 + Math.random() * 260; // elke meeuw zijn eigen stem
+  let t = start;
+  for (let i = 0; i < kreten; i++) {
+    const duur = 0.17 + Math.random() * 0.1;
+    const osc = c.createOscillator();
+    osc.type = 'sawtooth';
+    // Omhoog schieten, dan trager terugzakken: dat is de vorm van de roep.
+    osc.frequency.setValueAtTime(hoog * 0.62, t);
+    osc.frequency.exponentialRampToValueAtTime(hoog * 1.28, t + duur * 0.16);
+    osc.frequency.exponentialRampToValueAtTime(hoog * 0.72, t + duur);
+    const band = c.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = 1900;
+    band.Q.value = 3.2;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.12, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.06, t + duur * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + duur);
+    osc.connect(band);
+    band.connect(g);
+    g.connect(state.muziekGain);
+    if (state.galm) g.connect(state.galm);
+    osc.start(t);
+    osc.stop(t + duur + 0.02);
+    // Steeds iets korter achter elkaar, zoals een meeuw die zich opwindt.
+    t += duur + 0.16 - i * 0.02;
+  }
+}
+
+/** Plant alles wat op deze zestiende begint. */
+function planZestiende(index, start) {
+  const inLus = ((index % ZESTIENDEN_TOTAAL) + ZESTIENDEN_TOTAAL) % ZESTIENDEN_TOTAAL;
+  const maat = Math.floor(inLus / 16);
+  const tel = inLus % 16;
   const akkoord = AKKOORDEN[maat];
-  // Vanaf de tweede ronde komt de tegenstem erbij, zodat de lus niet in
-  // zichzelf blijft rondlopen maar ergens naartoe groeit.
-  const ronde = Math.floor(index / ACHTSTEN_TOTAAL);
+  // Vanaf de tweede ronde komt het schudritme erbij, zodat de lus ergens
+  // naartoe groeit in plaats van in zichzelf te blijven rondlopen.
+  const ronde = Math.floor(index / ZESTIENDEN_TOTAAL);
   const vol = ronde > 0;
 
   const noot = MELODIE_OP.get(inLus);
   if (noot) {
     const [toon, lengte] = noot;
-    const duur = lengte * ACHTSTE;
-    muziekNoot(toon, start, duur, 'triangle', 0.42, true);
-    // Tegenstem een octaaf lager: vult de klank zonder ooit vals te staan.
-    if (vol) muziekNoot(toon - 12, start, duur, 'sine', 0.16);
+    pluk(toon, start, lengte * ZESTIENDE, 0.34, 0.34, true);
   }
 
-  // Bas: grondtoon op de eerste tel, de kwint op de vierde — het wiegen van 6/8.
-  if (tel === 0) muziekNoot(akkoord.bas, start, ACHTSTE * 2.8, 'sine', 0.34);
-  if (tel === 3) muziekNoot(akkoord.vijfde, start, ACHTSTE * 2.6, 'sine', 0.28);
+  // Bas op de tresillo: grondtoon op één en op vier, de kwint op de tegentel
+  // van twee. Dat middelste aanslagje is het hele geheim van de maat.
+  if (tel === TRESILLO[0]) pluk(akkoord.bas, start, ZESTIENDE * 5, 0.3, 0.06);
+  if (tel === TRESILLO[1]) pluk(akkoord.vijfde, start, ZESTIENDE * 4, 0.2, 0.06);
+  if (tel === TRESILLO[2]) pluk(akkoord.bas, start, ZESTIENDE * 4, 0.26, 0.06);
 
-  // Akkoord eronder, zacht aangetokkeld zodat het niet met de melodie vecht.
-  if (tel === 0 || tel === 3) {
-    akkoord.drieklank.forEach((t, i) => {
-      muziekNoot(t - 12, start + i * 0.012, ACHTSTE * 2.4, 'triangle', 0.07);
+  // Akkoord op de tegentel, kort en zacht — het tikje van een cuatro.
+  if (TEGENTEL.includes(tel)) {
+    akkoord.greep.forEach((t, i) => {
+      pluk(t, start + i * 0.008, ZESTIENDE * 1.6, 0.05, 0.5);
     });
   }
 
-  // Trommel: slag op de twee hoofdtellen, tikje op de opmaat ernaartoe.
-  if (tel === 0 || tel === 3) muziekSlag(start, true);
-  if (vol && (tel === 2 || tel === 5)) muziekSlag(start, false);
+  // Schudritme op de achtsten, met de nadruk op de tegentellen.
+  if (vol && tel % 2 === 0) schud(start, tel % 4 === 2);
+
+  // En af en toe een meeuw: hooguit één kans per vier maten, en nooit in de
+  // eerste ronde — dan is de deun aan het woord. Dat komt neer op ongeveer één
+  // meeuw per halve minuut, vaak genoeg om te leven, zelden genoeg om niet te
+  // gaan storen. Hoger of lager? Alleen deze kans hoeft te veranderen.
+  if (vol && tel === 0 && maat % 4 === 1 && Math.random() < 0.35) {
+    meeuw(start + Math.random() * MAAT * 0.5);
+  }
 }
 
 // De planner kijkt een stukje vooruit en zet noten op de klok van de
@@ -303,7 +386,7 @@ function planAchtste(index, start) {
 const VOORUIT = 0.25; // seconden die we vooruit plannen
 const TIK = 45; // milliseconden tussen twee controles
 
-let volgendeAchtste = 0;
+let volgendeZestiende = 0;
 let positie = 0;
 
 function planner() {
@@ -311,10 +394,10 @@ function planner() {
   const c = state.ctx;
   if (!c) return;
   // Bij het hervatten na een pauze ligt de klok verder; sluit dan gewoon aan.
-  if (volgendeAchtste < c.currentTime) volgendeAchtste = c.currentTime + 0.06;
-  while (volgendeAchtste < c.currentTime + VOORUIT) {
-    if (state.aan) planAchtste(positie, volgendeAchtste);
-    volgendeAchtste += ACHTSTE;
+  if (volgendeZestiende < c.currentTime) volgendeZestiende = c.currentTime + 0.06;
+  while (volgendeZestiende < c.currentTime + VOORUIT) {
+    if (state.aan) planZestiende(positie, volgendeZestiende);
+    volgendeZestiende += ZESTIENDE;
     positie++;
   }
 }
@@ -325,7 +408,7 @@ export function startMuziek() {
   const c = ctx();
   if (!c) return;
   state.muziekAan = true;
-  volgendeAchtste = c.currentTime + 0.12;
+  volgendeZestiende = c.currentTime + 0.12;
   state.muziekTimer = setInterval(planner, TIK);
   planner();
 }
@@ -338,7 +421,7 @@ export function stopMuziek() {
     state.muziekTimer = null;
   }
   // De melodie hervat waar hij was; alleen de lus telt door, niet de maat.
-  volgendeAchtste = 0;
+  volgendeZestiende = 0;
 }
 
 /** De speler zet de muziek aan of uit. Dit ís de wens. */
@@ -355,7 +438,7 @@ export function muziekAan() {
 
 /** Hoe ver de deun is, in maten. Alleen voor de zekerheid bij het testen. */
 export function muziekMaat() {
-  return Math.floor(positie / 6) % MATEN;
+  return Math.floor(positie / 16) % MATEN;
 }
 
 export { MAAT as MUZIEK_MAATDUUR };

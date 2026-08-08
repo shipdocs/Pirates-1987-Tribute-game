@@ -64,12 +64,19 @@ wat jij koopt en verkoopt), scheepswerf (herstellen, kanonnen, schepen kopen en
 verkopen, vlaggenschip wisselen) en de gouverneur (bevorderingen, landgoed,
 kaperbrieven, gratie, de dochter van de gouverneur en uiteindelijk je aftreden).
 
-**Muziek.** Een eigen zeemansdeun in 6/8 — het wiegende ritme van de hoornpijp —
-met melodie, tegenstem, baslijn, akkoorden en een trommeltje, allemaal ter
-plekke opgewekt uit oscillatoren en geruis; er is geen enkel geluidsbestand.
-De deun loopt in zestien maten rond en wordt bij elke ronde iets voller. In de
-zeeslag en het duel zwijgt hij, zodat je de kanonnen hoort. Muziek en geluid
-staan los van elkaar in de scheepsraad.
+**Muziek.** Een tropische deun op de *tresillo* — het 3+3+2-ritme met
+Afro-Caribische wortels dat later de bodem werd van zowat alle eilandmuziek.
+De bas valt op één, op de tegentel van twee en op vier; de akkoorden vallen er
+telkens náást. Dat schuren laat de maat wiegen zonder dat er iets hard hoeft te
+slaan. F-groot, 103 slagen per minuut, en alles wordt geplukt in plaats van
+aangehouden: korte aanslagen met een boventoon die sneller uitdooft dan de
+grondtoon, waardoor het naar hout klinkt in plaats van naar een orgel.
+
+Zestien maten, ruim een halve minuut rond, en vanaf de tweede ronde komen het
+schudritme en af en toe een meeuw erbij. Alles ter plekke opgewekt uit
+oscillatoren en geruis — er is geen enkel geluidsbestand, ook niet voor de
+meeuw. In de zeeslag en het duel zwijgt de muziek, zodat je de kanonnen hoort.
+Muziek en geluid staan los van elkaar in de scheepsraad.
 
 **De lange lijn.** Roem, rang bij vier naties, grondbezit, huwelijk, veroverde
 steden — en je wordt ouder. Wie aftreedt krijgt een eindscore over zijn hele

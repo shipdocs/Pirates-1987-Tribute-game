@@ -1,0 +1,11 @@
+# Architect Mode Rules (Non-Obvious Only)
+
+- **Single source of truth**: all persistent game state lives on the globals `Game.wereld` and `Game.speler` in [`js/game.js`](../../js/game.js:11). Scenes (factories `maak…Scene()` in [`sail.js`](../../js/sail.js:19), [`battle.js`](../../js/battle.js:83), etc.) are transient — camera, timers, local animation. Do not design new state into scene closures.
+- **Scene protocol is duck-typed and optional**: `betreed/werkBij/teken/toets/scroll/verlaat/maatVeranderd`, all optional. `Game.zetScene()` handles enter/leave; the rAF loop calls update/draw. New scenes should follow this even shape.
+- **`gevechtsmodel.js` headless contract is load-bearing**: it imports only `util.js` and must stay free of canvas/DOM/audio so combat balance runs outside the browser (server/Node). Design any reusable "simulation core" the same way.
+- **Determinism boundary**: world layout uses seeded `makeRng(seed)` only; gameplay uses `Math.random`. This split is architectural — the world is a deterministic value derived from a seed, while the session is a stochastic simulation. A shared multiplayer world would require moving gameplay onto deterministic RNG too (see `ANALYSE-online-betaald-multiplayer.md`).
+- **Save format is seed + deltas, versioned**: `bewaar()` writes `{versie, seed, speler, oorlogen, diploTimer, steden[]}` — the world itself is rebuilt from seed in `laad()`. New persistent fields require a `versie` bump plus default-sanitizing migration in `laad()`.
+- **Rendering/UI split**: rendering and all gameplay drawing happen on the canvas `#spel` via `render.js`; every overlay/menu/dialog is DOM inside `#ui` built only through `UI.toonScherm`/`UI.vraag`. No raw DOM for game panels.
+- **Data layer is flat arrays + id-index maps**: `WAREN`/`SCHEPEN`/`STEDEN` with `WAAR_INDEX`/`SCHIP_INDEX`. Cargo is an array keyed by index from `nieuweLading()`. Adding data must respect this pairing.
+- **Keyboard contract**: input is keyed on `e.code` (physical), with arrow/Space/Tab `preventDefault` when no UI overlay is open — keep this in any new input handling.
+- **Map units**: world coordinates are projected lat/lon in "wereldeenheden" (`PPD = 92` in [`world.js`](../../js/world.js:6)); angles are radians with 0 = east. New systems that place things on the map must use these units.

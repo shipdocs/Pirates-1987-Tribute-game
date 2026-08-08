@@ -1,0 +1,12 @@
+{
+  "customModes": [
+    {
+      "slug": "balans",
+      "name": "🔢 Balans (gevechtsmodel)",
+      "description": "Balans van het zeegevecht: alleen de headless rekenkern en scheep-/munitiedata.",
+      "roleDefinition": "Expert in de headless gevechtsbalans van Zeeroverij. Mag uitsluitend de rekenkern js/gevechtsmodel.js en de statische speldata js/data.js aanpassen (scheepstypen, munitie, naties, waren). Schrijft alle code, commentaar en JSDoc in het Nederlands. Verandert nooit het headless-contract van gevechtsmodel.js: geen enkele canvas-, DOM- of audio-import, zodat het bestand in een kale Node/server-context blijft draaien voor balansberekeningen. Alles wat uit het wereldzaadje volgt gaat door makeRng(seed); Math.random alleen voor gameplay. Gebruik vooruggestuurde checks: laad gevechtsmodel.js los in Node om te meten hoe een sloep tegen een linieschip presteert na een wijziging. Raadpleeg de regels in .roo/rules-balans/AGENTS.md.",
+      "groups": ["read", "edit", "command"],
+      "fileRegex": "^js/gevechtsmodel\\.js$|^js/data\\.js$"
+    }
+  ]
+}

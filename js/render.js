@@ -1665,6 +1665,77 @@ export function tekenRook(ctx, p) {
 }
 
 /**
+ * Zichtbare stapelwolken per stormcel, in wereldruimte.
+ *
+ * Waar de oude wolkentegel in de zeelaag zat verstopt (bijna zwart op bijna
+ * zwart water, dus onzichtbaar), tekenen we hier échte wolken: heldere
+ * cumulus boven de zee en een donkere, dreigende kern in het hart van de
+ * storm. De wolken drijven met de wind mee en geven een storm zo een gezicht
+ * van veraf — precies zoals zwarte onweerswolken in het origineel.
+ */
+export function tekenStormen(ctx, wereld, cam, vw, vh, tijd) {
+  if (!wereld.stormen || !wereld.stormen.length) return;
+  const st = sierTijd(tijd);
+  const zoom = cam.zoom || 1;
+  const zx0 = cam.x - vw / 2 / zoom - 240,
+    zx1 = cam.x + vw / 2 / zoom + 240;
+  const zy0 = cam.y - vh / 2 / zoom - 240,
+    zy1 = cam.y + vh / 2 / zoom + 240;
+
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  for (const s of wereld.stormen) {
+    if (s.x < zx0 - s.straal || s.x > zx1 + s.straal) continue;
+    if (s.y < zy0 - s.straal || s.y > zy1 + s.straal) continue;
+
+    // De kern drijft waarnemend mee met de wind; de drift zet om in een
+    // trage draai van de wolken zelf, zodat ze niet als harde schijven
+    // over het water glijden.
+    const fase = st * 0.05 + s.kern;
+    const groei = clamp(s.leeftijd < 0.5 ? s.leeftijd / 0.5 : 1 - (s.leeftijd - 0.5) / 0.5, 0.15, 1);
+
+    // Eén zachte, donkere basiswolk voor de hele cel.
+    const basis = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.straal * 1.15);
+    basis.addColorStop(0, `rgba(24,42,62,${0.55 * groei})`);
+    basis.addColorStop(0.6, `rgba(16,32,50,${0.38 * groei})`);
+    basis.addColorStop(1, 'rgba(12,28,46,0)');
+    ctx.fillStyle = basis;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.straal * 1.15, 0, TAU);
+    ctx.fill();
+
+    // Cumulusbobbels die om de kern heen dwarrelen; dit is wat het oog
+    // van veraf als "de zwarte muur" leest.
+    const n = 12 + Math.round(groei * 8);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + fase * 0.35;
+      const afstand = s.straal * (0.35 + 0.4 * Math.sin(fase + i * 2.3));
+      const bx = s.x + Math.cos(a) * afstand + Math.sin(fase * 3 + i) * 26;
+      const by = s.y + Math.sin(a) * afstand + Math.cos(fase * 2.1 + i * 1.7) * 26;
+      const r = (34 + (i % 5) * 16 + s.straal * 0.045) * groei;
+      const g = ctx.createRadialGradient(bx, by, 0, bx, by, r * 2.6);
+      g.addColorStop(0, 'rgba(46,66,92,0.8)');
+      g.addColorStop(0.55, 'rgba(36,54,78,0.5)');
+      g.addColorStop(1, 'rgba(28,44,66,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(bx, by, r * 2.6, 0, TAU);
+      ctx.fill();
+    }
+
+    // De rand die oplicht waar het zonlicht langs glijdt.
+    ctx.strokeStyle = `rgba(190,205,222,${0.16 * groei})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.straal * 0.62, fase * 0.3, fase * 0.3 + Math.PI * 0.5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
  * Storm: regenbuien die meebuigen met de wind. Eenvoudige lijntjes die voorbij
  * waaien; hoe harder de wind, hoe meer en schuiner ze staan.
  */

@@ -733,8 +733,9 @@ function werf(stad, ouder) {
         rij.innerHTML =
           `<span class="werf-naam">${t.naam}${i === 0 ? ' <em>(vlaggenschip)</em>' : ''}</span>` +
           `<span class="werf-stat">romp ${Math.round(sh.romp)}/${sh.maxRomp} · ${sh.kanonnen}/${t.kanonnen} kanon` +
-          (up.roer || up.zeilen || up.romp
-            ? ` · uitrusting z${up.zeilen || 0}/r${up.roer || 0}/h${up.romp || 0}`
+          (up.roer || up.zeilen || up.romp || up.weer
+            ? ` · uitrusting z${up.zeilen || 0}/r${up.roer || 0}/h${up.romp || 0}` +
+              `${up.weer ? `/w${up.weer}` : ''}`
             : '') +
           `</span>`;
         const acties = el('div', 'werf-acties');
@@ -762,11 +763,15 @@ function werf(stad, ouder) {
         };
         acties.appendChild(kanon);
 
-        // Uitrusting: verbeter zeilen, romp of roer op de werf.
+        // Uitrusting: verbeter zeilen, romp of roer op de werf. `weer` heeft
+        // twee niveaus: eerst het weerglas, daarna de precisiebarometer.
         for (const [key, upg] of Object.entries(UPGRADES)) {
           const lvl = up[key] || 0;
           const prijs = Math.round(upg.basis * Math.pow(1.6, lvl));
-          const k = el('button', 'mini', `+${key === 'zeilen' ? 'zeil' : key === 'roer' ? 'roer' : 'romp'} (${fmtGold(prijs)})`);
+          let label;
+          if (key === 'weer') label = lvl === 0 ? 'Weerglas' : 'Precisiebarometer';
+          else label = `+${key === 'zeilen' ? 'zeil' : key === 'roer' ? 'roer' : 'romp'}`;
+          const k = el('button', 'mini', `${label} (${fmtGold(prijs)})`);
           k.disabled = lvl >= upg.max || s.goud < prijs || (key === 'romp' && sh.romp < sh.maxRomp - 1);
           k.onclick = () => {
             s.goud -= prijs;

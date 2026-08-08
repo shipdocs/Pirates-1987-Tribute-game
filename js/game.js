@@ -175,8 +175,9 @@ export function nieuwSchip(typeId, opts = {}) {
     zeilen: opts.zeilen != null ? opts.zeilen : 1,
     kanonnen: opts.kanonnen != null ? opts.kanonnen : Math.round(t.kanonnen * 0.6),
     lading: opts.lading || new Array(WAREN.length).fill(0),
-    // Scheepsuitrusting: niveau 0..max per verbetering.
-    upgrades: opts.upgrades || { zeilen: 0, romp: 0, roer: 0 },
+    // Scheepsuitrusting: niveau 0..max per verbetering. `weer` (weerglas en
+    // barometer) dempt stormschade en geldt alleen voor het vlaggenschip.
+    upgrades: opts.upgrades || { zeilen: 0, romp: 0, roer: 0, weer: 0 },
   };
 }
 
@@ -279,7 +280,7 @@ export function bewaar() {
   if (!Game.speler || !Game.wereld) return false;
   const w = Game.wereld;
   const data = {
-    versie: 2,
+    versie: 3,
     seed: w.seed,
     speler: Game.speler,
     // De wereldpolitiek staat op de wereld, niet op de speler, en volgt dus
@@ -287,6 +288,9 @@ export function bewaar() {
     // wat er tijdens deze reis is gebeurd.
     oorlogen: w.oorlogen || {},
     diploTimer: w.diploTimer || 0,
+    // Stormen zijn eveneens veranderlijke staat: ze drijven mee met de wind en
+    // worden dus niet door het zaadje opnieuw gezaaid.
+    stormen: (w.stormen || []).slice(),
     steden: w.steden.map((s) => ({
       natie: s.natie,
       welvaart: s.welvaart,
@@ -336,12 +340,16 @@ export function laad() {
   // gewoon bij vrede, precies zoals een nieuw spel.
   wereld.oorlogen = data.oorlogen || {};
   wereld.diploTimer = data.diploTimer || 0;
+  // Saves van vóór versie 3 kenden de stormen nog niet; die worden uit het
+  // zaadje gezaaid.
+  if (data.stormen && data.stormen.length) wereld.stormen = data.stormen;
   // Oude saves saneren: ontbrekende velden krijgen hun standaardwaarde.
   const sp = data.speler;
   if (!sp.familie) sp.familie = { rol: pick(Math.random, FAMILIE_ROLLEN), gevonden: false, gevondenDag: null };
   if (sp.opdracht === undefined) sp.opdracht = null;
   for (const schip of sp.schepen || []) {
     if (!schip.upgrades) schip.upgrades = { zeilen: 0, romp: 0, roer: 0 };
+    if (schip.upgrades.weer === undefined) schip.upgrades.weer = 0;
   }
   // De wereld wordt uit het zaadje herbouwd, en de kustlijnen zijn sinds
   // oudere saves fijner getekend. Een schip dat daardoor net op het droge

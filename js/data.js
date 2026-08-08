@@ -124,10 +124,10 @@ export const TALENTEN = [
 ];
 
 export const MOEILIJKHEDEN = [
-  { id: 'scheepsjongen', naam: 'Scheepsjongen', mult: 0.5, omschrijving: 'Rustig leren zeilen.' },
-  { id: 'kaperkapitein', naam: 'Kaperkapitein', mult: 1.0, omschrijving: 'De eerlijke uitdaging.' },
-  { id: 'zwaardvechter', naam: 'Zwaardvechter', mult: 1.5, omschrijving: 'Zware tegenstand, meer buit.' },
-  { id: 'legende', naam: 'Legende', mult: 2.2, omschrijving: 'Alleen voor doorgewinterde zeerovers.' },
+  { id: 'scheepsjongen', naam: 'Scheepsjongen', mult: 0.5, storm: 0.6, omschrijving: 'Rustig leren zeilen.' },
+  { id: 'kaperkapitein', naam: 'Kaperkapitein', mult: 1.0, storm: 1.0, omschrijving: 'De eerlijke uitdaging.' },
+  { id: 'zwaardvechter', naam: 'Zwaardvechter', mult: 1.5, storm: 1.4, omschrijving: 'Zware tegenstand, meer buit.' },
+  { id: 'legende', naam: 'Legende', mult: 2.2, storm: 1.8, omschrijving: 'Alleen voor doorgewinterde zeerovers.' },
 ];
 
 /** Rangen per natie, van laag naar hoog. */
@@ -251,12 +251,14 @@ export const OPDRACHT_SOORTEN = {
  * van het eerste niveau; elk volgend niveau kost meer. `stap` is de bonus per
  * niveau. `romp` verhoogt maxRomp permanent (die telt zo vanzelf mee in
  * herstel, HUD en gevecht); `zeilen` en `roer` zijn vermenigvuldigers die de
- * beweging op zee gebruiken.
+ * beweging op zee gebruiken. `weer` (weerglas → precisiebarometer) dempt de
+ * schade die een storm aanricht en geldt alleen voor het vlaggenschip.
  */
 export const UPGRADES = {
   zeilen: { naam: 'Zeilen', omschrijving: 'kruidt de snelheid op', basis: 900, max: 3, stap: 0.04 },
   romp: { naam: 'Rompversteviging', omschrijving: 'verstevigt de spanten', basis: 1200, max: 3, stap: 0.05 },
   roer: { naam: 'Roer', omschrijving: 'scherpt de wendbaarheid', basis: 700, max: 3, stap: 0.05 },
+  weer: { naam: 'Weerglas', omschrijving: 'kondigt stormen aan en dempt hun schade', basis: 1500, max: 2, stap: 0 },
 };
 
 export const FAMILIE_ROLLEN = ['broer', 'zus', 'vader', 'moeder'];

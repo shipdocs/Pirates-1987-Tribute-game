@@ -204,9 +204,11 @@ export function maakZeeslag(vloot, opts) {
     teken(c) {
       const vw = Game.breedte,
         vh = Game.hoogte;
+      // Stormen beïnvloeden ook de slag: zwaarder zeegang, meer regen.
+      const storm = wereld.stormWind ? wereld.stormWind(mij.x, mij.y) : { richting: wereld.windRichting, kracht: wereld.windKracht };
       R.tekenZee(c, cam, vw, vh, Game.tijd, {
-        richting: wereld.windRichting,
-        kracht: wereld.windKracht,
+        richting: storm.richting,
+        kracht: storm.kracht,
       });
 
       c.save();
@@ -236,9 +238,10 @@ export function maakZeeslag(vloot, opts) {
       c.restore();
 
       // Zeeleven en stormflair, net als op de overzichtskaart: meeuwen cirkelen
-      // boven het strijdtoneel, regen waait mee met de wind.
+      // boven het strijdtoneel, regen waait mee met de wind — binnen een storm
+      // harder.
       R.tekenMeeuwen(c, vw, vh, Game.tijd);
-      R.tekenRegen(c, Game.breedte, Game.hoogte, wereld.windRichting, wereld.windKracht, Game.tijd);
+      R.tekenRegen(c, Game.breedte, Game.hoogte, storm.richting, storm.kracht, Game.tijd);
 
       tekenGevechtHud(c);
     },
@@ -302,10 +305,11 @@ export function maakZeeslag(vloot, opts) {
 
   function beweeg(s, dt) {
     const t = SCHIP_INDEX[s.type];
-    const eff = zeilEfficiëntie(s.koers, wereld.windRichting, t.hoogte);
+    const storm = wereld.stormWind ? wereld.stormWind(s.x, s.y) : { richting: wereld.windRichting, kracht: wereld.windKracht };
+    const eff = zeilEfficiëntie(s.koers, storm.richting, t.hoogte);
     const romp = lerp(0.5, 1, clamp(s.romp / s.maxRomp, 0, 1));
     const upgrade = s.speler ? 1 + (mij.upgradeZeil || 0) : 1;
-    const doel = t.snelheid * eff * wereld.windKracht * s.zeilstand * s.tuigage * romp * 1.15 * upgrade;
+    const doel = t.snelheid * eff * storm.kracht * s.zeilstand * s.tuigage * romp * 1.15 * upgrade;
     s.snelheid = lerp(s.snelheid, doel, clamp(dt * 1.4, 0, 1));
     s.x += Math.cos(s.koers) * s.snelheid * dt;
     s.y += Math.sin(s.koers) * s.snelheid * dt;

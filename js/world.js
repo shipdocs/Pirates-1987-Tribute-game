@@ -243,6 +243,26 @@ export class Wereld {
     this.windKracht = 1;
     this.windTimer = 0;
 
+    // Stormen: beweeglijke weercellen die met de wind meedrijven. Ze zijn
+    // *gezaaid* uit het wereldzaadje (dus deterministisch) maar drijven daarna
+    // vrij op de wind mee; hun positie is daarmee veranderlijke staat, net als
+    // de politiek. Elke cel heeft een kern (x, y), een grootte en een
+    // levenslijn (verjaart en sterft).
+    this.stormen = [];
+    const stormRng = makeRng(seed ^ 0x9e3779b9);
+    const aantal = 3 + Math.floor(stormRng() * 3); // 3..5 stormen per wereld
+    for (let i = 0; i < aantal; i++) {
+      this.stormen.push({
+        x: rnd(stormRng, 60, WORLD_W - 60),
+        y: rnd(stormRng, 60, WORLD_H - 60),
+        straal: rnd(stormRng, 300, 620),
+        // 0..1: jonge cellen groeien, oude krimpen; volwassen = stabiel.
+        leeftijd: rnd(stormRng, 0, 1),
+        levensduur: rnd(stormRng, 250, 420), // seconden tot de cel verwaait
+        kern: rnd(stormRng, 0, TAU),
+      });
+    }
+
     this.vloten = [];
     for (let i = 0; i < 24; i++) this.spawnVloot(true);
 
@@ -438,6 +458,81 @@ export class Wereld {
     }
     const d = normAngle(this.windDoel - this.windRichting);
     this.windRichting = normAngle(this.windRichting + clamp(d, -0.25 * dt, 0.25 * dt));
+  }
+
+  /**
+   * Laat de stormen met de wind meedrijven, verouderen en vergaan. Stormen
+   * volgen de wind net iets sneller dan de zeegang, zodat een schip er met de
+   * wind in — of er juist tegenin — al dan niet in belandt.
+   */
+  stormTik(dt) {
+    const wind = this.windRichting;
+    // Stormen drijven wat sneller dan een schip en met een kleine laterale
+    // zwalk, zodat ze niet één gladde band blijven.
+    this.stormTijd = (this.stormTijd || 0) + dt;
+    const snelheid = 34 * this.windKracht;
+    const zwalk = Math.sin(this.stormTijd * 0.07 + this.stormen.length) * 0.35;
+    for (let i = this.stormen.length - 1; i >= 0; i--) {
+      const s = this.stormen[i];
+      s.leeftijd += dt / s.levensduur;
+      // Kern drijft met de wind mee.
+      s.x = (s.x + Math.cos(wind + zwalk) * snelheid * dt + WORLD_W) % WORLD_W;
+      s.y = (s.y + Math.sin(wind + zwalk) * snelheid * dt + WORLD_H) % WORLD_H;
+      // Groeien tot een kwart van hun leven, daarna krimpen tot ze vergaan.
+      if (s.leeftijd >= 1 || s.straal <= 120) {
+        this.stormen.splice(i, 1);
+        this.stormen.push(this.#nieuweStorm());
+      }
+    }
+  }
+
+  /** Maakt een nieuwe storm op een willekeurige plek op zee. */
+  #nieuweStorm() {
+    const rng = this.rng;
+    const x = rnd(rng, 60, WORLD_W - 60),
+      y = rnd(rng, 60, WORLD_H - 60);
+    // Niet over land laten ontstaan; de tekenlaag kapt hem dan al.
+    return {
+      x,
+      y,
+      straal: rnd(rng, 300, 620),
+      leeftijd: 0,
+      levensduur: rnd(rng, 250, 420),
+      kern: rnd(rng, 0, TAU),
+    };
+  }
+
+  /**
+   * Genormaliseerde storm-intensiteit (0..1) op een punt, of 0 als er geen
+   * storm in de buurt is. Deint met de leeftijd van de cel.
+   */
+  stormOp(x, y) {
+    let sterkst = 0;
+    for (const s of this.stormen) {
+      const d = dist(x, y, s.x, s.y);
+      if (d >= s.straal + 150) continue;
+      // Sterkst in de kern; aflopend naar de rand. Jonge cellen zijn nog zwak,
+      // oude krimpen weer.
+      const schemer = clamp(1 - d / (s.straal + 150), 0, 1);
+      const rijpheid =
+        s.leeftijd < 0.5
+          ? lerp(0.3, 1, s.leeftijd / 0.5) // groeien
+          : lerp(1, 0.35, (s.leeftijd - 0.5) / 0.5); // verlepteren
+      sterkst = Math.max(sterkst, schemer * rijpheid);
+    }
+    return clamp(sterkst, 0, 1);
+  }
+
+  /**
+   * Wind-effect op een punt: stuurt `windKracht` omhoog in stormen, zodat ook
+   * de zeegang en regen op die plek zwaarder worden.
+   */
+  stormWind(x, y) {
+    const s = this.stormOp(x, y);
+    return {
+      richting: this.windRichting + s * 0.5,
+      kracht: this.windKracht * (1 + s * 0.85),
+    };
   }
 
   stadOp(x, y, straal = 60) {

@@ -104,6 +104,14 @@ haalt uit het ruim een uitrustingsstuk dat op geen enkele werf te koop is:
 koperen huidbeslag, katoenen zeilen, fijn kruit. Die stukken horen bij jou en
 varen mee naar elk volgend vlaggenschip.
 
+**Schatgraven.** In de kroeg koop je kwarten van een schatkaart. Samen vormen
+ze één perkament met de echte kustlijn van de plek erop, drie herkenningspunten
+in inkt — een gespleten rots, een gestrand wrak, een grafheuvel — en een kruis.
+Zeil de streek af tot je stuurman de kust herkent, ga aan land, en volg het
+spoor van punt naar punt. Elk stuk perkament maakt één stap leesbaar: met vier
+stukken klopt de hele route, met twee moet je twee keer gokken. Drie keer
+verkeerd en het volk gaat terug naar de sloep.
+
 **Een vermist familielid.** Ergens in de Caraïben is een broer, zus, vader of
 moeder van je verdwenen. Bedelaars in de kroeg wijzen een stad aan; wie daar
 langs de kade navraagt, vindt niet het familielid maar een naam — en vanaf dat

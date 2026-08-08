@@ -359,6 +359,38 @@ export const LEGENDES = [
 
 export const LEGENDE_INDEX = Object.fromEntries(LEGENDES.map((l) => [l.id, l]));
 
+// --- Schatjacht -----------------------------------------------------------
+
+/**
+ * Herkenningspunten aan land. Ze worden twee keer getekend: klein op het
+ * kaartstuk en groot in het paneel terwijl je ernaast staat. `naam` wordt in
+ * lopende tekst gebruikt ("richting de drie palmen"), dus met lidwoord.
+ */
+export const HERKENNINGSPUNTEN = [
+  { id: 'rots', naam: 'de gespleten rots', kort: 'gespleten rots' },
+  { id: 'palmen', naam: 'de drie palmen', kort: 'drie palmen' },
+  { id: 'wrak', naam: 'het gestrande wrak', kort: 'gestrand wrak' },
+  { id: 'kreek', naam: 'de kreek', kort: 'kreek' },
+  { id: 'grafheuvel', naam: 'de grafheuvel', kort: 'grafheuvel' },
+  { id: 'bron', naam: 'de bron', kort: 'bron' },
+];
+
+export const PUNT_INDEX = Object.fromEntries(HERKENNINGSPUNTEN.map((p) => [p.id, p]));
+
+/**
+ * Grove streek waar een kaartstuk vandaan komt. Het perkament doet het fijne
+ * werk, deze regel het grove: zonder zo'n hint is een stuk gestileerde
+ * kustlijn niet terug te vinden op een zee van veertig graden breed.
+ */
+export const SCHATREGIOS = [
+  { id: 'antillen', naam: 'de Kleine Antillen', lon: [-64, -59], lat: [12, 18.5] },
+  { id: 'bahamas', naam: 'de Bahama-eilanden', lon: [-79, -74], lat: [22.5, 27] },
+  { id: 'cuba', naam: 'de kust van Cuba', lon: [-85, -74], lat: [19.5, 23.5] },
+  { id: 'hispaniola', naam: 'Hispaniola', lon: [-74, -68], lat: [17.5, 20.5] },
+  { id: 'main', naam: 'de Spaanse Main', lon: [-76, -62], lat: [8, 12.5] },
+  { id: 'yucatan', naam: 'Yucatán en de Golf', lon: [-95, -86], lat: [16, 22] },
+];
+
 // --- Buitstukken ----------------------------------------------------------
 
 /**

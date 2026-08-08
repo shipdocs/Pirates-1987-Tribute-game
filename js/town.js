@@ -553,15 +553,24 @@ function rondjeGeven(stad, sch) {
   sch.ververs();
 }
 
+/** Alle vier de stukken binnen: de haveloze man heeft niets meer te verkopen. */
+function schatCompleet(s) {
+  return !!(s.schat && s.schat.kwadranten.every(Boolean));
+}
+
 async function vreemdeling(stad, sch) {
   const s = Game.speler;
   const rol = rng();
-  if (rol < 0.32) {
+  if (rol < 0.32 && !schatCompleet(s)) {
+    // Nog geen schat op de kaart? Dan legt dit stuk er een neer.
+    if (!s.schat) s.schat = Game.wereld.plaatsSchat(s.schattenGevonden || 0);
+    const open = s.schat.kwadranten.map((k, i) => (k ? -1 : i)).filter((i) => i >= 0);
     const prijs = 300 + Math.round(rng() * 700);
     const koop = await UI.vraag(
       'Een havelozen man in de hoek',
-      `Hij schuift een gerafeld stuk perkament over de tafel. "De helft van een schatkaart, kapitein. ` +
-        `Voor ${fmtGold(prijs)} goudstukken is-ie van u."`,
+      `Hij schuift een gerafeld stuk perkament over de tafel. "Een kwart van een schatkaart, kapitein. ` +
+        `Van <b>${s.schat.regio}</b>, zweer ik u. Voor ${fmtGold(prijs)} goudstukken is-ie van u."` +
+        `<br><br><small>Je hebt ${4 - open.length} van de vier stukken.</small>`,
       [
         { label: `Kopen (${fmtGold(prijs)})`, waarde: true, uit: s.goud < prijs },
         { label: 'Laten liggen', waarde: false },
@@ -570,17 +579,14 @@ async function vreemdeling(stad, sch) {
     );
     if (koop) {
       s.goud -= prijs;
-      s.schatkaarten++;
+      s.schat.kwadranten[pick(rng, open)] = true;
+      const nu = s.schat.kwadranten.filter(Boolean).length;
       audio.sfx.munt();
-      sch._bericht = `Je bezit nu <b>${s.schatkaarten}</b> stukken van een schatkaart. Bij vier kun je gaan graven.`;
-      if (s.schatkaarten >= 4) {
-        s.schatkaarten -= 4;
-        const buit = Math.round(4000 + rng() * 9000);
-        s.goud += buit;
-        audio.sfx.fanfare();
-        sch._bericht = `De vier stukken passen! Op een naamloos eiland graaf je <b>${fmtGold(buit)} goudstukken</b> op.`;
-        s.roem += 20;
-      }
+      sch._bericht =
+        nu >= 4
+          ? `De vier stukken passen op elkaar. Het kruis ligt bij <b>${s.schat.regio}</b> — nu nog erheen varen.`
+          : `Je hebt nu <b>${nu}</b> van de vier stukken, allemaal van ${s.schat.regio}. ` +
+            'Hoe meer stukken, hoe minder je aan land hoeft te gokken.';
       sch.ververs();
     }
   } else if (rol < 0.6) {

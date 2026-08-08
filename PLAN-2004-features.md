@@ -218,9 +218,31 @@ anders straft het leer-niveau juist het hardst.
 
 ---
 
-## Fase 4 — De schatjacht als jacht
+## Fase 4 — De schatjacht als jacht ✔ uitgevoerd
 
 > De duurste van de vier, en het meest zichtbare stuk 2004.
+>
+> **Stand:** doorgevoerd, maar anders dan hieronder beschreven. Het plan
+> maakte er een krimpende cirkel plus een warm/koud-gesprek van; dat is de
+> boekhouding van een schatjacht, niet de jacht zelf. In het origineel zitten
+> **visuele aanwijzingen op de kaartstukken** en loopt er **een spoor langs
+> herkenningspunten aan land**. Dat is het geworden:
+>
+> - De vier kaartstukken zijn vier kwadranten van één getekend perkament, met
+>   de échte kustlijn rond de schat (uit `wereld.land`), drie herkenningspunten
+>   in inkt en het kruis ([`render.js`](js/render.js:1990)). Elk stuk noemt de
+>   streek, want een stuk gestileerde kust is anders niet terug te vinden.
+> - `plaatsSchat()` ([`world.js`](js/world.js:795)) legt de schat deterministisch
+>   op land met gegarandeerd bevaarbaar water binnen `SCHAT_ZICHT`.
+> - Vaar je die kust langs, dan herkent de stuurman hem en kun je aan land
+>   ([`sail.js`](js/sail.js:735)).
+> - Aan land loop je van herkenningspunt naar herkenningspunt. Elk kaartstuk
+>   maakt één stap leesbaar: met vier stukken klopt het hele spoor, met twee
+>   moet je twee keer gokken. Het paneel toont de prent van het punt dat de
+>   kaart aanwijst; ontbreekt dat stuk, dan is er geen prent. Drie missers en
+>   het volk gaat terug naar de sloep.
+>
+> Save-versie 6, met migratie van de oude teller `schatkaarten`.
 
 Nu leveren vier kaartstukken direct goud op ([`town.js`](js/town.js:498)).
 Voorstel: de stukken **narrowen een gebied** op de zeekaart die er al is.

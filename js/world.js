@@ -2,7 +2,7 @@
 import { makeRng, rnd, rndInt, pick, clamp, lerp, dist, TAU, normAngle } from './util.js';
 import {
   STEDEN, WAREN, WAAR_INDEX, SOORT_ECONOMIE, NATIE_IDS, SCHEPEN, SCHIP_INDEX, KAPITEIN_NAMEN,
-  SCHEEP_MAAT, LEGENDES, LEGENDE_INDEX, itemBonus,
+  SCHEEP_MAAT, LEGENDES, LEGENDE_INDEX, itemBonus, HERKENNINGSPUNTEN, SCHATREGIOS,
 } from './data.js';
 
 // Kaartprojectie: rechttoe-rechtaan, met echte graden als basis.
@@ -13,6 +13,13 @@ export const LON0 = -98,
   LAT1 = 31;
 export const WORLD_W = (LON1 - LON0) * PPD;
 export const WORLD_H = (LAT1 - LAT0) * PPD;
+
+/**
+ * Hoe dicht je langs de kust moet varen voordat de stuurman het perkament
+ * thuisbrengt. Dezelfde waarde begrenst waar een schat mag liggen, zodat elke
+ * schat gegarandeerd te bereiken is.
+ */
+export const SCHAT_ZICHT = 300;
 
 export const projX = (lon) => (lon - LON0) * PPD;
 export const projY = (lat) => (LAT1 - lat) * PPD;
@@ -804,6 +811,67 @@ export class Wereld {
   /** De vloot van de beruchte kapitein die nu op zee is, of null. */
   legendeOpZee() {
     return this.vloten.find((v) => v.legende) || null;
+  }
+
+  // --- Schatten -----------------------------------------------------------
+  // Zie SCHAT_ZICHT onderaan dit bestand: dat is tegelijk de eis bij het
+  // plaatsen en de afstand waarop de stuurman de kust herkent.
+
+  /**
+   * Legt een schat neer: een punt op land, vlak achter de kust, met drie
+   * herkenningspunten eromheen. Alles komt uit het wereldzaadje plus het
+   * volgnummer, zodat dezelfde save altijd dezelfde schat oplevert en er in de
+   * opslag niets meer hoeft dan dat nummer.
+   */
+  plaatsSchat(nummer = 0) {
+    const rng = makeRng(this.seed * 7919 + nummer * 104729 + 17);
+    const regio = pick(rng, SCHATREGIOS);
+
+    // Een plek zoeken die op land ligt én waar een schip echt bij kan komen.
+    // Niet "vlak bij niet-land" — een binnenmeertje of een rif telt niet: het
+    // spel biedt de tocht aan land pas aan als je binnen SCHAT_ZICHT vaart, dus
+    // die afstand moet hier gegarandeerd worden en niet gehoopt.
+    let punt = null;
+    for (let poging = 0; poging < 900 && !punt; poging++) {
+      const x = projX(rnd(rng, regio.lon[0], regio.lon[1]));
+      const y = projY(rnd(rng, regio.lat[0], regio.lat[1]));
+      if (!this.isLand(x, y)) continue;
+      const [wx, wy] = this.dichtstbijVaren(x, y, 'sloep', SCHAT_ZICHT);
+      if (dist(wx, wy, x, y) <= SCHAT_ZICHT * 0.8) punt = { x, y };
+    }
+    // Geen bereikbaar strandje in deze streek? Dan valt de schat terug op de
+    // rede van een willekeurige stad — daar kom je in elk geval altijd.
+    if (!punt) {
+      const stad = pick(rng, this.steden);
+      punt = { x: stad.ankerX, y: stad.ankerY };
+    }
+
+    // Drie herkenningspunten in een ruwe kring om het kruis heen; ze staan op
+    // vaste hoeken zodat de prent en het spoor over dezelfde plattegrond gaan.
+    const soorten = HERKENNINGSPUNTEN.slice();
+    const punten = [];
+    const start = rnd(rng, 0, TAU);
+    for (let i = 0; i < 3; i++) {
+      const soort = soorten.splice(Math.floor(rng() * soorten.length), 1)[0];
+      const hoek = start + (i / 3) * TAU + rnd(rng, -0.35, 0.35);
+      const afstand = rnd(rng, 90, 190);
+      punten.push({
+        id: soort.id,
+        x: punt.x + Math.cos(hoek) * afstand,
+        y: punt.y + Math.sin(hoek) * afstand,
+      });
+    }
+
+    return {
+      nummer,
+      x: punt.x,
+      y: punt.y,
+      regio: regio.naam,
+      punten,
+      // Welke kwadranten van het perkament je al hebt. Volgorde van onthullen
+      // wordt bij het kopen bepaald.
+      kwadranten: [false, false, false, false],
+    };
   }
 
   /**

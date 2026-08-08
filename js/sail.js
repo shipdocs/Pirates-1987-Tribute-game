@@ -4,9 +4,9 @@ import {
 } from './util.js';
 import {
   WAREN, WAAR_INDEX, SCHIP_INDEX, NATIES, RANGEN, scheepsAanduiding, MOEILIJKHEDEN,
-  metLidwoord, LEGENDES, LEGENDE_INDEX, ITEMS,
+  metLidwoord, LEGENDES, LEGENDE_INDEX, ITEMS, PUNT_INDEX,
 } from './data.js';
-import { WORLD_W, WORLD_H, zeilEfficiëntie } from './world.js';
+import { WORLD_W, WORLD_H, SCHAT_ZICHT, zeilEfficiëntie } from './world.js';
 import {
   Game, roundRect, vlaggenschip, ruimTotaal, vlootBemanningMax, bewaar, talentBonus,
   conditieWoord, PENSIOEN_HINT,
@@ -297,6 +297,22 @@ export function maakZeilScene() {
             break;
           }
         }
+      }
+
+      // --- De kust van de schatkaart herkennen -----------------------------
+      // Met minstens twee stukken kan de stuurman de kustlijn thuisbrengen.
+      // Alleen aanbieden als er geen ander scherm openstaat en je niet net
+      // hebt afgezien van de tocht.
+      if (
+        s.schat &&
+        s.schat.kwadranten.filter(Boolean).length >= 2 &&
+        !s.schat.bezig &&
+        (s.schat.afgezienDag == null || s.dag - s.schat.afgezienDag > 20) &&
+        dist(s.x, s.y, s.schat.x, s.schat.y) < SCHAT_ZICHT &&
+        !UI.ietsOpen()
+      ) {
+        s.schat.bezig = true;
+        gaAanLand();
       }
 
       // --- Haven binnenlopen ----------------------------------------------
@@ -714,6 +730,124 @@ export function maakZeilScene() {
     );
   }
 
+  // --- De schatjacht aan land ---------------------------------------------
+
+  /**
+   * Paneel met één herkenningspunt, groot in inkt. Hetzelfde tekeningetje als
+   * op het perkament, zodat je het spoor kunt volgen door te vergelijken.
+   */
+  function puntPaneel(id, breedte = 300, hoogte = 150) {
+    const cv = document.createElement('canvas');
+    cv.width = breedte;
+    cv.height = hoogte;
+    cv.className = 'kaart-canvas';
+    const g = cv.getContext('2d');
+    g.fillStyle = '#e9dcb8';
+    g.fillRect(0, 0, breedte, hoogte);
+    g.strokeStyle = 'rgba(120,92,50,0.4)';
+    g.lineWidth = 2;
+    g.strokeRect(3, 3, breedte - 6, hoogte - 6);
+    R.tekenHerkenningspunt(g, id, breedte / 2, hoogte / 2 + 12, 4.2);
+    return cv;
+  }
+
+  /**
+   * Het spoor: van herkenningspunt naar herkenningspunt. Elk stuk perkament
+   * dat je hebt maakt één stap leesbaar; voor de rest moet je gokken. Bij drie
+   * missers geeft het volk het op en vaar je met lege handen terug.
+   */
+  async function gaAanLand() {
+    const s = Game.speler;
+    const schat = s.schat;
+    const stukken = schat.kwadranten.filter(Boolean).length;
+
+    const beginnen = await UI.vraag(
+      'De stuurman herkent de kust',
+      `Hij houdt het perkament naast de kustlijn en knikt. "Dit is het, kapitein. ` +
+        `${schat.regio}." Aan wal gaan met een sloep en een paar man kost een dag of wat, ` +
+        'en het volk moppert als er niets ligt.',
+      [
+        { label: 'Aan land gaan', waarde: true },
+        { label: 'Doorvaren', waarde: false, esc: true },
+      ],
+      { figuur: 'zeeman' }
+    );
+    if (!beginnen) {
+      schat.bezig = false;
+      schat.afgezienDag = s.dag;
+      return;
+    }
+
+    // De route loopt langs de herkenningspunten en eindigt bij het kruis.
+    // Per stap kies je uit de drie punten; er is er telkens één goed.
+    const route = schat.punten.map((p) => p.id);
+    let missers = 0;
+
+    for (let stap = 0; stap < route.length && missers < 3; stap++) {
+      const goed = route[stap];
+      // Zoveel stappen als je stukken perkament hebt, staan op de kaart; de
+      // rest is gissen. Met vier stukken klopt het hele spoor.
+      const leesbaar = stap < stukken - 1;
+      const vorige = stap === 0 ? null : route[stap - 1];
+
+      const keuze = await UI.vraag(
+        stap === 0 ? 'Aan wal' : `Bij ${PUNT_INDEX[vorige].naam}`,
+        (stap === 0
+          ? 'De sloep loopt het strand op. Voor je uit ligt struikgewas, en daarachter drie plekken die eruitzien alsof iemand ze ooit heeft onthouden.'
+          : `Je staat bij ${PUNT_INDEX[vorige].naam}. Vanaf hier lopen drie sporen verder.`) +
+          (leesbaar
+            ? `<br><br>Het perkament is hier duidelijk: <b>${PUNT_INDEX[goed].naam}</b>.`
+            : '<br><br>Dit stuk van de kaart ontbreekt. De keuze is aan jou.'),
+        route.map((id) => ({ label: `Naar ${PUNT_INDEX[id].naam}`, waarde: id })),
+        // Het paneel ís het stuk perkament. Ontbreekt dat, dan is er ook geen
+        // prent — een willekeurig plaatje zou doen alsof je iets ziet.
+        { figuur: 'zeeman', paneel: leesbaar ? puntPaneel(goed) : null }
+      );
+
+      if (keuze === goed) {
+        s.dag += 1;
+        Game.melding(`Je staat bij ${PUNT_INDEX[goed].naam}. Het spoor klopt.`, 'goud');
+      } else {
+        missers++;
+        s.dag += 2;
+        s.moraal = clamp(s.moraal - 6, 0, 100);
+        audio.sfx.fout();
+        await UI.vraag(
+          'Verkeerd gelopen',
+          `Achter ${PUNT_INDEX[keuze].naam} loopt het spoor dood in het struikgewas. ` +
+            `Twee dagen kwijt, en het volk kijkt zuur.` +
+            (missers >= 3 ? ' Ze weigeren nog een stap te zetten.' : ''),
+          [{ label: missers >= 3 ? 'Terug naar de sloep' : 'Opnieuw proberen', waarde: 'ok' }],
+          { figuur: 'zeeman' }
+        );
+        stap--; // dezelfde stap opnieuw
+      }
+    }
+
+    if (missers >= 3) {
+      schat.bezig = false;
+      schat.afgezienDag = s.dag;
+      Game.melding('De tocht landinwaarts is op niets uitgelopen.', 'rood');
+      return;
+    }
+
+    // Bij het kruis: graven.
+    const buit = Math.round((5000 + Math.random() * 9000) * (1 + (s.schattenGevonden || 0) * 0.25));
+    s.goud += buit;
+    s.roem += 30;
+    s.moraal = clamp(s.moraal + 12, 0, 100);
+    s.schattenGevonden = (s.schattenGevonden || 0) + 1;
+    s.schat = null;
+    audio.sfx.fanfare();
+    await UI.vraag(
+      'De schop stuit op hout',
+      `Onder een halve el zand ligt een kist met ijzeren banden. Er zit ` +
+        `<b>${fmtGold(buit)} goudstukken</b> in, en een brief die niemand meer kan bezorgen.`,
+      [{ label: 'Naar de sloep, snel', waarde: 'ok' }],
+      { figuur: 'zeeman' }
+    );
+  }
+
   // --- Schermen -----------------------------------------------------------
 
   function toonKaart() {
@@ -758,6 +892,23 @@ export function maakZeilScene() {
           const stad = Game.wereld.steden.find((x) => x.naam === st.bij);
           if (!stad) continue;
           tekenDoodskop(g, stad.x * sc, stad.y * sc - 12);
+        }
+        // Het zoekgebied van de schatkaart: hoe meer stukken, hoe krapper de
+        // cirkel. Het kruis zelf komt er nooit op — dat moet je aan land zoeken.
+        if (s.schat && s.schat.kwadranten.some(Boolean)) {
+          const stukken = s.schat.kwadranten.filter(Boolean).length;
+          const straal = [0, 1500, 800, 460, 300][stukken] * sc;
+          g.save();
+          g.strokeStyle = 'rgba(140,47,34,0.75)';
+          g.setLineDash([6, 5]);
+          g.lineWidth = 1.6;
+          g.beginPath();
+          g.arc(s.schat.x * sc, s.schat.y * sc, straal, 0, TAU);
+          g.stroke();
+          g.setLineDash([]);
+          g.fillStyle = 'rgba(140,47,34,0.1)';
+          g.fill();
+          g.restore();
         }
         g.fillStyle = '#ffdf8a';
         g.strokeStyle = '#2b1d12';
@@ -873,6 +1024,27 @@ export function maakZeilScene() {
           lange.appendChild(opdrachtInfo);
         }
         body.appendChild(lange);
+
+        // Het perkament, als je er stukken van hebt.
+        if (s.schat && s.schat.kwadranten.some(Boolean)) {
+          const kaart = el('div', 'schipkaart');
+          const aantal = s.schat.kwadranten.filter(Boolean).length;
+          kaart.innerHTML = `<h3>De schatkaart</h3>`;
+          const cv = document.createElement('canvas');
+          cv.width = 320;
+          cv.height = 240;
+          cv.className = 'kaart-canvas';
+          R.tekenSchatkaart(cv.getContext('2d'), Game.wereld, s.schat, cv.width, cv.height, s.schat.kwadranten);
+          kaart.appendChild(cv);
+          const bij = el('p', 'verhaal');
+          bij.innerHTML =
+            `<b>${aantal}</b> van de vier stukken · ergens bij <b>${s.schat.regio}</b>.` +
+            (aantal >= 2
+              ? ' Zeil die streek af; je stuurman herkent de kust als je er langs komt.'
+              : ' Met één stuk herkent niemand die kust — koop er meer in de kroeg.');
+          kaart.appendChild(bij);
+          body.appendChild(kaart);
+        }
 
         // Beruchte kapiteins: wie er nog vaart, wie er verslagen is.
         const namen = el('div', 'schipkaart');

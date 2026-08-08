@@ -101,6 +101,9 @@ export function vraag(titel, tekst, keuzes, opts = {}) {
         const p = el('p', 'verhaal');
         p.innerHTML = tekst;
         body.appendChild(p);
+        // Optioneel beeld onder de tekst, bijvoorbeeld het herkenningspunt
+        // waar je op de schatjacht naast staat.
+        if (opts.paneel) body.appendChild(opts.paneel);
       },
       knoppen: keuzes.map((k) => ({
         label: k.label,

@@ -217,7 +217,9 @@ export function maakSpeler(opties) {
     y: 0,
     koers: Math.PI,
     snelheid: 0,
-    schatkaarten: 0,
+    // Lopende schatjacht: null of het resultaat van wereld.plaatsSchat().
+    schat: null,
+    schattenGevonden: 0,
     veroverdeSteden: 0,
     verslagenSchepen: 0,
     gehuwd: null,
@@ -328,7 +330,7 @@ export function bewaar() {
   if (!Game.speler || !Game.wereld) return false;
   const w = Game.wereld;
   const data = {
-    versie: 5,
+    versie: 6,
     seed: w.seed,
     speler: Game.speler,
     // De wereldpolitiek staat op de wereld, niet op de speler, en volgt dus
@@ -406,6 +408,16 @@ export function laad() {
   // Saves van vóór versie 5 kenden de beruchte kapiteins nog niet. Nieuwe
   // legendes die later worden toegevoegd komen er langs deze weg ook bij.
   if (!Array.isArray(sp.items)) sp.items = [];
+  // Saves van vóór de schatjacht hadden alleen een teller `schatkaarten`. Die
+  // wordt omgezet: er komt een echte schat op de kaart met evenveel kwadranten
+  // al ingevuld als er stukken gekocht waren.
+  if (sp.schattenGevonden == null) sp.schattenGevonden = 0;
+  if (sp.schat === undefined) sp.schat = null;
+  if (!sp.schat && sp.schatkaarten > 0) {
+    sp.schat = wereld.plaatsSchat(sp.schattenGevonden);
+    for (let i = 0; i < Math.min(4, sp.schatkaarten); i++) sp.schat.kwadranten[i] = true;
+  }
+  delete sp.schatkaarten;
   if (!sp.legendes) sp.legendes = {};
   for (const l of LEGENDES) {
     if (!sp.legendes[l.id]) sp.legendes[l.id] = { verslagen: false, getipt: false, bij: null };

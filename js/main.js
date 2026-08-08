@@ -1,7 +1,7 @@
 // Opstart: titelscherm, het maken van een kapitein en de overgang naar zee.
 import { TAU, clamp, lerp, el, pick, makeRng, sierTijd, fmtGold } from './util.js';
 import { NATIES, NATIE_IDS, TALENTEN, MOEILIJKHEDEN } from './data.js';
-import { Wereld } from './world.js';
+import { PPD, Wereld } from './world.js';
 import { ENTERAFSTAND } from './gevechtsmodel.js';
 import { Game, maakSpeler, heeftOpslag, laad, wisOpslag, leesErelijst } from './game.js';
 import { maakZeilScene } from './sail.js';
@@ -17,39 +17,47 @@ R.initPatronen(Game.ctx);
 
 function maakTitelScene() {
   const wereld = new Wereld(20250807);
-  const cam = { x: 0, y: 0, zoom: 0.62 };
+  // De titel houdt zijn vertrouwde brede blik over de Caraïben. De vaarwereld
+  // zelf is groter geworden, dus schaal hier camera, acteurs en beweging samen.
+  const titelSchaal = PPD / 92;
+  const cam = { x: 0, y: 0, zoom: 0.62 / titelSchaal };
   // Camera drijft langzaam over de Antillen.
   let t = 0;
   const schepen = [];
   const r = makeRng(7);
   for (let i = 0; i < 6; i++) {
     schepen.push({
-      x: r() * 2400 + 600,
-      y: r() * 1200 + 500,
+      x: (r() * 2400 + 600) * titelSchaal,
+      y: (r() * 1200 + 500) * titelSchaal,
       koers: r() * TAU,
       type: pick(r, ['sloep', 'fregat', 'galjoen', 'brigantijn', 'koopvaarder']),
       natie: pick(r, [...NATIE_IDS, 'piraat']),
-      snelheid: 20 + r() * 20,
+      snelheid: (20 + r() * 20) * titelSchaal,
     });
   }
 
   return {
     naam: 'titel',
     betreed() {
-      cam.x = 1900;
-      cam.y = 1000;
+      cam.x = 1900 * titelSchaal;
+      cam.y = 1000 * titelSchaal;
       toonTitelmenu();
     },
     werkBij(dt) {
       t += dt;
       wereld.windTik(dt);
-      cam.x = 1900 + Math.sin(t * 0.06) * 520;
-      cam.y = 1020 + Math.cos(t * 0.045) * 260;
+      cam.x = (1900 + Math.sin(t * 0.06) * 520) * titelSchaal;
+      cam.y = (1020 + Math.cos(t * 0.045) * 260) * titelSchaal;
       for (const s of schepen) {
         s.x += Math.cos(s.koers) * s.snelheid * dt;
         s.y += Math.sin(s.koers) * s.snelheid * dt;
         // Draai bij zodra de hele romp vooruit op een eiland dreigt te lopen.
-        if (wereld.isLand(s.x + Math.cos(s.koers) * 90, s.y + Math.sin(s.koers) * 90)) {
+        if (
+          wereld.isLand(
+            s.x + Math.cos(s.koers) * 90 * titelSchaal,
+            s.y + Math.sin(s.koers) * 90 * titelSchaal
+          )
+        ) {
           s.koers += dt * 1.2;
         }
       }
@@ -73,7 +81,7 @@ function maakTitelScene() {
         R.tekenSchip(c, s.x, s.y, s.koers, s.type, s.natie, wereld.windRichting, {
           vaart: 0.6,
           tijd: Game.tijd,
-          schaal: 1.4,
+          schaal: 1.4 * titelSchaal,
         });
       }
       c.restore();

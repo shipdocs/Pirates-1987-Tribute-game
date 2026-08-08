@@ -24,7 +24,8 @@ This file provides guidance to agents when working with code in this repository.
 - **Debugging**: full game state exposed as `window.__G = Game`; in battle, `__G.scene.debug.vijand` mutates the enemy directly. `audio.muziekStand()` exists for testing.
 - **Reduced motion**: pass decorative time through `sierTijd(t)` (freezes when `prefers-reduced-motion` is set); gameplay motion must NOT go through it.
 - **Data lookup**: arrays in `js/data.js` are paired with id-index maps (`WAREN`→`WAAR_INDEX`, `SCHEPEN`→`SCHIP_INDEX`). Cargo is an array indexed by `WAAR_INDEX` (use `nieuweLading()`); never use string keys.
-- **Units**: positions/speeds are "wereldeenheden" on a lat/lon-projected map (`PPD = 92` world units per degree, in `world.js`). Angles are radians, 0 = east.
+- **Units**: positions/speeds are "wereldeenheden" on a lat/lon-projected map (`PPD = 196` world units per degree, in `world.js`). Angles are radians, 0 = east. Sailing time is intentionally partially decoupled from physical scale (`DAGEN_PER_SECONDE = 0.12` in `sail.js`).
+- **Battle terrain**: every sea battle gets deterministic local coast and rocks from the world seed, encounter position, and opponent. Terrain blocks ships and cannonballs; ship-size clearance is intentional, so small vessels can use gaps that large vessels cannot.
 
 ## Style
 

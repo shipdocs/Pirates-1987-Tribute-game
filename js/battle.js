@@ -1,5 +1,7 @@
 // Zeeslag: laveren, de wind uitbuiten en de volle laag geven.
-import { clamp, lerp, normAngle, dist, TAU, turnToward, fmtGold } from './util.js';
+import {
+  clamp, lerp, normAngle, dist, TAU, turnToward, fmtGold, makeRng, rnd, rndInt,
+} from './util.js';
 import {
   WAREN, SCHIP_INDEX, scheepsAanduiding, metLidwoord, MOEILIJKHEDEN, NATIES,
   LEGENDE_INDEX, ITEMS, itemBonus,
@@ -18,6 +20,154 @@ import {
 
 const ARENA_X = 1150;
 const ARENA_Y = 820;
+
+// --- Slagterrein ---------------------------------------------------------
+
+/** Vast, door het wereldzaad bepaalde kust en rotsen voor één zeeslag. */
+function maakSlagTerrein(wereld, speler, vloot) {
+  let naamZaad = 0;
+  for (const teken of vloot.naam || vloot.type) {
+    naamZaad = Math.imul(naamZaad ^ teken.charCodeAt(0), 16777619);
+  }
+  const zaad = (wereld.seed ^ Math.round(speler.x * 31) ^ Math.round(speler.y * 131) ^ naamZaad) >>> 0;
+  const rng = makeRng(zaad);
+  const sy = rng() < 0.5 ? -1 : 1;
+  const kust = {
+    x: rnd(rng, -180, 180),
+    y: sy * rnd(rng, 500, 560),
+    rx: rnd(rng, 520, 700),
+    ry: rnd(rng, 230, 300),
+    draai: rnd(rng, -0.12, 0.12),
+    rand: [],
+    groei: [],
+  };
+
+  const punten = 42;
+  const fase = rnd(rng, 0, TAU);
+  for (let i = 0; i < punten; i++) {
+    const a = (i / punten) * TAU;
+    const rafel = 1 + Math.sin(a * 3 + fase) * 0.055 + Math.sin(a * 7 - fase) * 0.025 + rnd(rng, -0.025, 0.025);
+    kust.rand.push([Math.cos(a) * kust.rx * rafel, Math.sin(a) * kust.ry * rafel]);
+  }
+  for (let i = 0; i < 28; i++) {
+    const a = rnd(rng, 0, TAU);
+    const d = Math.sqrt(rng()) * 0.72;
+    kust.groei.push({
+      x: Math.cos(a) * kust.rx * d,
+      y: Math.sin(a) * kust.ry * d,
+      r: rnd(rng, 3, 7),
+      licht: rng() < 0.28,
+    });
+  }
+
+  const rotsen = [];
+  for (let poging = 0; poging < 120 && rotsen.length < 4; poging++) {
+    const r = rnd(rng, 22, 46);
+    const x = rnd(rng, -690, 690);
+    const y = rnd(rng, -440, 440);
+    if (Math.abs(x) < 320 && Math.abs(y) < 210) continue;
+    if (dist(x, y, -230, 70) < r + 150 || dist(x, y, 250, -110) < r + 150) continue;
+    if (raaktSlagTerrein({ kust, rotsen: [] }, x, y, r + 45)) continue;
+    if (rotsen.some((rots) => dist(x, y, rots.x, rots.y) < r + rots.r + 80)) continue;
+    const hoeken = rndInt(rng, 7, 11);
+    const rand = [];
+    for (let i = 0; i < hoeken; i++) {
+      const a = (i / hoeken) * TAU;
+      const rr = r * rnd(rng, 0.72, 1.15);
+      rand.push([Math.cos(a) * rr, Math.sin(a) * rr]);
+    }
+    rotsen.push({ x, y, r, draai: rnd(rng, 0, TAU), rand });
+  }
+  return { kust, rotsen };
+}
+
+/** Raakt een middelpunt met veiligheidsmarge de kust of een rotspunt? */
+function raaktSlagTerrein(terrein, x, y, marge = 0) {
+  const kust = terrein.kust;
+  const dx = x - kust.x,
+    dy = y - kust.y;
+  const cos = Math.cos(-kust.draai),
+    sin = Math.sin(-kust.draai);
+  const lx = dx * cos - dy * sin,
+    ly = dx * sin + dy * cos;
+  if ((lx * lx) / ((kust.rx + marge) ** 2) + (ly * ly) / ((kust.ry + marge) ** 2) <= 1) {
+    return true;
+  }
+  return terrein.rotsen.some((rots) => dist(x, y, rots.x, rots.y) <= rots.r + marge);
+}
+
+function padVanRand(c, rand, schaal = 1) {
+  c.beginPath();
+  c.moveTo(rand[0][0] * schaal, rand[0][1] * schaal);
+  for (let i = 1; i < rand.length; i++) c.lineTo(rand[i][0] * schaal, rand[i][1] * schaal);
+  c.closePath();
+}
+
+/** Tekent ondiepte, strand, begroeiing en rotsen onder de strijdende schepen. */
+function tekenSlagTerrein(c, terrein) {
+  const kust = terrein.kust;
+  c.save();
+  c.translate(kust.x, kust.y);
+  c.rotate(kust.draai);
+
+  c.fillStyle = 'rgba(67,190,190,0.18)';
+  padVanRand(c, kust.rand, 1.3);
+  c.fill();
+  c.fillStyle = 'rgba(82,207,194,0.28)';
+  padVanRand(c, kust.rand, 1.16);
+  c.fill();
+  c.fillStyle = '#d7c48e';
+  padVanRand(c, kust.rand, 1.035);
+  c.fill();
+
+  const land = c.createLinearGradient(-kust.rx, -kust.ry, kust.rx, kust.ry);
+  land.addColorStop(0, '#557a3d');
+  land.addColorStop(0.55, '#315d36');
+  land.addColorStop(1, '#173f2d');
+  c.fillStyle = land;
+  padVanRand(c, kust.rand);
+  c.fill();
+  c.strokeStyle = 'rgba(239,220,163,0.82)';
+  c.lineWidth = 3;
+  c.stroke();
+
+  for (const plant of kust.groei) {
+    c.fillStyle = plant.licht ? '#5f8848' : '#234d32';
+    c.beginPath();
+    c.arc(plant.x, plant.y, plant.r, 0, TAU);
+    c.fill();
+    c.fillStyle = 'rgba(8,31,27,0.25)';
+    c.beginPath();
+    c.ellipse(plant.x + 3, plant.y + 4, plant.r * 1.1, plant.r * 0.65, 0.5, 0, TAU);
+    c.fill();
+  }
+  c.restore();
+
+  for (const rots of terrein.rotsen) {
+    c.save();
+    c.translate(rots.x, rots.y);
+    c.rotate(rots.draai);
+    c.fillStyle = 'rgba(72,203,196,0.2)';
+    c.beginPath();
+    c.arc(0, 0, rots.r + 22, 0, TAU);
+    c.fill();
+    c.fillStyle = 'rgba(8,31,42,0.32)';
+    c.beginPath();
+    c.ellipse(6, 8, rots.r * 1.08, rots.r * 0.75, 0.25, 0, TAU);
+    c.fill();
+    const steen = c.createLinearGradient(-rots.r, -rots.r, rots.r, rots.r);
+    steen.addColorStop(0, '#b4aa91');
+    steen.addColorStop(0.45, '#756f62');
+    steen.addColorStop(1, '#3d4544');
+    c.fillStyle = steen;
+    padVanRand(c, rots.rand);
+    c.fill();
+    c.strokeStyle = 'rgba(225,218,194,0.42)';
+    c.lineWidth = 1.5;
+    c.stroke();
+    c.restore();
+  }
+}
 
 /** Halve lengte en breedte van een romp, op de schaal waarop we in de slag tekenen. */
 function rompMaat(typeId) {
@@ -73,12 +223,14 @@ export function maakZeeslag(vloot, opts) {
   vijand.startKanonnen = startKanonnen;
   mij.startKanonnen = mij.kanonnen;
 
+  const terrein = maakSlagTerrein(wereld, speler, vloot);
   let kogels = [];
   let deeltjes = [];
   let munitie = 0;
   let tijd = 0;
   let afgelopen = false;
   let vijandMoraal = 100;
+  let terreinBotsKoeling = 0;
   const cam = { x: 0, y: 0, zoom: 0.85 };
   // Welk muziekthema er speelde toen we hier binnenkwamen.
   let vorigThema = 'zee';
@@ -86,7 +238,13 @@ export function maakZeeslag(vloot, opts) {
   const scene = {
     naam: 'zeeslag',
     // Handvat voor de console: __G.scene.debug.vijand.romp = 1, enzovoort.
-    debug: { mij, vijand },
+    debug: {
+      mij,
+      vijand,
+      terrein,
+      kogels,
+      raaktTerrein: (x, y, marge = 0) => raaktSlagTerrein(terrein, x, y, marge),
+    },
 
     betreed() {
       cam.x = (mij.x + vijand.x) / 2;
@@ -116,6 +274,7 @@ export function maakZeeslag(vloot, opts) {
     werkBij(dt) {
       if (UI.ietsOpen() || afgelopen) return;
       tijd += dt;
+      terreinBotsKoeling = Math.max(0, terreinBotsKoeling - dt);
       wereld.windTik(dt * 0.4);
 
       stuurSpeler(dt);
@@ -135,11 +294,17 @@ export function maakZeeslag(vloot, opts) {
         // In stappen langslopen, anders schiet een snelle kogel dwars door een
         // smalle sloep heen zonder hem te raken.
         let geraakt = false;
+        let raakteTerrein = false;
         const stappen = Math.max(1, Math.ceil(lengte / 5));
         for (let n = 1; n <= stappen && !geraakt; n++) {
           const px = k.x + (vx * n) / stappen;
           const py = k.y + (vy * n) / stappen;
-          if (raaktRomp(px, py, k.doel, hl, hb)) {
+          if (raaktSlagTerrein(terrein, px, py, 2)) {
+            k.x = px;
+            k.y = py;
+            raakteTerrein = true;
+            geraakt = true;
+          } else if (raaktRomp(px, py, k.doel, hl, hb)) {
             k.x = px;
             k.y = py;
             geraakt = true;
@@ -147,9 +312,14 @@ export function maakZeeslag(vloot, opts) {
         }
 
         if (geraakt) {
-          treffer(k.doel, k);
-          audio.sfx.treffer();
-          spatDeeltjes(k.x, k.y, '#ffb45a', 7);
+          if (raakteTerrein) {
+            audio.sfx.plons();
+            spatDeeltjes(k.x, k.y, '#b6aa91', 5);
+          } else {
+            treffer(k.doel, k);
+            audio.sfx.treffer();
+            spatDeeltjes(k.x, k.y, '#ffb45a', 7);
+          }
           kogels.splice(i, 1);
           continue;
         }
@@ -220,6 +390,8 @@ export function maakZeeslag(vloot, opts) {
       c.scale(cam.zoom, cam.zoom);
       c.translate(-cam.x, -cam.y);
 
+      tekenSlagTerrein(c, terrein);
+      for (const s of [vijand, mij]) tekenKielzog(c, s);
       for (const p of deeltjes) R.tekenRook(c, p);
 
       for (const s of [vijand, mij]) tekenStrijder(c, s, wereld.windRichting);
@@ -315,8 +487,48 @@ export function maakZeeslag(vloot, opts) {
     const upgrade = s.speler ? 1 + (mij.upgradeZeil || 0) : 1;
     const doel = t.snelheid * eff * storm.kracht * s.zeilstand * s.tuigage * romp * 1.15 * upgrade;
     s.snelheid = lerp(s.snelheid, doel, clamp(dt * 1.4, 0, 1));
-    s.x += Math.cos(s.koers) * s.snelheid * dt;
-    s.y += Math.sin(s.koers) * s.snelheid * dt;
+    const nx = s.x + Math.cos(s.koers) * s.snelheid * dt;
+    const ny = s.y + Math.sin(s.koers) * s.snelheid * dt;
+    const [rompL] = rompMaat(s.type);
+    if (!raaktSlagTerrein(terrein, nx, ny, rompL + 7)) {
+      s.x = nx;
+      s.y = ny;
+    } else {
+      s.snelheid *= 0.24;
+      if (!s.speler) s.koers = normAngle(s.koers + dt * 1.1);
+      if (s.speler && terreinBotsKoeling <= 0) {
+        terreinBotsKoeling = 2.5;
+        Game.melding('Branding aan de boeg — afvallen, voor je op de rotsen loopt!', 'rood');
+        audio.sfx.fout();
+      }
+    }
+    werkKielzogBij(s, dt);
+  }
+
+  /** Legt twee vaste schuimsporen achter het hek, zodat camerabeweging leesbaar blijft. */
+  function werkKielzogBij(s, dt) {
+    for (let i = s.kielzog.length - 1; i >= 0; i--) {
+      s.kielzog[i].tijd += dt;
+      if (s.kielzog[i].tijd > 4.2) s.kielzog.splice(i, 1);
+    }
+    if (s.snelheid < 5) return;
+    const [L, B] = R.scheepMaat(s.type);
+    const hx = s.x - Math.cos(s.koers) * L;
+    const hy = s.y - Math.sin(s.koers) * L;
+    const laatste = s.kielzog[s.kielzog.length - 1];
+    if (laatste && dist(hx, hy, laatste.x, laatste.y) < 11) return;
+    const nx = -Math.sin(s.koers) * B * 0.72;
+    const ny = Math.cos(s.koers) * B * 0.72;
+    s.kielzog.push({
+      x: hx,
+      y: hy,
+      lx: hx + nx,
+      ly: hy + ny,
+      rx: hx - nx,
+      ry: hy - ny,
+      tijd: 0,
+      kracht: clamp(s.snelheid / 80, 0.18, 1),
+    });
   }
 
   /** Dracht van dit schip met de munitie die er nu in zit. */
@@ -891,6 +1103,26 @@ export function maakZeeslag(vloot, opts) {
   }
 
   function tekenStrijder(c, s, wind) {
+    // Heldere V aan de boeg: de zee kan van richting veranderen, deze golf
+    // hoort altijd zichtbaar bij de vaarrichting van het schip zelf.
+    const [schipL, schipB] = R.scheepMaat(s.type);
+    const golf = clamp(s.snelheid / 70, 0, 1);
+    if (golf > 0.08) {
+      c.save();
+      c.translate(s.x, s.y);
+      c.rotate(s.koers);
+      c.scale(2, 2);
+      c.strokeStyle = `rgba(232,249,250,${0.28 + golf * 0.42})`;
+      c.lineWidth = 1.15;
+      c.beginPath();
+      c.moveTo(schipL * 0.5, 0);
+      c.quadraticCurveTo(schipL * 0.7, -schipB * 0.25, schipL * 0.46, -schipB * 1.2);
+      c.moveTo(schipL * 0.5, 0);
+      c.quadraticCurveTo(schipL * 0.7, schipB * 0.25, schipL * 0.46, schipB * 1.2);
+      c.stroke();
+      c.restore();
+    }
+
     R.tekenSchip(c, s.x, s.y, s.koers, s.type, s.natie, wind, {
       vaart: s.snelheid / 90,
       tijd: Game.tijd,
@@ -918,6 +1150,29 @@ export function maakZeeslag(vloot, opts) {
     c.fillStyle = 'rgba(240,230,205,0.9)';
     c.textAlign = 'center';
     c.fillText(`${s.bemanning}`, s.x, by - 4);
+    c.restore();
+  }
+
+  /** Tekent het historische hekgolfspoor in vaste wereldcoördinaten. */
+  function tekenKielzog(c, s) {
+    if (s.kielzog.length < 2) return;
+    c.save();
+    c.lineCap = 'round';
+    for (let i = 1; i < s.kielzog.length; i++) {
+      const a = s.kielzog[i - 1],
+        b = s.kielzog[i];
+      const leven = clamp(1 - Math.max(a.tijd, b.tijd) / 4.2, 0, 1);
+      const alfa = leven * 0.46 * Math.min(a.kracht, b.kracht);
+      if (alfa <= 0.015) continue;
+      c.strokeStyle = `rgba(221,245,248,${alfa})`;
+      c.lineWidth = 1.2 + leven * 2.2;
+      c.beginPath();
+      c.moveTo(a.lx, a.ly);
+      c.lineTo(b.lx, b.ly);
+      c.moveTo(a.rx, a.ry);
+      c.lineTo(b.rx, b.ry);
+      c.stroke();
+    }
     c.restore();
   }
 
@@ -1066,5 +1321,6 @@ function maakStrijder(o) {
     upgradeZeil: o.upgradeZeil || 0,
     upgradeRoer: o.upgradeRoer || 0,
     upgradeHoogte: o.upgradeHoogte || 0,
+    kielzog: [],
   };
 }

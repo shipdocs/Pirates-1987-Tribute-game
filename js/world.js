@@ -5,14 +5,17 @@ import {
   SCHEEP_MAAT, LEGENDES, LEGENDE_INDEX, itemBonus, HERKENNINGSPUNTEN, SCHATREGIOS,
 } from './data.js';
 
-// Kaartprojectie: rechttoe-rechtaan, met echte graden als basis.
-export const PPD = 92; // wereldeenheden per graad
+// Kaartprojectie: rechttoe-rechtaan, met echte graden als basis. De ruime
+// schaal zorgt dat een overtocht een reis is, terwijl de camera maar één
+// eiland, doorgang of kuststrook tegelijk hoeft te tonen.
+export const PPD = 196; // wereldeenheden per graad
 export const LON0 = -98,
   LON1 = -58,
   LAT0 = 7.6,
   LAT1 = 31;
 export const WORLD_W = (LON1 - LON0) * PPD;
 export const WORLD_H = (LAT1 - LAT0) * PPD;
+const DOEL_VLOTEN = 46;
 
 /**
  * Hoe dicht je langs de kust moet varen voordat de stuurman het perkament
@@ -260,7 +263,9 @@ export class Wereld {
     // levenslijn (verjaart en sterft).
     this.stormen = [];
     const stormRng = makeRng(seed ^ 0x9e3779b9);
-    const aantal = 3 + Math.floor(stormRng() * 3); // 3..5 stormen per wereld
+    // De kaart is ruim tweemaal zo breed geworden. Met 6..9 cellen blijft de
+    // kans om onderweg werkelijk weer tegen te komen ongeveer gelijk.
+    const aantal = 6 + Math.floor(stormRng() * 4); // 6..9 stormen per wereld
     for (let i = 0; i < aantal; i++) {
       this.stormen.push({
         x: rnd(stormRng, 60, WORLD_W - 60),
@@ -274,7 +279,7 @@ export class Wereld {
     }
 
     this.vloten = [];
-    for (let i = 0; i < 24; i++) this.spawnVloot(true);
+    for (let i = 0; i < DOEL_VLOTEN; i++) this.spawnVloot(true);
 
     // Aanlooptijd voordat de eerste beruchte kapitein zich kan vertonen: een
     // kersverse kapitein in een sloep hoort niet in zijn eerste minuut tegen
@@ -778,7 +783,7 @@ export class Wereld {
       }
     }
     // Voorraad aanvullen zodat de zee levendig blijft maar niet overvol raakt.
-    while (this.vloten.length < 24) this.spawnVloot(true);
+    while (this.vloten.length < DOEL_VLOTEN) this.spawnVloot(true);
     this.#legendeTik(dt, speler);
   }
 

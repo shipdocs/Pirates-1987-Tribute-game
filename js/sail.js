@@ -18,7 +18,13 @@ import { maakZeeslag } from './battle.js';
 import { openHaven } from './town.js';
 
 const VOEDSEL = WAAR_INDEX.voedsel;
-const DAGEN_PER_SECONDE = 0.2; // één dag per vijf seconden varen
+// De fysieke wereld is ruim tweemaal zo groot, maar de kalender loopt bewust
+// niet evenredig mee. Een lange reis kost circa 28% meer dagen dan voorheen,
+// niet ruim tweemaal zoveel proviand, moraal en jaren van de kapitein.
+const DAGEN_PER_SECONDE = 0.12;
+const STANDAARD_ZOOM = 1.28;
+const MIN_ZOOM = 0.24;
+const MAX_ZOOM = 2.4;
 
 /**
  * Doodskopje op de zeekaart: waar een beruchte kapitein gezien is. Met een
@@ -68,7 +74,8 @@ const OUDERDOM_MELDINGEN = [
 ];
 
 export function maakZeilScene() {
-  const cam = { x: 0, y: 0, zoom: 1 };
+  const cam = { x: 0, y: 0, zoom: STANDAARD_ZOOM };
+  let doelZoom = STANDAARD_ZOOM;
   let miniKaart = null;
   let ontmoetingKoeling = 0;
   let hongerKoeling = 0;
@@ -101,14 +108,15 @@ export function maakZeilScene() {
       const s = Game.speler;
       cam.x = s.x;
       cam.y = s.y;
-      cam.zoom = 1;
+      cam.zoom = STANDAARD_ZOOM;
+      doelZoom = STANDAARD_ZOOM;
       houdCameraInKaart();
       if (!miniKaart) miniKaart = maakMiniKaart(Game.wereld);
       audio.startMuziek();
     },
 
     scroll(dy) {
-      cam.zoom = clamp(cam.zoom * (dy > 0 ? 0.9 : 1.1), 0.35, 2.2);
+      doelZoom = clamp(doelZoom * (dy > 0 ? 0.9 : 1.1), MIN_ZOOM, MAX_ZOOM);
       houdCameraInKaart();
     },
 
@@ -123,10 +131,10 @@ export function maakZeilScene() {
       } else if (code === 'Escape') {
         toonMenu();
       } else if (code === 'Equal' || code === 'NumpadAdd') {
-        cam.zoom = clamp(cam.zoom * 1.2, 0.35, 2.2);
+        doelZoom = clamp(doelZoom * 1.2, MIN_ZOOM, MAX_ZOOM);
         houdCameraInKaart();
       } else if (code === 'Minus' || code === 'NumpadSubtract') {
-        cam.zoom = clamp(cam.zoom / 1.2, 0.35, 2.2);
+        doelZoom = clamp(doelZoom / 1.2, MIN_ZOOM, MAX_ZOOM);
         houdCameraInKaart();
       }
     },
@@ -265,7 +273,12 @@ export function maakZeilScene() {
       }
 
       // --- Camera ---------------------------------------------------------
-      const vooruit = 60 / cam.zoom;
+      // Zoomen glijdt rustig naar de gekozen stand. De kleinste stand toont
+      // nagenoeg de hele Caraïben en is daarmee nadrukkelijk kaartoverzicht.
+      cam.zoom = lerp(cam.zoom, doelZoom, clamp(dt * 7, 0, 1));
+      // Minder loefruimte dan voorheen houdt het eigen schip dichter bij het
+      // visuele middelpunt, zonder het zicht vóór de boeg helemaal te verliezen.
+      const vooruit = 28 / cam.zoom;
       cam.x = lerp(cam.x, s.x + Math.cos(s.koers) * vooruit, clamp(dt * 3, 0, 1));
       cam.y = lerp(cam.y, s.y + Math.sin(s.koers) * vooruit, clamp(dt * 3, 0, 1));
       houdCameraInKaart();
@@ -371,9 +384,10 @@ export function maakZeilScene() {
         R.tekenStad(c, stad, cam, Game.tijd, dist(stad.ankerX, stad.ankerY, s.x, s.y) < 140);
       }
 
-      // Bij uitzoomen groeien de schepen mee, net als de steden: anders is een
-      // sloep op de hele kaart nog maar een paar pixels groot.
-      const scheepSchaal = clamp(0.7 / cam.zoom, 1, 2.2);
+      // Verre schepen blijven herkenbaar, maar groeien minder sterk mee bij
+      // uitzoomen. De eigen kapitein krijgt hieronder bewust meer gewicht.
+      const scheepSchaal = clamp(0.64 / cam.zoom, 0.82, 1.8);
+      const spelerSchaal = clamp(1.55 / cam.zoom, 1.08, 2.6);
 
       const doeLandCheck = (wx, wy) => w.isLand(wx, wy);
       for (const v of w.vloten) {
@@ -415,7 +429,7 @@ export function maakZeilScene() {
         tijd: Game.tijd,
         zeilen: schip.zeilen,
         kanonnen: schip.kanonnen,
-        schaal: scheepSchaal,
+        schaal: spelerSchaal,
         isLand: doeLandCheck,
         rompFractie: schip.romp / schip.maxRomp,
       });

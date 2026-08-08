@@ -104,6 +104,12 @@ haalt uit het ruim een uitrustingsstuk dat op geen enkele werf te koop is:
 koperen huidbeslag, katoenen zeilen, fijn kruit. Die stukken horen bij jou en
 varen mee naar elk volgend vlaggenschip.
 
+**Een vermist familielid.** Ergens in de Caraïben is een broer, zus, vader of
+moeder van je verdwenen. Bedelaars in de kroeg wijzen een stad aan; wie daar
+langs de kade navraagt, vindt niet het familielid maar een naam — en vanaf dat
+moment vaart die naam rond. Zolang hij vaart, zoek je in geen enkele haven
+verder: het antwoord ligt aan boord van zijn galjoen.
+
 **De lange lijn.** Roem, rang bij vier naties, grondbezit, huwelijk, veroverde
 steden — en je wordt ouder, en dat merk je. Na je veertigste wordt het venster
 waarin je een stoot kunt pareren korter en komt je adem trager terug; vanaf je

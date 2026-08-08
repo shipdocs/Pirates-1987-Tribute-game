@@ -652,6 +652,32 @@ export function maakZeeslag(vloot, opts) {
     speler.roem += 80;
     speler.moraal = clamp(speler.moraal + 15, 0, 100);
 
+    // De schurk voert geen buit maar mensen: onder het dek zit het familielid
+    // waar je de halve Caraïben voor hebt afgezocht.
+    if (legende.schurk) {
+      const rol = (speler.familie && speler.familie.rol) || 'familielid';
+      if (speler.familie) {
+        speler.familie.gevonden = true;
+        speler.familie.gevondenDag = speler.dag;
+      }
+      speler.roem += 120;
+      speler.moraal = clamp(speler.moraal + 20, 0, 100);
+      const kist = Math.round(6000 + Math.random() * 6000);
+      speler.goud += kist;
+      audio.sfx.fanfare();
+      await UI.vraag(
+        `Uw ${rol} is terecht`,
+        `Achter een grendel in het ruim staan ze te knipperen tegen het licht. Tussen hen in ` +
+          `staat uw <b>${rol}</b>. Na al die jaren is de familie weer bij elkaar, en de hele ` +
+          `Caraïben zal het horen.<br><br>In de kajuit van ${legende.naam} staat bovendien een ` +
+          `kist met <b>${fmtGold(kist)} goudstukken</b> — betaald voor mensen die hij nooit had mogen verkopen.`,
+        [{ label: 'Ze aan dek brengen', waarde: 'ok' }],
+        // Het portret volgt de rol: een zus of moeder is geen zeeman.
+        { figuur: rol === 'zus' || rol === 'moeder' ? 'dame' : 'zeeman' }
+      );
+      return;
+    }
+
     if (!Array.isArray(speler.items)) speler.items = [];
     const item = ITEMS[legende.buit];
     const nieuw = item && !speler.items.includes(legende.buit);

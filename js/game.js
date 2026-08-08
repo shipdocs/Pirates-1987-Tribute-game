@@ -225,8 +225,9 @@ export function maakSpeler(opties) {
     gestopt: false,
     // Wanneer een haven hem voor het laatst op zijn leeftijd wees.
     pensioenGevraagd: 0,
-    // Vermist familielid: rol wordt bij het begin bepaald.
-    familie: { rol: pick(Math.random, FAMILIE_ROLLEN), gevonden: false, gevondenDag: null },
+    // Vermist familielid: rol wordt bij het begin bepaald. `spoor` gaat aan
+    // zodra je weet wie ze heeft meegevoerd; pas dan vaart die schurk rond.
+    familie: { rol: pick(Math.random, FAMILIE_ROLLEN), spoor: false, gevonden: false, gevondenDag: null },
     // Actieve gouverneursopdracht (zie town.js). null als er geen loopt.
     opdracht: null,
     // Buitstukken van verslagen legendes; horen bij de kapitein, niet bij één schip.
@@ -313,6 +314,7 @@ export function berekenScore(speler) {
   score += speler.veroverdeSteden * 400;
   score += speler.verslagenSchepen * 25;
   if (speler.gehuwd) score += 600;
+  if (speler.familie && speler.familie.gevonden) score += 800;
   // Wie op tijd stopt, houdt zijn naam hoog. Na zijn vijftigste levert elk jaar
   // op zee minder op dan het kost — zo wordt aftreden een keuze en niet alleen
   // het einde van het spel.
@@ -391,7 +393,10 @@ export function laad() {
   if (data.stormen && data.stormen.length) wereld.stormen = data.stormen;
   // Oude saves saneren: ontbrekende velden krijgen hun standaardwaarde.
   const sp = data.speler;
-  if (!sp.familie) sp.familie = { rol: pick(Math.random, FAMILIE_ROLLEN), gevonden: false, gevondenDag: null };
+  if (!sp.familie) sp.familie = { rol: pick(Math.random, FAMILIE_ROLLEN), spoor: false, gevonden: false, gevondenDag: null };
+  // Saves van vóór de schurk: wie zijn familielid al gevonden had, houdt dat;
+  // wie nog zocht, begint bij het spoor.
+  if (sp.familie.spoor == null) sp.familie.spoor = !!sp.familie.gevonden;
   if (sp.opdracht === undefined) sp.opdracht = null;
   // Saves van vóór versie 4 kenden het verouderen nog niet. De leeftijd volgt
   // uit de verstreken dagen, dus die is altijd terug te rekenen.

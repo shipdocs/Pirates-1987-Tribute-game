@@ -139,9 +139,16 @@ een eigen dialoog met fanfare.
 
 ---
 
-## Fase 2 — De schurk en het familielid
+## Fase 2 — De schurk en het familielid ✔ uitgevoerd
 
 > Bouwt direct op fase 1: de schurk *is* een legende, met een eigen staart.
+>
+> **Stand:** doorgevoerd. Baltasar de Quiroga staat als zevende legende met
+> `schurk: true` in [`data.js`](js/data.js:266), vaart alleen als
+> `speler.familie.spoor` aanstaat ([`world.js`](js/world.js:786)), en zijn
+> nederlaag levert het familielid op in plaats van een uitrustingsstuk
+> ([`battle.js`](js/battle.js:643)). Aftreden telt de familie mee in de
+> epiloog en in de eindscore.
 
 - `FAMILIE_ROLLEN` blijft; erbij komt één vaste antagonist in `LEGENDES` met
   `schurk: true`, bijvoorbeeld de man die je familielid vasthoudt.
@@ -153,6 +160,12 @@ een eigen dialoog met fanfare.
   de epiloog.
 - De schurk is **zwaarder dan de rest** (`kracht` ~1.6) en verschijnt pas na de
   eerste tip — anders loop je hem op dag drie tegen het lijf.
+
+*Zoals uitgevoerd:* de knop "Naar uw … vragen" en de bedelaar in de kroeg
+verdwijnen zodra het spoor er ligt — verder zoeken in havens heeft dan geen
+zin meer, want het antwoord vaart rond. De schurk staat ook pas in de lijst
+beruchte kapiteins zodra je van hem gehoord hebt, en hij laat geen buitstuk
+achter: het familielid ís de buit, plus een kist losgeld uit zijn kajuit.
 
 **Werk:** klein-middel, mits fase 1 er ligt.
 

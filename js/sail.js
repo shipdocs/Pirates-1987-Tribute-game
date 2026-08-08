@@ -856,12 +856,14 @@ export function maakZeilScene() {
         const famInfo = document.createElement('div');
         famInfo.className = 'schipkaart-info';
         const fam = s.familie;
-        famInfo.innerHTML =
-          fam && !fam.gevonden
-            ? `<span>Familie</span><span>Je ${fam.rol} is vermist${fam.zoekStad ? ` · laatst gehoord in ${fam.zoekStad}` : ' · geruchten in de kroeg'}</span>`
-            : fam && fam.gevonden
-              ? `<span>Familie</span><span>Je ${fam.rol} is teruggevonden ✓</span>`
-              : `<span>Familie</span><span>—</span>`;
+        const schurk = LEGENDES.find((l) => l.schurk);
+        famInfo.innerHTML = !fam
+          ? `<span>Familie</span><span>—</span>`
+          : fam.gevonden
+            ? `<span>Familie</span><span>Je ${fam.rol} is teruggevonden ✓</span>`
+            : fam.spoor
+              ? `<span>Familie</span><span>Je ${fam.rol} zit aan boord bij ${schurk.naam}</span>`
+              : `<span>Familie</span><span>Je ${fam.rol} is vermist${fam.zoekStad ? ` · laatst gehoord in ${fam.zoekStad}` : ' · geruchten in de kroeg'}</span>`;
         lange.appendChild(famInfo);
         if (s.opdracht) {
           const opdrachtInfo = el('div', 'schipkaart-info');
@@ -876,7 +878,9 @@ export function maakZeilScene() {
         const namen = el('div', 'schipkaart');
         namen.innerHTML = '<h3>Beruchte kapiteins</h3>';
         const naamInfo = el('div', 'schipkaart-info');
-        naamInfo.innerHTML = LEGENDES.map((l) => {
+        // De schurk staat er pas bij zodra je weet dat hij bestaat.
+        const zichtbaar = LEGENDES.filter((l) => !l.schurk || s.familie?.spoor);
+        naamInfo.innerHTML = zichtbaar.map((l) => {
           const st = (s.legendes && s.legendes[l.id]) || {};
           const stand = st.verslagen
             ? 'verslagen ✓'

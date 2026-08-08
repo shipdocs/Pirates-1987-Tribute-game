@@ -3,7 +3,7 @@ import { clamp, lerp, fmtGold, fmtDate, el, pick, makeRng } from './util.js';
 import {
   WAREN, SCHEPEN, SCHIP_INDEX, NATIES, NATIE_IDS, RANGEN, metLidwoord,
   GERUCHTEN, KAPITEIN_NAMEN, VOORNAMEN_V, ACHTERNAMEN, MOEILIJKHEDEN,
-  OPDRACHT_SOORTEN, UPGRADES, FAMILIE_ROLLEN, LEGENDE_INDEX,
+  OPDRACHT_SOORTEN, UPGRADES, FAMILIE_ROLLEN, LEGENDES, LEGENDE_INDEX,
 } from './data.js';
 import {
   Game, vlaggenschip, ruimTotaal, ruimVrij, vlootBemanningMax, nieuwSchip, talentBonus, berekenScore,
@@ -145,8 +145,9 @@ function hoofdmenu(stad, opVertrek) {
           bestormStad(stad, opVertrek);
         },
       },
-      // Langs de kade vragen naar het vermiste familielid.
-      ...(!s.familie?.gevonden && (s.familie?.zoekStad === stad.naam)
+      // Langs de kade vragen naar het vermiste familielid. Zodra het spoor
+      // gevonden is heeft navragen geen zin meer: dan vaart het antwoord rond.
+      ...(!s.familie?.gevonden && !s.familie?.spoor && s.familie?.zoekStad === stad.naam
         ? [
             {
               label: `${UI.ikoon('familie')}Naar uw ${s.familie.rol} vragen`,
@@ -588,7 +589,7 @@ async function vreemdeling(stad, sch) {
       `Een oude stuurman fluistert: "In <b>${doelStad.naam}</b> ligt ` +
       `${pick(rng, WAREN).naam.toLowerCase()} voor een schijntje. Vaar erheen voor het rondgaat."`;
     sch.ververs();
-  } else if (rol < 0.68 && !s.familie?.gevonden) {
+  } else if (rol < 0.68 && !s.familie?.gevonden && !s.familie?.spoor) {
     // Vermist familielid — de lange persoonlijke lijn uit het origineel.
     const rolNaam = s.familie.rol;
     const waar = pick(rng, Game.wereld.steden.filter((x) => x !== stad));
@@ -1424,19 +1425,24 @@ async function zoekFamilie(stad, sch) {
   // Hogere roem en charme helpen; anders een loos spoor.
   const kans = clamp(0.45 + s.roem / 900 + (talentBonus(s, 'charme') ? 0.15 : 0), 0.2, 0.95);
   if (Math.random() < kans) {
-    s.familie.gevonden = true;
-    s.familie.gevondenDag = s.dag;
-    s.roem += 60;
-    s.moraal = clamp(s.moraal + 20, 0, 100);
-    audio.sfx.fanfare();
+    // Niet het familielid zelf, maar het spoor: een naam om achterna te varen.
+    const schurk = LEGENDES.find((l) => l.schurk);
+    s.familie.spoor = true;
+    s.familie.zoekStad = null;
+    s.roem += 25;
+    s.moraal = clamp(s.moraal + 8, 0, 100);
+    audio.sfx.fout();
     await UI.vraag(
-      `Uw ${rol} is gevonden!`,
-      `In een stoffige steeg vind je ten slotte je ${rol}. Na jaren van scheiding is de familie ` +
-        `weer herenigd. De hele Caraïben spreekt erover. "U bent een van ons, kapitein."`,
-      [{ label: 'Een traan wegpinken', waarde: 'ok' }],
-      { figuur: 'gouverneur' }
+      'Een naam, eindelijk',
+      `Achter in een pakhuis vind je iemand die het zich herinnert. "Uw ${rol}? Die is hier geweest, ja. ` +
+        `Meegevoerd, met de rest van de vracht." Hij kijkt naar de deur voordat hij verder praat. ` +
+        `"<b>${schurk.naam}</b>, ${schurk.bijnaam}. ${schurk.verhaal} Zolang hij vaart, ` +
+        `vindt u uw ${rol} in geen enkele haven — die zit aan boord."`,
+      [{ label: 'Dan zoek ik hém', waarde: 'ok', soort: 'gevaar' }],
+      { figuur: 'zeeman' }
     );
-    sch._bericht = `Je ${rol} is veilig. De familie is weer bij elkaar.`;
+    sch._bericht =
+      `Je ${rol} is aan boord bij <b>${schurk.naam}</b>. Er is maar één manier om ze terug te krijgen.`;
   } else {
     await UI.vraag(
       'Een dood spoor',
@@ -1499,6 +1505,19 @@ export async function tredAf(stad) {
                 { tekst: 'Hoogste rang' },
                 {
                   tekst: `${RANGEN[clamp(s.rang[hoogsteRang], 0, RANGEN.length - 1)].naam} (${NATIES[hoogsteRang].naam})`,
+                  klasse: 'rechts',
+                },
+              ],
+            },
+            {
+              cellen: [
+                { tekst: 'Familie' },
+                {
+                  tekst: s.familie && s.familie.gevonden
+                    ? `uw ${s.familie.rol} teruggehaald`
+                    : s.familie
+                      ? `uw ${s.familie.rol} nooit teruggezien`
+                      : '—',
                   klasse: 'rechts',
                 },
               ],

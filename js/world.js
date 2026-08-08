@@ -789,9 +789,12 @@ export class Wereld {
     // Ze komen op volgorde van naam: pas wie genoeg roem heeft, is het
     // opzoeken waard. Zo loop je Dolle Jack tegen het lijf lang voordat het
     // linieschip van de Kraai zich laat zien.
-    const vrij = LEGENDES.filter(
-      (l) => (speler.roem || 0) >= l.roem && (!speler.legendes[l.id] || !speler.legendes[l.id].verslagen)
-    );
+    const vrij = LEGENDES.filter((l) => {
+      if (speler.legendes[l.id] && speler.legendes[l.id].verslagen) return false;
+      // De schurk vaart niet rond zolang je niet weet dat hij bestaat.
+      if (l.schurk && !(speler.familie && speler.familie.spoor)) return false;
+      return (speler.roem || 0) >= l.roem;
+    });
     if (!vrij.length) return;
     // Niet elke gelegenheid grijpen: een legende hoort zeldzaam te blijven.
     if (this.rng() > 0.4) return;

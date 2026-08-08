@@ -342,6 +342,19 @@ export const LEGENDES = [
     buit: 'fijnkruit',
     verhaal: 'Niemand weet hoe hij aan een linieschip komt. Wie het vroeg, vaart niet meer.',
   },
+  {
+    // De schurk: hij vaart pas rond zodra je het spoor van je familielid hebt
+    // gevonden, en zijn nederlaag is de enige manier om ze terug te krijgen.
+    id: 'quiroga',
+    naam: 'Baltasar de Quiroga',
+    bijnaam: 'de Man met de Handschoenen',
+    schip: 'oorlogsgaljoen',
+    jachtgebied: 'spanje',
+    kracht: 1.6,
+    roem: 220,
+    schurk: true,
+    verhaal: 'Handelt in mensen en noemt het vracht. Hij raakt niets aan zonder handschoenen.',
+  },
 ];
 
 export const LEGENDE_INDEX = Object.fromEntries(LEGENDES.map((l) => [l.id, l]));

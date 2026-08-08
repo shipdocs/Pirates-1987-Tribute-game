@@ -7,6 +7,7 @@ import {
 } from './data.js';
 import {
   Game, vlaggenschip, ruimTotaal, ruimVrij, vlootBemanningMax, nieuwSchip, talentBonus, berekenScore,
+  bewaarInErelijst, wisOpslag,
 } from './game.js';
 import * as UI from './ui.js';
 import * as audio from './audio.js';
@@ -99,6 +100,7 @@ function hoofdmenu(stad, opVertrek) {
         : []),
       {
         label: `${UI.ikoon('zeil')}Uitvaren`,
+        esc: true,
         actie: () => {
           sch.sluit();
           opVertrek();
@@ -414,7 +416,7 @@ function kroeg(stad, ouder) {
         { label: 'Een rondje geven (100 goud)', uit: s.goud < 100, actie: () => rondjeGeven(stad, sch) },
         { label: 'De buit verdelen', uit: s.goud <= 0, actie: () => { sch.sluit(); verdeelBuit(stad, ouder); } },
         { label: 'Rondkijken naar vreemd volk', actie: () => vreemdeling(stad, sch) },
-        { label: 'Terug', actie: () => sch.sluit() },
+        { label: 'Terug', esc: true, actie: () => sch.sluit() },
       ];
     },
   });
@@ -581,7 +583,7 @@ function verdeelBuit(stad, ouder) {
           ouder.ververs();
         },
       },
-      { label: 'Toch maar niet', actie: () => { sch.sluit(); ouder.ververs(); } },
+      { label: 'Toch maar niet', esc: true, actie: () => { sch.sluit(); ouder.ververs(); } },
     ],
   });
 }
@@ -656,7 +658,7 @@ function handel(stad, ouder) {
         '<span class="goedkoop">Groen</span> = koopje, <span class="duur">rood</span> = hoge prijs.';
       body.appendChild(uitleg);
     },
-    knoppen: (sch) => [{ label: 'Terug', actie: () => { sch.sluit(); ouder.ververs(); } }],
+    knoppen: (sch) => [{ label: 'Terug', esc: true, actie: () => { sch.sluit(); ouder.ververs(); } }],
   });
 
   function koop(i, n, sch) {
@@ -828,7 +830,7 @@ function werf(stad, ouder) {
       }
       body.appendChild(markt);
     },
-    knoppen: (sch) => [{ label: 'Terug', actie: () => { sch.sluit(); ouder.ververs(); } }],
+    knoppen: (sch) => [{ label: 'Terug', esc: true, actie: () => { sch.sluit(); ouder.ververs(); } }],
   });
   return scherm;
 }
@@ -916,7 +918,7 @@ function gouverneur(stad, ouder) {
       if (rel <= -25) {
         knoppen.push({ label: 'Om gratie verzoeken (5.000 goud)', uit: s.gespaard < 5000, actie: () => gratie(stad, sch) });
       }
-      knoppen.push({ label: 'Terug', actie: () => { sch.sluit(); ouder.ververs(); } });
+      knoppen.push({ label: 'Terug', esc: true, actie: () => { sch.sluit(); ouder.ververs(); } });
       return knoppen;
     },
   });
@@ -1206,7 +1208,7 @@ async function bestormStad(stad, opVertrek) {
       (s.moraal < 40 ? '<br><b>De bemanning is niet in de stemming voor een bestorming.</b>' : ''),
     [
       { label: 'Aanvallen!', waarde: true, soort: 'gevaar' },
-      { label: 'Terug aan boord', waarde: false },
+      { label: 'Terug aan boord', waarde: false, esc: true },
     ],
     { figuur: 'zeeman' }
   );
@@ -1378,6 +1380,10 @@ export async function tredAf(stad) {
 
   const score = berekenScore(s);
   s.gestopt = true;
+  // De loopbaan gaat naar de erelijst en het opgeslagen spel wordt gewist: deze
+  // kapitein is klaar, en de titel mag hem niet meer terug op zee zetten.
+  const plaats = bewaarInErelijst(s, score, stad);
+  wisOpslag();
   const jaren = Math.max(1, Math.floor(s.leeftijd - s.startLeeftijd));
   const hectare = Object.values(s.land).reduce((a, b) => a + b, 0);
   const hoogsteRang = Object.keys(s.rang).reduce((a, b) => (s.rang[b] > s.rang[a] ? b : a), NATIE_IDS[0]);
@@ -1416,6 +1422,12 @@ export async function tredAf(stad) {
           ]
         )
       );
+      const nb = el('p', 'verhaal');
+      nb.innerHTML =
+        plaats >= 0
+          ? `Deze loopbaan staat op <b>plaats ${plaats + 1}</b> van de erelijst.`
+          : 'Deze loopbaan haalde de erelijst niet — er zijn tien grotere namen.';
+      body.appendChild(nb);
     },
     knoppen: () => [{ label: 'Een nieuw avontuur beginnen', actie: () => window.location.reload() }],
   });

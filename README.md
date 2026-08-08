@@ -66,19 +66,38 @@ kaperbrieven, gratie, de dochter van de gouverneur en uiteindelijk je aftreden).
 
 **De lange lijn.** Roem, rang bij vier naties, grondbezit, huwelijk, veroverde
 steden — en je wordt ouder. Wie aftreedt krijgt een eindscore over zijn hele
-loopbaan.
+loopbaan, en komt op de erelijst van de tien grootste kapiteins.
 
 ## Bediening
 
+Sturen kan met de pijltjestoetsen of met `W` `A` `S` `D`. Op zee is `S` het
+vlootscherm, dus daar mindert alleen ↓ het zeil.
+
 | | |
 |---|---|
-| **Op zee** | ← → sturen · ↑ ↓ zeil bij- of minderen · klik = koers uitzetten |
+| **Op zee** | ← → of `A` `D` sturen · ↑ ↓ zeil bij- of minderen · klik = koers uitzetten |
 | | `M` zeekaart · `S` vloot en ruim · `C` bemanning · `Esc` scheepsraad |
 | | scrollen of `+` `-` = in- en uitzoomen |
-| **Zeegevecht** | ← → sturen — hiermee richt je · ↑ ↓ zeil · `spatie` vuren |
-| | `1` `2` `3` rondkogel, kettingkogel, schroot |
+| **Zeegevecht** | ← → of `A` `D` sturen — hiermee richt je · ↑ ↓ of `W` `S` zeil |
+| | `spatie` vuren · `1` `2` `3` rondkogel, kettingkogel, schroot · `Tab` volgende soort |
 | | `B` enteren (binnen 95 m) · `Esc` proberen te vluchten |
 | **Duel** | ↑ hoog · → midden · ↓ laag — pareer op de hoogte waarop hij uithaalt |
+| **In een scherm** | `Esc` sluiten · `Tab` langs de knoppen · `Enter` indrukken |
+
+## Bewaren en stoppen
+
+Er is één opgeslagen spel, in `localStorage`. Het wordt **automatisch bewaard
+zodra je een haven uitvaart** — het natuurlijke rustpunt, na de handel, de werf
+en het aanmonsteren. Daarnaast kun je in de scheepsraad (`Esc` op zee) op elk
+moment zelf bewaren, of bewaren en meteen stoppen.
+
+Stoppen kan op twee manieren. Wie via de scheepsraad afsluit, kan later verder
+waar hij gebleven was. Wie bij de gouverneur **aftreedt**, sluit zijn loopbaan
+definitief af: de eindscore gaat naar de erelijst en het opgeslagen spel wordt
+gewist. Een afgetreden kapitein vaart niet meer uit.
+
+De erelijst staat los van het opgeslagen spel en blijft dus staan wanneer je het
+logboek wist (titelscherm → *Het logboek wissen*).
 
 ## Opbouw van de code
 

@@ -1,9 +1,9 @@
 // Opstart: titelscherm, het maken van een kapitein en de overgang naar zee.
-import { TAU, clamp, lerp, el, pick, makeRng, sierTijd } from './util.js';
+import { TAU, clamp, lerp, el, pick, makeRng, sierTijd, fmtGold } from './util.js';
 import { NATIES, NATIE_IDS, TALENTEN, MOEILIJKHEDEN } from './data.js';
 import { Wereld } from './world.js';
 import { ENTERAFSTAND } from './gevechtsmodel.js';
-import { Game, maakSpeler, heeftOpslag, laad, wisOpslag } from './game.js';
+import { Game, maakSpeler, heeftOpslag, laad, wisOpslag, leesErelijst } from './game.js';
 import { maakZeilScene } from './sail.js';
 import * as R from './render.js';
 import * as UI from './ui.js';
@@ -177,6 +177,25 @@ function toonTitelmenu() {
             Game.zetScene(maakZeilScene());
           },
         });
+        k.push({
+          label: 'Het logboek wissen',
+          soort: 'gevaar',
+          actie: async () => {
+            const ja = await UI.vraag(
+              'Het logboek wissen?',
+              'Het opgeslagen spel wordt uitgewist en is niet terug te halen. ' +
+                'De erelijst blijft staan.',
+              [
+                { label: 'Ja, wissen', waarde: true, soort: 'gevaar' },
+                { label: 'Nee, laten staan', waarde: false, esc: true },
+              ]
+            );
+            if (!ja) return;
+            wisOpslag();
+            Game.melding('Het logboek is uitgewist.');
+            sch.ververs();
+          },
+        });
       }
       // Eerst dit menu sluiten: het hulpscherm opent het straks zelf weer, en
       // anders blijft er bij elke rondgang een titelmenu op de stapel staan.
@@ -187,6 +206,15 @@ function toonTitelmenu() {
           toonHulp();
         },
       });
+      if (leesErelijst().length) {
+        k.push({
+          label: 'De erelijst',
+          actie: () => {
+            sch.sluit();
+            toonErelijst();
+          },
+        });
+      }
       return k;
     },
   });
@@ -211,30 +239,39 @@ function toonHulp() {
       };
       body.appendChild(
         blok('Op zee', [
-          ['← →', 'roer bakboord / stuurboord'],
-          ['↑ ↓', 'meer of minder zeil'],
+          ['← → / A D', 'roer bakboord / stuurboord'],
+          ['↑ ↓ / W', 'meer of minder zeil'],
           ['klik', 'koers uitzetten naar dat punt'],
+          ['scroll / + −', 'in- en uitzoomen'],
           ['M', 'zeekaart'],
           ['S', 'vloot en ruim'],
           ['C', 'bemanning en betrekkingen'],
-          ['Esc', 'scheepsraad (bewaren, geluid)'],
+          ['Esc', 'scheepsraad (bewaren, stoppen, geluid)'],
         ])
       );
       body.appendChild(
         blok('In het zeegevecht', [
-          ['← →', 'sturen — hiermee richt je'],
-          ['↑ ↓', 'zeil bijzetten of minderen'],
+          ['← → / A D', 'sturen — hiermee richt je'],
+          ['↑ ↓ / W S', 'zeil bijzetten of minderen'],
           ['spatie', 'de volle laag geven'],
           ['1 2 3', 'rondkogel · kettingkogel · schroot'],
+          ['Tab', 'volgende soort kogel'],
           ['B', `enteren (binnen ${ENTERAFSTAND} meter)`],
           ['Esc', 'proberen te vluchten'],
         ])
       );
       body.appendChild(
         blok('In het duel', [
-          ['↑', 'hoog aanvallen of pareren'],
-          ['→', 'midden aanvallen of pareren'],
-          ['↓', 'laag aanvallen of pareren'],
+          ['↑ / W', 'hoog aanvallen of pareren'],
+          ['→ / D / spatie', 'midden aanvallen of pareren'],
+          ['↓ / S', 'laag aanvallen of pareren'],
+        ])
+      );
+      body.appendChild(
+        blok('In de schermen', [
+          ['Esc', 'het venster sluiten of de reis vervolgen'],
+          ['Tab', 'langs de knoppen lopen'],
+          ['Enter', 'de gekozen knop indrukken'],
         ])
       );
       const p = el('p', 'verhaal');
@@ -257,7 +294,51 @@ function toonHulp() {
         'uit voor je entert. Let wel op de dracht: schroot draagt nog geen kwart van een rondkogel.';
       body.appendChild(g);
     },
-    knoppen: (sch) => [{ label: 'Terug', actie: () => { sch.sluit(); toonTitelmenu(); } }],
+    knoppen: (sch) => [{ label: 'Terug', esc: true, actie: () => { sch.sluit(); toonTitelmenu(); } }],
+  });
+}
+
+// --- Erelijst -------------------------------------------------------------
+
+function toonErelijst() {
+  UI.toonScherm({
+    titel: 'De erelijst',
+    onder: 'De tien grootste loopbanen van de Caraïben',
+    breed: true,
+    bouw(body) {
+      const lijst = leesErelijst();
+      if (!lijst.length) {
+        const p = el('p', 'verhaal');
+        p.textContent =
+          'Nog geen enkele kapitein heeft het commando neergelegd. Wie bij de gouverneur ' +
+          'aftreedt, krijgt zijn loopbaan hier bijgeschreven.';
+        body.appendChild(p);
+        return;
+      }
+      body.appendChild(
+        UI.tabel(
+          [
+            { label: '' },
+            { label: 'Kapitein' },
+            { label: 'Onder' },
+            { label: 'Jaren', rechts: true },
+            { label: 'Vermogen', rechts: true },
+            { label: 'Score', rechts: true },
+          ],
+          lijst.map((r, i) => ({
+            cellen: [
+              { tekst: String(i + 1) },
+              { tekst: r.naam },
+              { tekst: NATIES[r.natie] ? NATIES[r.natie].naam : '—' },
+              { tekst: String(r.jaren), klasse: 'rechts' },
+              { tekst: fmtGold(r.goud), klasse: 'rechts' },
+              { html: `<b>${r.score}</b>`, klasse: 'rechts' },
+            ],
+          }))
+        )
+      );
+    },
+    knoppen: (sch) => [{ label: 'Terug', esc: true, actie: () => { sch.sluit(); toonTitelmenu(); } }],
   });
 }
 
@@ -358,7 +439,7 @@ function maakKapitein() {
           begin(keuze);
         },
       },
-      { label: 'Terug', actie: () => { sch.sluit(); toonTitelmenu(); } },
+      { label: 'Terug', esc: true, actie: () => { sch.sluit(); toonTitelmenu(); } },
     ],
   });
 

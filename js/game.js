@@ -3,6 +3,8 @@ import { clamp, makeRng, yearOf, pick } from './util.js';
 import { WAREN, SCHIP_INDEX, RANGEN, NATIE_IDS, MOEILIJKHEDEN, FAMILIE_ROLLEN } from './data.js';
 import { Wereld } from './world.js';
 import * as audio from './audio.js';
+// ui.js leunt alleen op util en audio, dus dit levert geen kringetje op.
+import * as UI from './ui.js';
 
 export const OPSLAG_SLEUTEL = 'zeeroverij.opslag.v1';
 
@@ -46,7 +48,12 @@ export const Game = {
       if (e.repeat) return;
       this.toetsen.add(e.code);
       if (this.scene && this.scene.toets) this.scene.toets(e.code, e);
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+      // Tab wisselt de munitie in het gevecht; laten we hem door, dan verspringt
+      // de browserfocus ondertussen van het canvas af. Zodra er een scherm open
+      // staat blijft Tab wél gewoon door de knoppen lopen.
+      const slik = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'];
+      if (!UI.ietsOpen()) slik.push('Tab');
+      if (slik.includes(e.code)) e.preventDefault();
       audio.ontgrendel();
     });
     window.addEventListener('keyup', (e) => this.toetsen.delete(e.code));
@@ -272,9 +279,14 @@ export function bewaar() {
   if (!Game.speler || !Game.wereld) return false;
   const w = Game.wereld;
   const data = {
-    versie: 1,
+    versie: 2,
     seed: w.seed,
     speler: Game.speler,
+    // De wereldpolitiek staat op de wereld, niet op de speler, en volgt dus
+    // niet vanzelf uit het zaadje: wie oorlog voert met wie is een gevolg van
+    // wat er tijdens deze reis is gebeurd.
+    oorlogen: w.oorlogen || {},
+    diploTimer: w.diploTimer || 0,
     steden: w.steden.map((s) => ({
       natie: s.natie,
       welvaart: s.welvaart,
@@ -311,11 +323,19 @@ export function laad() {
     return null;
   }
   if (!data || !data.speler) return null;
+  // Een kapitein die het commando heeft neergelegd, vaart niet meer uit. Bij
+  // het aftreden wordt de opslag gewist, maar een save die daarvóór is gemaakt
+  // kan hem nog terugbrengen; die weigeren we hier alsnog.
+  if (data.speler.gestopt) return null;
   const wereld = new Wereld(data.seed);
   data.steden.forEach((s, i) => {
     if (!wereld.steden[i]) return;
     Object.assign(wereld.steden[i], s);
   });
+  // Saves van vóór versie 2 kenden de wereldpolitiek nog niet; die begint dan
+  // gewoon bij vrede, precies zoals een nieuw spel.
+  wereld.oorlogen = data.oorlogen || {};
+  wereld.diploTimer = data.diploTimer || 0;
   // Oude saves saneren: ontbrekende velden krijgen hun standaardwaarde.
   const sp = data.speler;
   if (!sp.familie) sp.familie = { rol: pick(Math.random, FAMILIE_ROLLEN), gevonden: false, gevondenDag: null };
@@ -332,6 +352,50 @@ export function wisOpslag() {
   } catch (e) {
     /* niets te doen */
   }
+}
+
+// --- Erelijst -------------------------------------------------------------
+
+export const ERELIJST_SLEUTEL = 'zeeroverij.erelijst.v1';
+
+/** De tien beste loopbanen, van hoog naar laag. */
+export function leesErelijst() {
+  try {
+    const ruw = localStorage.getItem(ERELIJST_SLEUTEL);
+    const lijst = ruw ? JSON.parse(ruw) : [];
+    return Array.isArray(lijst) ? lijst : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Schrijft een afgesloten loopbaan bij. Alleen de uitkomst wordt bewaard, niet
+ * de hele spelstaat: de erelijst overleeft het wissen van een opgeslagen spel.
+ */
+export function bewaarInErelijst(speler, score, stad) {
+  const regel = {
+    naam: speler.naam,
+    natie: speler.natie,
+    score,
+    roem: Math.round(speler.roem),
+    goud: speler.gespaard,
+    jaren: Math.max(1, Math.floor(speler.leeftijd - speler.startLeeftijd)),
+    moeilijkheid: speler.moeilijkheid,
+    stad: stad ? stad.naam : '',
+    dag: speler.dag,
+  };
+  const lijst = leesErelijst();
+  lijst.push(regel);
+  lijst.sort((a, b) => b.score - a.score);
+  lijst.length = Math.min(lijst.length, 10);
+  try {
+    localStorage.setItem(ERELIJST_SLEUTEL, JSON.stringify(lijst));
+  } catch (e) {
+    console.warn('Erelijst bewaren mislukt', e);
+  }
+  // De plaats in de lijst, of -1 als hij er net buiten viel.
+  return lijst.indexOf(regel);
 }
 
 export { yearOf, makeRng };

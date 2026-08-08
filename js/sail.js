@@ -28,6 +28,19 @@ export function maakZeilScene() {
   // in (vanuit) -> (naar), in plaats van plotseling op open zee te staan.
   let vertrek = null;
 
+  /**
+   * Houdt het beeld binnen de zeekaart. Zonder deze klem vaar je zo voorbij de
+   * rand van de wereld het lege niets in — en zag je bovendien de hulplijnen
+   * waarmee het vasteland zichzelf sluit. Past het hele zeegebied in het beeld,
+   * dan centreren we het gewoon.
+   */
+  function houdCameraInKaart() {
+    const halfW = Game.breedte / 2 / cam.zoom;
+    const halfH = Game.hoogte / 2 / cam.zoom;
+    cam.x = halfW * 2 >= WORLD_W ? WORLD_W / 2 : clamp(cam.x, halfW, WORLD_W - halfW);
+    cam.y = halfH * 2 >= WORLD_H ? WORLD_H / 2 : clamp(cam.y, halfH, WORLD_H - halfH);
+  }
+
   const scene = {
     naam: 'zeilen',
 
@@ -36,12 +49,14 @@ export function maakZeilScene() {
       cam.x = s.x;
       cam.y = s.y;
       cam.zoom = 1;
+      houdCameraInKaart();
       if (!miniKaart) miniKaart = maakMiniKaart(Game.wereld);
       audio.startMuziek();
     },
 
     scroll(dy) {
       cam.zoom = clamp(cam.zoom * (dy > 0 ? 0.9 : 1.1), 0.35, 2.2);
+      houdCameraInKaart();
     },
 
     toets(code) {
@@ -56,8 +71,10 @@ export function maakZeilScene() {
         toonMenu();
       } else if (code === 'Equal' || code === 'NumpadAdd') {
         cam.zoom = clamp(cam.zoom * 1.2, 0.35, 2.2);
+        houdCameraInKaart();
       } else if (code === 'Minus' || code === 'NumpadSubtract') {
         cam.zoom = clamp(cam.zoom / 1.2, 0.35, 2.2);
+        houdCameraInKaart();
       }
     },
 
@@ -161,6 +178,7 @@ export function maakZeilScene() {
       const vooruit = 60 / cam.zoom;
       cam.x = lerp(cam.x, s.x + Math.cos(s.koers) * vooruit, clamp(dt * 3, 0, 1));
       cam.y = lerp(cam.y, s.y + Math.sin(s.koers) * vooruit, clamp(dt * 3, 0, 1));
+      houdCameraInKaart();
 
       // --- Tijd, proviand en moraal ---------------------------------------
       const dagen = dt * DAGEN_PER_SECONDE;
@@ -228,6 +246,7 @@ export function maakZeilScene() {
       c.scale(cam.zoom, cam.zoom);
       c.translate(-cam.x, -cam.y);
 
+      R.tekenDiepte(c, w);
       R.tekenKaartlijnen(c, cam, vw, vh);
       R.tekenLand(c, w, cam, vw, vh);
       R.tekenKustEffecten(c, w, cam, vw, vh, Game.tijd);
@@ -965,14 +984,19 @@ function maakMiniKaart(wereld) {
   g.save();
   g.scale(sc, sc);
   g.lineJoin = 'round';
+  g.lineCap = 'round';
+  // Ondiep water in de bankbreedte van het eiland zelf, zodat de Bahamabank
+  // ook op duimnagelformaat als een plaat te herkennen is.
   g.strokeStyle = 'rgba(90,180,190,0.5)';
-  g.lineWidth = 22;
-  for (const l of wereld.land) g.stroke(l.path);
+  for (const l of wereld.land) {
+    g.lineWidth = 22 * (l.bank || 1);
+    g.stroke(l.kust);
+  }
   g.fillStyle = '#4a7a44';
   for (const l of wereld.land) g.fill(l.path);
   g.strokeStyle = '#d9c48a';
   g.lineWidth = 6;
-  for (const l of wereld.land) g.stroke(l.path);
+  for (const l of wereld.land) g.stroke(l.kust);
   g.restore();
   return cv;
 }

@@ -65,6 +65,7 @@ function maakTitelScene() {
       c.translate(vw / 2, vh / 2);
       c.scale(cam.zoom, cam.zoom);
       c.translate(-cam.x, -cam.y);
+      R.tekenDiepte(c, wereld);
       R.tekenKaartlijnen(c, cam, vw, vh);
       R.tekenLand(c, wereld, cam, vw, vh);
       for (const stad of wereld.steden) R.tekenStad(c, stad, cam, Game.tijd, false);

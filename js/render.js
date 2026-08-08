@@ -42,35 +42,241 @@ const ZON_Y = 3.6;
 
 // We bewaren de tegels zelf (niet het patroon), want elk canvas heeft zijn
 // eigen patroonobject nodig — de landlaag tekent op een eigen buffer.
-let waterTegel = null;
 let landTegel = null;
-let waterPatroon = null;
+let wolkTegel = null;
+/** @type {{patroon:CanvasPattern, maat:number}[]} */
+let sprankelLagen = [];
 
-/** Naadloos golfpatroon dat we over de zee heen schuiven. */
-function maakWaterTegel() {
-  const S = 256;
+// Maat waarop de golftegel wordt gerékend. De maten waarop hij uiteindelijk in
+// beeld komt staan in GOLF_LAGEN; die worden vooraf uitgebakken.
+const ZEE_TEGEL = 256;
+
+// Lichtrichting op het water, tegengesteld aan de vaste slagschaduw: de zon
+// staat linksboven, dus daar vandaan lichten de golfkruinen op.
+const LICHT_LEN = Math.hypot(ZON_X, ZON_Y);
+const LICHT_X = -ZON_X / LICHT_LEN;
+const LICHT_Y = -ZON_Y / LICHT_LEN;
+
+/**
+ * Zoekt de golfvector met gehele componenten die het dichtst bij `hoek` ligt.
+ *
+ * Waarom geheel? Alleen als een sinus een heel aantal keer in de tegel past,
+ * sluit hij naadloos aan op zijn buren. Een golfveld dat we gewoon zouden
+ * draaien, zou bij elke tegelnaad een breuk vertonen; door de richting te
+ * kiezen uit de roosterhoeken houden we het naadloos én kunnen we het patroon
+ * assenparallel blijven vullen, wat vele malen goedkoper is dan het canvas
+ * draaien.
+ */
+function golfVector(hoek) {
+  const cx = Math.cos(hoek),
+    cy = Math.sin(hoek);
+  let best = [3, 0],
+    bestScore = -2;
+  for (let nx = -6; nx <= 6; nx++) {
+    for (let ny = -6; ny <= 6; ny++) {
+      const len = Math.hypot(nx, ny);
+      if (len < 2.6 || len > 6.2) continue;
+      const score = (nx * cx + ny * cy) / len;
+      if (score > bestScore) {
+        bestScore = score;
+        best = [nx, ny];
+      }
+    }
+  }
+  return best;
+}
+
+// [richting t.o.v. de wind, veelvoud van de grondgolf, amplitude, fase]
+//
+// Ruim bemeten in de hogere veelvouden en in drie richtingen tegelijk: zee is
+// korte golf op lange golf, en de kruinlijnen worden pas gebroken door reeksen
+// die schuin binnenlopen.
+const GOLF_REEKSEN = [
+  [0, 1, 0.8, 0.0],
+  [0, 2, 0.6, 1.7],
+  [0, 3, 0.48, 3.9],
+  [0, 5, 0.32, 2.4],
+  [0, 8, 0.18, 5.5],
+  [0.62, 1, 0.75, 0.9],
+  [0.62, 3, 0.34, 4.6],
+  [0.62, 6, 0.16, 2.1],
+  [-0.75, 1, 0.7, 5.9],
+  [-0.75, 2, 0.5, 2.8],
+  [-0.75, 4, 0.28, 1.2],
+  [-0.75, 7, 0.12, 5.0],
+  [1.25, 2, 0.4, 0.3],
+  [1.25, 5, 0.16, 3.3],
+  [-1.5, 3, 0.3, 4.4],
+];
+
+// Trage velden waarmee we het golfveld op zichzelf verschuiven, elk op twee
+// schalen zodat de kruinen zowel in het groot als in het klein kronkelen.
+const VERVORM_X = [[0.9, 1, 1, 0.4], [0.9, 2, 0.5, 2.2], [2.1, 4, 0.3, 5.0]];
+const VERVORM_Y = [[-1.1, 1, 1, 3.1], [-1.1, 3, 0.4, 1.1], [-2.3, 5, 0.25, 0.7]];
+
+/** Som van sinusgolven met gehele golfvectoren, genormaliseerd naar ±1. */
+function golfVeld(S, reeksen, hoek) {
+  const h = new Float32Array(S * S);
+  const su = new Float32Array(S),
+    cu = new Float32Array(S),
+    sv = new Float32Array(S),
+    cv = new Float32Array(S);
+
+  for (const [draai, veelvoud, amp, fase] of reeksen) {
+    const [bx, by] = golfVector(hoek + draai);
+    const nx = bx * veelvoud,
+      ny = by * veelvoud;
+    // Boven Nyquist heeft een component geen betekenis meer, alleen ruis.
+    if (Math.abs(nx) > S / 4 || Math.abs(ny) > S / 4) continue;
+    for (let i = 0; i < S; i++) {
+      const u = (TAU * nx * i) / S;
+      su[i] = Math.sin(u);
+      cu[i] = Math.cos(u);
+      const v = (TAU * ny * i) / S + fase;
+      sv[i] = Math.sin(v);
+      cv[i] = Math.cos(v);
+    }
+    // sin(u + v) uitgeschreven, zodat we per tegel maar 4·S sinussen nodig
+    // hebben in plaats van S² per component.
+    for (let y = 0; y < S; y++) {
+      const svy = sv[y],
+        cvy = cv[y],
+        rij = y * S;
+      for (let x = 0; x < S; x++) h[rij + x] += amp * (su[x] * cvy + cu[x] * svy);
+    }
+  }
+
+  let max = 0;
+  for (let i = 0; i < h.length; i++) {
+    const a = h[i] < 0 ? -h[i] : h[i];
+    if (a > max) max = a;
+  }
+  const inv = max > 0 ? 1 / max : 1;
+  for (let i = 0; i < h.length; i++) h[i] *= inv;
+  return h;
+}
+
+/**
+ * Naadloze golftegel voor één windrichting.
+ *
+ * Een stapel vlakke sinussen levert altijd kaarsrechte, oneindig lange
+ * kruinen op — geen zee maar geborsteld metaal. Daarom bemonsteren we het veld
+ * niet op (x, y) maar op een plek die zelf door twee trage golfvelden wordt
+ * verschoven: de kruinen gaan kronkelen en breken af, zoals kabbeling doet.
+ * Omdat de verschuivingsvelden dezelfde periode hebben als de tegel, blijft
+ * het geheel naadloos. Van het resultaat nemen we de helling naar de zon toe:
+ * kruinen lichten op, dalen vallen weg.
+ */
+function maakGolfTegel(hoek) {
+  const S = ZEE_TEGEL;
+  const ruw = golfVeld(S, GOLF_REEKSEN, hoek);
+  const vx = golfVeld(S, VERVORM_X, hoek);
+  const vy = golfVeld(S, VERVORM_Y, hoek);
+
+  const AMPL = 28; // hoe ver we het veld op zichzelf verschuiven, in tegelpixels
+  const h = new Float32Array(S * S);
+  for (let y = 0; y < S; y++) {
+    const rij = y * S;
+    for (let x = 0; x < S; x++) {
+      const i = rij + x;
+      const sx = x + vx[i] * AMPL,
+        sy = y + vy[i] * AMPL;
+      const x0 = Math.floor(sx),
+        y0 = Math.floor(sy);
+      const fx = sx - x0,
+        fy = sy - y0;
+      // Rondom de tegel heen bemonsteren, anders scheurt het veld aan de naad.
+      const xa = ((x0 % S) + S) % S,
+        xb = (xa + 1) % S;
+      const ya = ((y0 % S) + S) % S,
+        yb = (ya + 1) % S;
+      const boven = ruw[ya * S + xa] * (1 - fx) + ruw[ya * S + xb] * fx;
+      const onder = ruw[yb * S + xa] * (1 - fx) + ruw[yb * S + xb] * fx;
+      h[i] = boven * (1 - fy) + onder * fy;
+    }
+  }
+
   const c = offscreen(S, S);
   const g = c.getContext('2d');
-  g.clearRect(0, 0, S, S);
-  g.strokeStyle = 'rgba(255,255,255,0.055)';
-  g.lineWidth = 1.6;
-  g.lineCap = 'round';
-  for (let i = 0; i < 46; i++) {
-    const y = (i / 46) * S;
-    g.beginPath();
-    for (let x = -8; x <= S + 8; x += 6) {
-      const yy = y + Math.sin((x / S) * TAU * 2 + i * 1.7) * 3.2;
-      if (x === -8) g.moveTo(x, yy);
-      else g.lineTo(x, yy);
+  const img = g.createImageData(S, S);
+  const d = img.data;
+  for (let y = 0; y < S; y++) {
+    const rij = y * S,
+      boven = ((y - 1 + S) % S) * S,
+      onder = ((y + 1) % S) * S;
+    for (let x = 0; x < S; x++) {
+      const links = (x - 1 + S) % S,
+        rechts = (x + 1) % S;
+      const gx = h[rij + rechts] - h[rij + links];
+      const gy = h[onder + x] - h[boven + x];
+      const helling = -(gx * LICHT_X + gy * LICHT_Y) * 2.1;
+      const i4 = (rij + x) * 4;
+      if (helling > 0) {
+        // De hoogste kruinen krijgen een schuimkop bovenop het glanslicht.
+        const kruin = h[rij + x];
+        const schuim = kruin > 0.72 ? (kruin - 0.72) * 2.6 : 0;
+        d[i4] = 234;
+        d[i4 + 1] = 249;
+        d[i4 + 2] = 255;
+        d[i4 + 3] = Math.min(255, helling * 74 + schuim * 130);
+      } else {
+        d[i4] = 5;
+        d[i4 + 1] = 38;
+        d[i4 + 2] = 64;
+        d[i4 + 3] = Math.min(255, -helling * 92);
+      }
     }
-    g.stroke();
   }
-  // Losse schitteringen.
-  g.fillStyle = 'rgba(255,255,255,0.09)';
-  for (let i = 0; i < 90; i++) {
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
+/** Losse lichtvonken die over de kruinen twinkelen. */
+function maakSprankelTegel(S = 256) {
+  const c = offscreen(S, S);
+  const g = c.getContext('2d');
+  for (let i = 0; i < 130; i++) {
     const x = Math.random() * S,
       y = Math.random() * S;
-    g.fillRect(x, y, 3 + Math.random() * 5, 1.2);
+    const r = 0.9 + Math.random() * 2.2;
+    const grad = g.createRadialGradient(x, y, 0, x, y, r * 2.4);
+    grad.addColorStop(0, 'rgba(255,255,248,0.95)');
+    grad.addColorStop(0.4, 'rgba(220,244,255,0.35)');
+    grad.addColorStop(1, 'rgba(220,244,255,0)');
+    g.fillStyle = grad;
+    g.beginPath();
+    g.arc(x, y, r * 2.4, 0, TAU);
+    g.fill();
+  }
+  return c;
+}
+
+/**
+ * Zachte donkere vlekken. Uitvergroot en traag drijvend lezen ze als de
+ * schaduw van passerende stapelwolken — het goedkoopste middel om een vlak
+ * blauw canvas de schaal van een oceaan te geven.
+ */
+function maakWolkTegel() {
+  // Meteen op eindmaat gemaakt: een tegel die we bij het vullen nog moeten
+  // opschalen dwingt het canvas hem elk beeld opnieuw te bemonsteren.
+  const S = 768;
+  const c = offscreen(S, S);
+  const g = c.getContext('2d');
+  // Ook over de rand heen tekenen, anders zijn de naden zichtbaar.
+  for (let i = 0; i < 26; i++) {
+    const x = Math.random() * S,
+      y = Math.random() * S;
+    const r = 66 + Math.random() * 162;
+    for (const [ox, oy] of [[0, 0], [S, 0], [-S, 0], [0, S], [0, -S]]) {
+      const grad = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+      grad.addColorStop(0, 'rgba(2,18,34,0.5)');
+      grad.addColorStop(0.6, 'rgba(2,18,34,0.24)');
+      grad.addColorStop(1, 'rgba(2,18,34,0)');
+      g.fillStyle = grad;
+      g.beginPath();
+      g.arc(x + ox, y + oy, r, 0, TAU);
+      g.fill();
+    }
   }
   return c;
 }
@@ -91,10 +297,80 @@ function maakLandTegel() {
 }
 
 export function initPatronen(ctx) {
-  waterTegel = maakWaterTegel();
   landTegel = maakLandTegel();
-  waterPatroon = ctx.createPattern(waterTegel, 'repeat');
+  wolkTegel = maakWolkTegel();
+  // Eén vonkenlaag. Twee zag er iets levendiger uit, maar 'lighter' is de
+  // duurste menging die we gebruiken en dit is een schermvullende laag.
+  sprankelLagen = [maakSprankelTegel(256)].map((t) => ({
+    patroon: ctx.createPattern(t, 'repeat'),
+    maat: t.width,
+  }));
+  golfStand.lagen = null;
   landLaag.geldig = false;
+}
+
+// Golftegels voor de huidige windrichting. De richting kwantiseren we in
+// stapjes van ruim zeven graden: de wind draait traag, dus we bouwen de tegels
+// hooguit een paar keer per minuut opnieuw.
+const GOLF_STAP = 0.13;
+
+// [maat in beeldpixels, driftsnelheid, dekking, wolkenschaduw meebakken] —
+// deining, golfslag, rimpeling. De maat staat vast in plaats van mee te schalen
+// met de zoom: zo hoeft het canvas de tegel nooit te herbemonsteren, en dat
+// scheelt bij een schermvullende laag meer dan alle andere winst bij elkaar.
+//
+// De deining staat op de maat van de wolkentegel, want daar bakken we de
+// wolkenschaduw in mee. Beide drijven traag en groot met de wind; ze in één
+// laag doen scheelt een hele schermvullende vulling per beeld.
+const GOLF_LAGEN = [
+  [768, 6, 0.42, true],
+  [320, 17, 0.72, false],
+  [141, 30, 0.28, false],
+];
+
+const golfStand = { stap: null, lagen: null, ctx: null };
+
+function zorgVoorGolven(ctx, hoek) {
+  const stap = Math.round(hoek / GOLF_STAP);
+  if (golfStand.stap === stap && golfStand.lagen && golfStand.ctx === ctx) return golfStand.lagen;
+  const bron = maakGolfTegel(stap * GOLF_STAP);
+  golfStand.lagen = GOLF_LAGEN.map(([maat, snel, alfa, metWolken]) => {
+    const c = offscreen(maat, maat);
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    if (metWolken && wolkTegel) {
+      g.drawImage(wolkTegel, 0, 0, maat, maat);
+      // De golven wegen binnen deze laag lichter dan de wolken; het verschil
+      // zat vroeger in de twee afzonderlijke dekkingen (0,30 om 0,42).
+      g.globalAlpha = 0.71;
+    }
+    g.drawImage(bron, 0, 0, maat, maat);
+    return { patroon: ctx.createPattern(c, 'repeat'), maat, snel, alfa };
+  });
+  golfStand.stap = stap;
+  golfStand.ctx = ctx;
+  return golfStand.lagen;
+}
+
+/**
+ * Vult het beeld met een herhalend patroon, verschoven over (offX, offY).
+ *
+ * Het patroon ligt vast aan de oorsprong van de gebruikersruimte, dus door het
+ * canvas te verschuiven en het gat terug te compenseren dekken we precies het
+ * beeld — geen overdruk, geen patroontransform, geen herbemonstering.
+ */
+function vulPatroon(ctx, patroon, vw, vh, maat, offX, offY, alfa, samenstelling) {
+  if (!patroon || alfa <= 0.002) return;
+  const tx = mod(offX, maat),
+    ty = mod(offY, maat);
+  ctx.save();
+  ctx.globalAlpha = alfa;
+  if (samenstelling) ctx.globalCompositeOperation = samenstelling;
+  ctx.translate(tx, ty);
+  ctx.fillStyle = patroon;
+  ctx.fillRect(-tx, -ty, vw, vh);
+  ctx.restore();
 }
 
 // --- Zee ------------------------------------------------------------------
@@ -131,51 +407,130 @@ function mengKleur(hex, zwart) {
 export function tekenZee(ctx, cam, vw, vh, t, wind) {
   const schemer = schemerFactor();
   const g = ctx.createLinearGradient(0, 0, 0, vh);
-  g.addColorStop(0, mengKleur('#10486f', schemer));
-  g.addColorStop(0.5, mengKleur('#16648f', schemer * 0.8));
-  g.addColorStop(1, mengKleur('#0e4166', schemer * 0.65));
+  g.addColorStop(0, mengKleur('#0a3a5e', schemer));
+  g.addColorStop(0.42, mengKleur('#14618c', schemer * 0.8));
+  g.addColorStop(0.72, mengKleur('#10527a', schemer * 0.72));
+  g.addColorStop(1, mengKleur('#092f4c', schemer * 0.65));
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, vw, vh);
 
-  // Schemering: een goudoranje gloed op de kim en een blauwige nevel.
+  const wr = wind ? wind.richting : 0;
+  const wk = clamp(wind ? wind.kracht : 1, 0.25, 2);
+  const st = sierTijd(t);
+  const zoom = cam.zoom || 1;
+  // Het water beweegt met de wereld mee (het ligt eronder, niet erachter), dus
+  // de patronen volgen de camera één-op-één; alleen de drift is van de wind.
+  const camX = cam.x * zoom,
+    camY = cam.y * zoom;
+  const dx = Math.cos(wr),
+    dy = Math.sin(wr);
+
+  // Deining (met de wolkenschaduw erin), golfslag, en — alleen als je er dicht
+  // genoeg op zit — rimpeling. Alle drie dezelfde tegel op een andere maat en
+  // snelheid: het oog ziet er drie afzonderlijke zeegangen in, en het scheelt
+  // twee tegelbouwen. De deining blijft bewust flauw: op die maat is één tegel
+  // bijna een halve schermbreedte, en een sterke laag zou zijn eigen herhaling
+  // verraden.
+  const golfLagen = zorgVoorGolven(ctx, wr);
+  for (let i = 0; i < golfLagen.length; i++) {
+    if (i === 2 && zoom <= 0.55) break; // uitgezoomd is rimpeling toch alleen ruis
+    const { patroon, maat, snel, alfa } = golfLagen[i];
+    const drift = st * snel * wk;
+    vulPatroon(ctx, patroon, vw, vh, maat, -camX + dx * drift, -camY + dy * drift, alfa);
+  }
+
+  // Zonnevonken op de kruinen, ademend zodat het twinkelt in plaats van staat.
+  // Bij schemering doven ze uit: dan is er geen zon om in te vonken.
+  const helder = clamp(1 - schemer * 1.4, 0.15, 1);
+  for (let i = 0; i < sprankelLagen.length; i++) {
+    const { patroon, maat } = sprankelLagen[i];
+    const drift = st * 21 * wk;
+    const alfa = 0.24 * helder * (0.55 + 0.45 * Math.sin(st * 1.7));
+    vulPatroon(ctx, patroon, vw, vh, maat, -camX + dx * drift, -camY + dy * drift, alfa, 'lighter');
+  }
+
+  // Schemering: een goudoranje gloed op de kim en een blauwige nevel. Deze
+  // gaat óver het water heen, anders kleurt hij alleen de lege ondergrond.
   if (schemer > 0.05) {
     const s = schemer;
     const gloed = ctx.createRadialGradient(vw * 0.5, vh * 0.35, 0, vw * 0.5, vh * 0.35, vh * 0.7);
-    gloed.addColorStop(0, `rgba(255,180,80,${0.18 * s})`);
+    gloed.addColorStop(0, `rgba(255,180,80,${0.2 * s})`);
     gloed.addColorStop(1, 'rgba(255,180,80,0)');
     ctx.fillStyle = gloed;
     ctx.fillRect(0, 0, vw, vh);
     const nevel = ctx.createLinearGradient(0, 0, 0, vh);
-    nevel.addColorStop(0, `rgba(24,42,70,${0.4 * s})`);
+    nevel.addColorStop(0, `rgba(24,42,70,${0.42 * s})`);
     nevel.addColorStop(1, 'rgba(10,30,52,0)');
     ctx.fillStyle = nevel;
     ctx.fillRect(0, 0, vw, vh);
   }
+}
 
-  if (!waterPatroon) return;
+// --- Diepte ---------------------------------------------------------------
 
-  // De deining loopt mee met de wind: richting én snelheid.
-  const wr = wind ? wind.richting : 0;
-  const wk = clamp(wind ? wind.kracht : 1, 0.25, 2);
-  const st = sierTijd(t);
-  const dx = Math.cos(wr) * wk;
-  const dy = Math.sin(wr) * wk;
+// Wereldeenheden per pixel in de dieptekaart. Grof mag — het is een zachte
+// overgang — maar niet té grof: hoe kleiner de bron, hoe zwaarder de browser
+// moet interpoleren bij het uitvergroten, en dat is een schermvullende
+// bewerking die elk beeld terugkomt.
+const DIEPTE_SCHAAL = 4;
 
-  // Twee patroonlagen die met verschillende snelheid meebewegen.
-  for (const [schaal, snel, alfa] of [
-    [1.0, 22, 0.85],
-    [1.9, 12, 0.5],
-  ]) {
-    ctx.save();
-    ctx.globalAlpha = alfa;
-    ctx.translate(
-      mod(-(cam.x * cam.zoom) / schaal + dx * st * snel, 256),
-      mod(-(cam.y * cam.zoom) / schaal + dy * st * snel, 256)
-    );
-    ctx.fillStyle = waterPatroon;
-    ctx.fillRect(-256, -256, vw + 512, vh + 512);
-    ctx.restore();
+// Van diep naar ondiep: breedte van de gordel in wereldeenheden, de kleur en
+// hoe zwaar de laag meetelt. De bankfactor van elk eiland schaalt de breedte,
+// zodat de Bahamabank in een breed turkoois veld ligt en Dominica in geen.
+const DIEPTE_STAPPEN = [
+  [500, '#1b5f80', 0.26],
+  [320, '#1f7290', 0.28],
+  [200, '#27889c', 0.3],
+  [120, '#3aa3a8', 0.32],
+  [66, '#55c0b4', 0.34],
+  [32, '#7ad6c2', 0.36],
+];
+
+const diepteCache = { wereld: null, canvas: null };
+
+function bouwDiepteKaart(wereld) {
+  const W = Math.max(1, Math.ceil(WORLD_W / DIEPTE_SCHAAL));
+  const H = Math.max(1, Math.ceil(WORLD_H / DIEPTE_SCHAAL));
+  const c = offscreen(W, H);
+  const g = c.getContext('2d');
+  // Elke stap eerst apart optrekken en dan als geheel met vaste dekking
+  // opleggen: anders stapelen de banken van naburige eilanden op elkaar en
+  // wordt de Kleine Antillen één lichtgevende sliert.
+  const tmp = offscreen(W, H);
+  const tg = tmp.getContext('2d');
+  for (const [breedte, kleur, alfa] of DIEPTE_STAPPEN) {
+    tg.setTransform(1, 0, 0, 1, 0, 0);
+    tg.clearRect(0, 0, W, H);
+    tg.setTransform(1 / DIEPTE_SCHAAL, 0, 0, 1 / DIEPTE_SCHAAL, 0, 0);
+    tg.lineJoin = 'round';
+    tg.lineCap = 'round';
+    tg.strokeStyle = kleur;
+    tg.fillStyle = kleur;
+    for (const l of wereld.land) {
+      tg.lineWidth = breedte * (l.bank || 1);
+      tg.stroke(l.path);
+      tg.fill(l.path);
+    }
+    g.globalAlpha = alfa;
+    g.drawImage(tmp, 0, 0);
   }
+  return c;
+}
+
+/**
+ * Ondiep water als veld in plaats van als randje: de banken en platen zijn
+ * van ver zichtbaar, en het verschil tussen een koraalplateau en een steile
+ * vulkaanhelling wordt leesbaar. Verwacht de camera-transform.
+ */
+export function tekenDiepte(ctx, wereld) {
+  if (diepteCache.wereld !== wereld || !diepteCache.canvas) {
+    diepteCache.canvas = bouwDiepteKaart(wereld);
+    diepteCache.wereld = wereld;
+  }
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(diepteCache.canvas, 0, 0, WORLD_W, WORLD_H);
+  ctx.restore();
 }
 
 // --- Land -----------------------------------------------------------------
@@ -244,6 +599,95 @@ function bouwLandLaag(wereld, cam, vw, vh, dpr) {
   landLaag.geldig = true;
 }
 
+/** Begrenzingsvak van een bergrug, met wat lucht voor de breedte van de rug. */
+function rugVak(rug) {
+  if (rug._bb) return rug._bb;
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity;
+  for (const [x, y] of rug.pts) {
+    if (x < x0) x0 = x;
+    if (y < y0) y0 = y;
+    if (x > x1) x1 = x;
+    if (y > y1) y1 = y;
+  }
+  const m = 40 * rug.hoog;
+  rug._bb = { x0: x0 - m, y0: y0 - m, x1: x1 + m, y1: y1 + m };
+  return rug._bb;
+}
+
+/**
+ * Een bergrug als keten van toppen. Eén streep van gelijke dikte leest als een
+ * omgevallen boomstam; een rij overlappende koppen die naar de uiteinden toe
+ * uitdooft leest als gebergte. De koppen gaan in één pad, zodat de overlap bij
+ * het vullen niet als donkere vlek doorschemert.
+ */
+function rugPaden(rug) {
+  if (rug._paden) return rug._paden;
+  const pts = rug.pts;
+  const seg = [];
+  let lengte = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    seg.push(d);
+    lengte += d;
+  }
+  const basis = 18 * rug.hoog;
+  const n = Math.max(9, Math.round(lengte / (basis * 0.4)));
+
+  // [verschuiving richting de zon, straalfactor] per laag: schaduwzijde,
+  // gesteente, droge kam, en de toppen die het licht vangen.
+  const lagen = [[-0.26, 1], [0, 0.9], [0.1, 0.58], [0.3, 0.26]];
+  const paden = lagen.map(() => new Path2D());
+
+  for (let k = 0; k <= n; k++) {
+    const t = k / n;
+    let d = t * lengte,
+      i = 0;
+    while (i < seg.length - 1 && d > seg[i]) {
+      d -= seg[i];
+      i++;
+    }
+    const u = seg[i] ? clamp(d / seg[i], 0, 1) : 0;
+    const x = lerp(pts[i][0], pts[i + 1][0], u);
+    const y = lerp(pts[i][1], pts[i + 1][1], u);
+    // Uitdovend naar de uiteinden, met een vaste rimpel zodat de kam niet als
+    // een gladde worst oogt. Deterministisch: de kaart moet elke keer gelijk zijn.
+    const taper = Math.sqrt(Math.sin(Math.PI * clamp(t, 0.04, 0.96)));
+    const ruis = Math.abs((Math.sin(k * 12.9898 + rug.hoog * 78.233) * 43758.5453) % 1);
+    const r = basis * taper * (0.68 + 0.55 * ruis);
+    // Kammen kronkelen; een rechte lijn toppen verraadt de constructie.
+    const zw = Math.sin(k * 2.4 + rug.hoog * 9.1) * basis * 0.22;
+    const nx = i < seg.length && seg[i] ? -(pts[i + 1][1] - pts[i][1]) / seg[i] : 0;
+    const ny = i < seg.length && seg[i] ? (pts[i + 1][0] - pts[i][0]) / seg[i] : 0;
+    const px = x + nx * zw,
+      py = y + ny * zw;
+    for (let li = 0; li < lagen.length; li++) {
+      const [verschuif, factor] = lagen[li];
+      paden[li].moveTo(px + LICHT_X * r * verschuif + r * factor, py + LICHT_Y * r * verschuif);
+      paden[li].arc(px + LICHT_X * r * verschuif, py + LICHT_Y * r * verschuif, r * factor, 0, TAU);
+    }
+  }
+  rug._paden = paden;
+  return paden;
+}
+
+/** Eén bergrug: schaduwzijde, kaal gesteente, droge kam, zonbeschenen top. */
+function tekenRug(ctx, rug) {
+  const paden = rugPaden(rug);
+  const kleuren = [
+    'rgba(20,38,22,0.42)',
+    'rgba(94,97,60,0.8)',
+    'rgba(132,124,86,0.72)',
+    'rgba(230,226,190,0.5)',
+  ];
+  for (let i = 0; i < paden.length; i++) {
+    ctx.fillStyle = kleuren[i];
+    ctx.fill(paden[i]);
+  }
+}
+
 /** Het eigenlijke tekenwerk, op de bufferlaag. */
 function tekenEilanden(ctx, wereld, vak, zoom) {
   const zx0 = vak.x0,
@@ -262,17 +706,19 @@ function tekenEilanden(ctx, wereld, vak, zoom) {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  // Ondiepten: brede, doorschijnende randen rond de kust.
-  const banken = [
-    [64, 'rgba(41,123,150,0.55)'],
-    [40, 'rgba(58,158,172,0.5)'],
-    [22, 'rgba(96,196,196,0.45)'],
-    [10, 'rgba(150,228,214,0.5)'],
-  ];
-  for (const [w, kleur] of banken) {
-    ctx.lineWidth = w;
+  // Rif vlak voor de kust. De brede banken zitten in de dieptekaart; hier gaat
+  // het om de scherpe rand waar het koraal in het zand overgaat. De bankfactor
+  // van het eiland bepaalt hoe ver die rand uitloopt.
+  for (const [w, kleur] of [
+    [40, 'rgba(50,150,170,0.4)'],
+    [22, 'rgba(96,196,196,0.4)'],
+    [10, 'rgba(162,234,216,0.5)'],
+  ]) {
     ctx.strokeStyle = kleur;
-    for (const l of zichtbaar) ctx.stroke(l.path);
+    for (const l of zichtbaar) {
+      ctx.lineWidth = w * (l.bank || 1);
+      ctx.stroke(l.kust);
+    }
   }
 
   // Slagschaduw voor diepte. De offset is in schermpixels, zodat de eilanden
@@ -283,46 +729,78 @@ function tekenEilanden(ctx, wereld, vak, zoom) {
   for (const l of zichtbaar) ctx.fill(l.path);
   ctx.restore();
 
-  // Landmassa: donker binnenland, lichter naar de kust toe.
+  // Hoogtetinten: donker, vochtig binnenland dat naar de kust toe opklaart.
+  // De banden lopen vanaf de échte kust naar binnen — langs een kaartrand komt
+  // dus vanzelf geen kustgroen te staan.
+  const korrel = landTegel ? ctx.createPattern(landTegel, 'repeat') : null;
   for (const l of zichtbaar) {
-    ctx.fillStyle = '#335c33';
+    ctx.fillStyle = '#3a5c37';
     ctx.fill(l.path);
   }
-  const korrel = landTegel ? ctx.createPattern(landTegel, 'repeat') : null;
   for (const l of zichtbaar) {
     ctx.save();
     ctx.clip(l.path);
     const b = bbox(l);
+    const k = l.groot ? 1.7 : 1;
     for (const [w, kleur] of [
-      [88, 'rgba(74,122,68,0.55)'],
-      [46, 'rgba(96,145,78,0.6)'],
-      [18, 'rgba(126,168,92,0.7)'],
+      [380, '#41653a'],
+      [220, '#4b7340'],
+      [120, '#5a8548'],
+      [62, '#6d9a52'],
+      [26, '#84b062'],
     ]) {
-      ctx.lineWidth = w;
+      ctx.lineWidth = w * k;
       ctx.strokeStyle = kleur;
-      ctx.stroke(l.path);
+      ctx.stroke(l.kust);
     }
+
+    // Bergruggen, geknipt op deze landmassa.
+    if (wereld.ruggen) {
+      for (const rug of wereld.ruggen) {
+        const r = rugVak(rug);
+        if (r.x1 < b.x0 || r.x0 > b.x1 || r.y1 < b.y0 || r.y0 > b.y1) continue;
+        if (r.x1 < zx0 || r.x0 > zx1 || r.y1 < zy0 || r.y0 > zy1) continue;
+        tekenRug(ctx, rug);
+      }
+    }
+
     if (korrel) {
       // De korrel blijft aan de wereld verankerd — anders verspringt hij zodra
       // de buffer opnieuw wordt opgebouwd — maar hij groeit mee bij uitzoomen,
       // zodat hij nooit subpixelklein wordt en gaat ruisen.
-      const k = Math.max(1, 1 / zoom);
+      const kk = Math.max(1, 1 / zoom);
       ctx.save();
-      ctx.scale(k, k);
+      ctx.scale(kk, kk);
       ctx.fillStyle = korrel;
-      ctx.fillRect(b.x0 / k, b.y0 / k, (b.x1 - b.x0) / k, (b.y1 - b.y0) / k);
+      ctx.fillRect(b.x0 / kk, b.y0 / kk, (b.x1 - b.x0) / kk, (b.y1 - b.y0) / kk);
       ctx.restore();
     }
+
+    // Kustreliëf: de landrand vangt licht aan de zonzijde en valt weg aan de
+    // andere. Dat tilt een eiland zichtbaar uit het water.
+    ctx.save();
+    ctx.translate(-LICHT_X * 3.2, -LICHT_Y * 3.2);
+    ctx.lineWidth = 15;
+    ctx.strokeStyle = 'rgba(20,40,26,0.32)';
+    ctx.stroke(l.kust);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(LICHT_X * 2.6, LICHT_Y * 2.6);
+    ctx.lineWidth = 9;
+    ctx.strokeStyle = 'rgba(226,232,178,0.26)';
+    ctx.stroke(l.kust);
+    ctx.restore();
+
     ctx.restore();
   }
 
-  // Strand en kustlijn.
+  // Strand en kustlijn — alleen langs echte oevers.
   ctx.lineWidth = 7;
   ctx.strokeStyle = '#dcc691';
-  for (const l of zichtbaar) ctx.stroke(l.path);
+  for (const l of zichtbaar) ctx.stroke(l.kust);
   ctx.lineWidth = 1.6;
   ctx.strokeStyle = 'rgba(247,236,205,0.85)';
-  for (const l of zichtbaar) ctx.stroke(l.path);
+  for (const l of zichtbaar) ctx.stroke(l.kust);
 }
 
 /**
@@ -408,7 +886,7 @@ export function tekenKustEffecten(ctx, wereld, cam, vw, vh, tijd) {
     ctx.strokeStyle = `rgba(238,250,253,${alfa})`;
     ctx.setLineDash([16, 13 + 7 * Math.sin(st * snel + fase)]);
     ctx.lineDashOffset = st * 11 * snel + fase * 28;
-    for (const l of zichtbaar) ctx.stroke(l.path);
+    for (const l of zichtbaar) ctx.stroke(l.kust);
     ctx.restore();
   }
 
@@ -417,26 +895,36 @@ export function tekenKustEffecten(ctx, wereld, cam, vw, vh, tijd) {
   ctx.save();
   ctx.lineWidth = GROOTSTE_ROMPSSTRAAL * 2;
   ctx.strokeStyle = `rgba(70,196,212,${0.09 + 0.05 * pulseren})`;
-  for (const l of zichtbaar) ctx.stroke(l.path);
+  for (const l of zichtbaar) ctx.stroke(l.kust);
   ctx.restore();
 }
 
-/** Vage lengte- en breedtelijnen, als op een oude zeekaart. */
+/**
+ * Vage lengte- en breedtelijnen, als op een oude zeekaart. De maaswijdte volgt
+ * de zoom: één graad als je erop zit, vijf als je de hele Caraïben overziet.
+ * Elke vijfde lijn telt als hoofdgraad en staat wat steviger aan.
+ */
 export function tekenKaartlijnen(ctx, cam, vw, vh) {
-  const stap = 92 * 2; // elke twee graden
+  const graad = 92;
+  const zoom = cam.zoom || 1;
+  const graden = zoom > 1.2 ? 1 : zoom > 0.5 ? 2 : 5;
+  const stap = graad * graden;
   ctx.save();
-  ctx.strokeStyle = 'rgba(220,205,160,0.075)';
-  ctx.lineWidth = 1 / cam.zoom;
-  ctx.beginPath();
-  for (let x = 0; x <= WORLD_W; x += stap) {
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, WORLD_H);
+  ctx.lineWidth = 1 / zoom;
+  for (const [veelvoud, kleur] of [[1, 'rgba(220,205,160,0.06)'], [5, 'rgba(220,205,160,0.13)']]) {
+    const s = stap * veelvoud;
+    ctx.strokeStyle = kleur;
+    ctx.beginPath();
+    for (let x = 0; x <= WORLD_W; x += s) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, WORLD_H);
+    }
+    for (let y = 0; y <= WORLD_H; y += s) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(WORLD_W, y);
+    }
+    ctx.stroke();
   }
-  for (let y = 0; y <= WORLD_H; y += stap) {
-    ctx.moveTo(0, y);
-    ctx.lineTo(WORLD_W, y);
-  }
-  ctx.stroke();
   ctx.restore();
 }
 

@@ -1,5 +1,5 @@
 // Opbouw van de Caribische wereldkaart: land, steden, economie, wind en vloten.
-import { makeRng, rnd, rndInt, pick, clamp, lerp, pointInPoly, dist, TAU, normAngle } from './util.js';
+import { makeRng, rnd, rndInt, pick, clamp, lerp, dist, TAU, normAngle } from './util.js';
 import { STEDEN, WAREN, WAAR_INDEX, SOORT_ECONOMIE, NATIE_IDS, SCHEPEN, SCHIP_INDEX, KAPITEIN_NAMEN, SCHEEP_MAAT } from './data.js';
 
 // Kaartprojectie: rechttoe-rechtaan, met echte graden als basis.
@@ -18,6 +18,9 @@ const P = (lon, lat) => [projX(lon), projY(lat)];
 // --- Kustlijnen -----------------------------------------------------------
 
 // Vasteland: Florida, Golfkust, Mexico, Yucatán, Midden-Amerika, Spanish Main.
+// Dit is een ópen lijn: alleen echte kust. Het achterland wordt gesloten met
+// VASTELAND_SLUITING, en die segmenten krijgen geen strand of branding — het
+// zijn de randen van de kaart, geen oevers.
 const VASTELAND = [
   [-81.5, 31], [-81.3, 30.4], [-80.9, 29.2], [-80.55, 28.5], [-80.1, 27.0],
   [-80.1, 26.0], [-80.4, 25.3], [-81.1, 25.1], [-81.7, 25.9], [-81.85, 26.6],
@@ -35,8 +38,12 @@ const VASTELAND = [
   [-74.8, 11.1], [-73.3, 11.3], [-72.2, 11.85], [-71.35, 11.9], [-71.6, 10.9],
   [-71.0, 10.6], [-70.2, 11.5], [-69.6, 11.45], [-68.3, 10.5], [-66.9, 10.6],
   [-65.5, 10.2], [-64.7, 10.15], [-63.0, 10.6], [-62.4, 10.65], [-62.0, 10.0],
-  [-61.6, 9.2], [-60.6, 8.6], [-59.2, 8.3], [-58.0, 8.0], [-58.0, 7.4],
-  [-98.4, 7.4], [-98.4, 31],
+  [-61.6, 9.2], [-60.6, 8.6], [-59.2, 8.3], [-58.0, 8.0],
+];
+
+/** Sluit het vasteland buiten beeld; nadrukkelijk géén kust. */
+const VASTELAND_SLUITING = [
+  [-58.0, 7.2], [-98.6, 7.2], [-98.6, 31.4], [-81.5, 31.4],
 ];
 
 const CUBA = [
@@ -69,24 +76,70 @@ const BAHAMAS = [
   [[-76.2, 24.2], [-75.1, 23.1], [-74.85, 23.02], [-75.95, 24.18]],
 ];
 
-/** Kleinere eilanden als middelpunt + straal in graden. */
+/**
+ * Kleinere eilanden als middelpunt + straal in graden, met daarachter de
+ * bankfactor: hoe ver het ondiepe water voor de kust uitloopt. Een koraaleiland
+ * op de Bahamabank ligt in een breed turkoois veld; een vulkaan als Dominica
+ * duikt binnen een kabellengte naar duizend vadem. Dát verschil is precies wat
+ * een Caribische zeekaart herkenbaar maakt.
+ */
 const EILANDJES = [
-  [-77.4, 25.05, 0.16], [-73.3, 21.05, 0.42], [-72.82, 20.08, 0.16], [-73.05, 18.85, 0.3],
-  [-81.25, 19.32, 0.15], [-80.05, 19.68, 0.08], [-86.9, 20.45, 0.15],
-  [-64.75, 18.35, 0.26], [-63.05, 18.09, 0.15], [-63.24, 17.63, 0.08], [-62.97, 17.49, 0.09],
-  [-62.73, 17.33, 0.13], [-62.6, 17.15, 0.08], [-61.79, 17.08, 0.15], [-61.79, 17.63, 0.12],
-  [-62.19, 16.74, 0.09], [-61.6, 16.22, 0.26], [-61.35, 15.42, 0.18], [-61.02, 14.65, 0.2],
-  [-60.97, 13.9, 0.14], [-61.19, 13.25, 0.13], [-61.68, 12.12, 0.13], [-59.55, 13.18, 0.15],
-  [-60.7, 11.25, 0.13], [-61.05, 10.45, 0.4], [-63.95, 11.0, 0.24], [-68.95, 12.15, 0.22],
-  [-70.0, 12.52, 0.15], [-68.3, 12.2, 0.17], [-81.37, 13.35, 0.1], [-81.7, 12.55, 0.1],
+  [-77.4, 25.05, 0.16, 2.2], [-73.3, 21.05, 0.42, 2.0], [-72.82, 20.08, 0.16, 1.8], [-73.05, 18.85, 0.3, 0.9],
+  [-81.25, 19.32, 0.15, 0.7], [-80.05, 19.68, 0.08, 0.7], [-86.9, 20.45, 0.15, 1.1],
+  [-64.75, 18.35, 0.26, 1.3], [-63.05, 18.09, 0.15, 1.5], [-63.24, 17.63, 0.08, 0.45], [-62.97, 17.49, 0.09, 0.45],
+  [-62.73, 17.33, 0.13, 0.5], [-62.6, 17.15, 0.08, 0.5], [-61.79, 17.08, 0.15, 1.1], [-61.79, 17.63, 0.12, 1.7],
+  [-62.19, 16.74, 0.09, 0.45], [-61.6, 16.22, 0.26, 0.8], [-61.35, 15.42, 0.18, 0.4], [-61.02, 14.65, 0.2, 0.5],
+  [-60.97, 13.9, 0.14, 0.45], [-61.19, 13.25, 0.13, 0.45], [-61.68, 12.12, 0.13, 0.6], [-59.55, 13.18, 0.15, 0.6],
+  [-60.7, 11.25, 0.13, 0.9], [-61.05, 10.45, 0.4, 1.3], [-63.95, 11.0, 0.24, 1.0], [-68.95, 12.15, 0.22, 0.6],
+  [-70.0, 12.52, 0.15, 0.7], [-68.3, 12.2, 0.17, 0.6], [-81.37, 13.35, 0.1, 1.4], [-81.7, 12.55, 0.1, 1.4],
 ];
 
-/** Kustlijn opdelen en licht verstoren zodat hij organisch oogt. */
-function verruw(poly, rng, kracht, rondingen = 1) {
+/**
+ * Bergruggen, als lijnen over het land. Ze worden geklemd op de landvorm, dus
+ * ze mogen ruim genomen zijn; wat buiten de kust valt wordt weggeknipt.
+ * `hoog` bepaalt hoe zwaar de rug oogt (breedte en schaduw).
+ */
+const BERGRUGGEN = [
+  // Cuba
+  { pts: [[-77.5, 19.98], [-76.6, 20.05], [-75.7, 20.15]], hoog: 0.85 }, // Sierra Maestra
+  { pts: [[-80.35, 21.85], [-79.85, 21.95]], hoog: 0.45 }, // Escambray
+  { pts: [[-84.3, 22.4], [-83.3, 22.5]], hoog: 0.4 }, // Sierra de los Órganos
+  // Hispaniola
+  { pts: [[-71.9, 18.75], [-70.9, 19.0], [-70.1, 19.25]], hoog: 1.0 }, // Cordillera Central
+  { pts: [[-73.9, 18.42], [-72.9, 18.45]], hoog: 0.6 }, // Massif de la Hotte
+  { pts: [[-71.5, 19.75], [-70.4, 19.6]], hoog: 0.45 }, // Cordillera Septentrional
+  // Jamaica en Puerto Rico
+  { pts: [[-77.0, 18.15], [-76.45, 18.08]], hoog: 0.6 }, // Blue Mountains
+  { pts: [[-66.8, 18.2], [-66.0, 18.2]], hoog: 0.5 }, // Cordillera Central
+  // Vasteland
+  { pts: [[-92.2, 15.4], [-90.5, 15.2], [-88.9, 15.3]], hoog: 0.95 }, // Guatemalteekse hooglanden
+  { pts: [[-87.6, 14.6], [-86.2, 14.2], [-85.0, 13.5]], hoog: 0.8 }, // Honduras/Nicaragua
+  { pts: [[-83.9, 10.4], [-82.6, 9.5], [-81.4, 8.9]], hoog: 0.7 }, // Cordillera de Talamanca
+  { pts: [[-74.2, 10.95], [-73.6, 10.75]], hoog: 0.75 }, // Sierra Nevada de Santa Marta
+  { pts: [[-72.6, 10.0], [-72.4, 9.0], [-72.2, 8.2]], hoog: 0.7 }, // Serranía de Perijá
+  { pts: [[-71.6, 9.2], [-70.4, 9.6], [-69.6, 10.0]], hoog: 0.8 }, // Cordillera de Mérida
+  { pts: [[-67.6, 10.3], [-66.2, 10.35], [-64.9, 10.05]], hoog: 0.55 }, // Cordillera de la Costa
+  { pts: [[-96.3, 18.9], [-97.0, 20.2], [-97.6, 21.6]], hoog: 0.7 }, // Sierra Madre Oriental
+  { pts: [[-61.8, 8.0], [-60.4, 7.9], [-59.0, 8.0]], hoog: 0.5 }, // Guyanaas hoogland
+  // Vulkanen van de Kleine Antillen: korte, steile ruggen.
+  { pts: [[-61.35, 15.45], [-61.32, 15.35]], hoog: 0.55 }, // Dominica
+  { pts: [[-61.03, 14.75], [-61.0, 14.68]], hoog: 0.5 }, // Pelée
+  { pts: [[-61.2, 13.32], [-61.18, 13.25]], hoog: 0.5 }, // Soufrière
+  { pts: [[-61.66, 16.18], [-61.62, 16.1]], hoog: 0.45 }, // Basse-Terre
+  { pts: [[-62.2, 16.72], [-62.18, 16.68]], hoog: 0.4 }, // Montserrat
+  { pts: [[-62.75, 17.36], [-62.72, 17.3]], hoog: 0.4 }, // St. Kitts
+];
+
+/**
+ * Kustlijn opdelen en licht verstoren zodat hij organisch oogt. Bij een open
+ * lijn (`gesloten = false`) blijven de uiteinden staan waar ze staan.
+ */
+function verruw(poly, rng, kracht, rondingen = 1, gesloten = true) {
   let pts = poly;
   for (let r = 0; r < rondingen; r++) {
     const uit = [];
-    for (let i = 0; i < pts.length; i++) {
+    const laatste = gesloten ? pts.length : pts.length - 1;
+    for (let i = 0; i < laatste; i++) {
       const a = pts[i],
         b = pts[(i + 1) % pts.length];
       uit.push(a);
@@ -98,21 +151,27 @@ function verruw(poly, rng, kracht, rondingen = 1) {
       const off = (rng() - 0.5) * kracht * len;
       uit.push([mx - (dy / len) * off, my + (dx / len) * off]);
     }
+    if (!gesloten) uit.push(pts[pts.length - 1]);
     pts = uit;
-    kracht *= 0.55;
+    kracht *= 0.62;
   }
   return pts;
 }
 
 function maakEilandje(lon, lat, straal, rng) {
-  const n = rndInt(rng, 9, 14);
+  const n = rndInt(rng, 11, 18);
   const pts = [];
-  const rekX = rnd(rng, 0.7, 1.5);
-  const rekY = rnd(rng, 0.7, 1.5);
+  // Niet elk eiland is een rond kiezeltje: sommige zijn lang en smal, andere
+  // gelobd met een baai erin. Twee harmonischen op de straal doen dat werk.
+  const rekX = rnd(rng, 0.55, 1.9);
+  const rekY = rnd(rng, 0.55, 1.9);
   const draai = rnd(rng, 0, TAU);
+  const lobben = rndInt(rng, 2, 4);
+  const lobDiepte = rnd(rng, 0.1, 0.3);
+  const lobFase = rnd(rng, 0, TAU);
   for (let i = 0; i < n; i++) {
-    const a = (i / n) * TAU + rnd(rng, -0.1, 0.1);
-    const r = straal * rnd(rng, 0.62, 1.15);
+    const a = (i / n) * TAU + rnd(rng, -0.08, 0.08);
+    const r = straal * (1 - lobDiepte + lobDiepte * Math.cos(a * lobben + lobFase)) * rnd(rng, 0.82, 1.14);
     const x = Math.cos(a) * r * rekX,
       y = Math.sin(a) * r * rekY;
     pts.push([lon + x * Math.cos(draai) - y * Math.sin(draai), lat + x * Math.sin(draai) + y * Math.cos(draai)]);
@@ -132,26 +191,48 @@ export class Wereld {
     const rng = makeRng(seed);
     this.rng = rng;
 
-    /** @type {{pts:number[][], path:Path2D, groot:boolean}[]} */
+    /**
+     * `path` is de gesloten landvorm (vullen, botsen); `kust` bevat alleen de
+     * échte oever, zodat strand en branding nooit op een kaartrand belanden.
+     * `bank` schaalt de breedte van het ondiepe water voor de kust.
+     * @type {{pts:number[][], path:Path2D, kust:Path2D, groot:boolean, bank:number}[]}
+     */
     this.land = [];
-    const voegToe = (graden, ruw, groot) => {
-      const verfijnd = verruw(graden, rng, ruw, groot ? 2 : 1);
-      const pts = verfijnd.map(([lon, lat]) => P(lon, lat));
+    const voegToe = (graden, ruw, groot, bank = 1, sluiting = null) => {
+      const open = !!sluiting;
+      const kustGraden = verruw(graden, rng, ruw, groot ? 3 : 2, !open);
+      const kustPts = kustGraden.map(([lon, lat]) => P(lon, lat));
+
+      const kust = new Path2D();
+      kust.moveTo(kustPts[0][0], kustPts[0][1]);
+      for (let i = 1; i < kustPts.length; i++) kust.lineTo(kustPts[i][0], kustPts[i][1]);
+      if (!open) kust.closePath();
+
+      const pts = open ? kustPts.concat(sluiting.map(([lon, lat]) => P(lon, lat))) : kustPts;
       const path = new Path2D();
       path.moveTo(pts[0][0], pts[0][1]);
       for (let i = 1; i < pts.length; i++) path.lineTo(pts[i][0], pts[i][1]);
       path.closePath();
-      this.land.push({ pts, path, groot });
+
+      this.land.push({ pts, path, kust, groot, bank });
       return pts;
     };
 
-    voegToe(VASTELAND, 0.06, true);
-    voegToe(CUBA, 0.09, true);
-    voegToe(HISPANIOLA, 0.09, true);
-    voegToe(JAMAICA, 0.1, false);
-    voegToe(PUERTO_RICO, 0.08, false);
-    for (const b of BAHAMAS) voegToe(b, 0.12, false);
-    for (const [lon, lat, r] of EILANDJES) voegToe(maakEilandje(lon, lat, r, rng), 0.08, false);
+    voegToe(VASTELAND, 0.085, true, 1, VASTELAND_SLUITING);
+    voegToe(CUBA, 0.1, true, 1.15);
+    voegToe(HISPANIOLA, 0.1, true, 0.8);
+    voegToe(JAMAICA, 0.11, false, 0.9);
+    voegToe(PUERTO_RICO, 0.085, false, 0.7);
+    for (const b of BAHAMAS) voegToe(b, 0.13, false, 2.4);
+    for (const [lon, lat, r, bank] of EILANDJES) {
+      voegToe(maakEilandje(lon, lat, r, rng), 0.09, false, bank);
+    }
+
+    // Bergruggen naar wereldcoördinaten; de tekenlaag knipt ze op het land.
+    this.ruggen = BERGRUGGEN.map((r) => ({
+      pts: r.pts.map(([lon, lat]) => P(lon, lat)),
+      hoog: r.hoog,
+    }));
 
     this.#bouwMasker();
     this.#bouwSteden();
@@ -168,36 +249,53 @@ export class Wereld {
     this.tijd = 0;
   }
 
-  // Grof rasterlandmasker voor snelle botsingscontrole.
+  /**
+   * Grof rasterlandmasker voor snelle botsingscontrole.
+   *
+   * Per polygoon met scanlijnen gevuld in plaats van elke cel tegen elke
+   * kustlijn te toetsen: dat scheelt bij een half miljoen cellen en duizenden
+   * kustpunten twee ordes van grootte, en het is precies wat ons de ruimte
+   * geeft om de kust veel grilliger te maken. De even-oneven-regel is dezelfde
+   * als in pointInPoly, dus masker en polygoontoets blijven het eens.
+   */
   #bouwMasker() {
     this.mw = Math.ceil(WORLD_W / RASTER) + 1;
     this.mh = Math.ceil(WORLD_H / RASTER) + 1;
     this.masker = new Uint8Array(this.mw * this.mh);
-    // Begrenzingsvak per polygoon zodat we niet alles hoeven te testen.
-    const vakken = this.land.map((l) => {
-      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-      for (const [x, y] of l.pts) {
-        if (x < x0) x0 = x;
+    const kruisingen = [];
+    for (const l of this.land) {
+      const pts = l.pts;
+      let y0 = Infinity,
+        y1 = -Infinity;
+      for (let i = 0; i < pts.length; i++) {
+        const y = pts[i][1];
         if (y < y0) y0 = y;
-        if (x > x1) x1 = x;
         if (y > y1) y1 = y;
       }
-      return { x0, y0, x1, y1 };
-    });
-    for (let cy = 0; cy < this.mh; cy++) {
-      const wy = cy * RASTER;
-      for (let cx = 0; cx < this.mw; cx++) {
-        const wx = cx * RASTER;
-        let land = 0;
-        for (let i = 0; i < this.land.length; i++) {
-          const v = vakken[i];
-          if (wx < v.x0 || wx > v.x1 || wy < v.y0 || wy > v.y1) continue;
-          if (pointInPoly(wx, wy, this.land[i].pts)) {
-            land = 1;
-            break;
-          }
+      const cy0 = Math.max(0, Math.ceil(y0 / RASTER));
+      const cy1 = Math.min(this.mh - 1, Math.floor(y1 / RASTER));
+      for (let cy = cy0; cy <= cy1; cy++) {
+        const wy = cy * RASTER;
+        kruisingen.length = 0;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          const yi = pts[i][1],
+            yj = pts[j][1];
+          if (yi > wy === yj > wy) continue;
+          const xi = pts[i][0],
+            xj = pts[j][0];
+          kruisingen.push(((xj - xi) * (wy - yi)) / (yj - yi) + xi);
         }
-        this.masker[cy * this.mw + cx] = land;
+        if (kruisingen.length < 2) continue;
+        kruisingen.sort((a, b) => a - b);
+        const rij = cy * this.mw;
+        for (let k = 0; k + 1 < kruisingen.length; k += 2) {
+          let cx0 = Math.ceil(kruisingen[k] / RASTER);
+          let cx1 = Math.ceil(kruisingen[k + 1] / RASTER) - 1;
+          if (cx1 < 0 || cx0 > this.mw - 1) continue;
+          if (cx0 < 0) cx0 = 0;
+          if (cx1 > this.mw - 1) cx1 = this.mw - 1;
+          for (let cx = cx0; cx <= cx1; cx++) this.masker[rij + cx] = 1;
+        }
       }
     }
   }

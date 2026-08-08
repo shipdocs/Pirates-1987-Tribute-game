@@ -235,7 +235,9 @@ export function maakZeeslag(vloot, opts) {
       tekenMistrand(c);
       c.restore();
 
-      // Stormflair in de slag: regen waait mee met de wind.
+      // Zeeleven en stormflair, net als op de overzichtskaart: meeuwen cirkelen
+      // boven het strijdtoneel, regen waait mee met de wind.
+      R.tekenMeeuwen(c, vw, vh, Game.tijd);
       R.tekenRegen(c, Game.breedte, Game.hoogte, wereld.windRichting, wereld.windKracht, Game.tijd);
 
       tekenGevechtHud(c);

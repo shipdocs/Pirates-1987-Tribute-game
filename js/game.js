@@ -343,6 +343,15 @@ export function laad() {
   for (const schip of sp.schepen || []) {
     if (!schip.upgrades) schip.upgrades = { zeilen: 0, romp: 0, roer: 0 };
   }
+  // De wereld wordt uit het zaadje herbouwd, en de kustlijnen zijn sinds
+  // oudere saves fijner getekend. Een schip dat daardoor net op het droge
+  // uitkomt, zetten we terug in het dichtstbijzijnde vaarwater.
+  const vlag = sp.schepen && sp.schepen[0];
+  if (vlag && !wereld.isVaren(sp.x, sp.y, vlag.type)) {
+    const [vx, vy] = wereld.dichtstbijVaren(sp.x, sp.y, vlag.type, 1200);
+    sp.x = vx;
+    sp.y = vy;
+  }
   return { wereld, speler: sp };
 }
 

@@ -382,7 +382,7 @@ function maakKapitein() {
         const n = NATIES[id];
         const k = el('button', 'keuze' + (keuze.natie === id ? ' gekozen' : ''));
         k.innerHTML =
-          `<span class="vlag"><i style="background:${n.vlag[0]}"></i>` +
+          `<span class="vlag${n.vlagStaand ? ' staand' : ''}"><i style="background:${n.vlag[0]}"></i>` +
           `<i style="background:${n.vlag[1]}"></i><i style="background:${n.vlag[2]}"></i></span>` +
           `<b>${n.naam}</b>`;
         k.onclick = () => {

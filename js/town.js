@@ -341,9 +341,15 @@ function havenPrent(stad) {
       <rect x="323" y="67" width="8" height="4" rx="2"/>
     </g>
     <rect x="313" y="18" width="2.5" height="24" fill="#3a2a18"/>
-    <rect x="315.5" y="20" width="17" height="5" fill="${natie.vlag[0]}"/>
-    <rect x="315.5" y="25" width="17" height="5" fill="${natie.vlag[1]}"/>
-    <rect x="315.5" y="30" width="17" height="5" fill="${natie.vlag[2]}"/>
+    ${
+      natie.vlagStaand
+        ? `<rect x="315.5" y="20" width="5.7" height="15" fill="${natie.vlag[0]}"/>
+           <rect x="321.2" y="20" width="5.7" height="15" fill="${natie.vlag[1]}"/>
+           <rect x="326.9" y="20" width="5.7" height="15" fill="${natie.vlag[2]}"/>`
+        : `<rect x="315.5" y="20" width="17" height="5" fill="${natie.vlag[0]}"/>
+           <rect x="315.5" y="25" width="17" height="5" fill="${natie.vlag[1]}"/>
+           <rect x="315.5" y="30" width="17" height="5" fill="${natie.vlag[2]}"/>`
+    }
 
     <!-- Water op de rede -->
     <rect x="0" y="${HP.water}" width="400" height="${130 - HP.water}" fill="url(#hp-water)"/>

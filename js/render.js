@@ -923,10 +923,21 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
   for (let i = 0; i < 3; i++) {
     ctx.fillStyle = natie.vlag[i];
     ctx.beginPath();
-    ctx.moveTo(0, -fh / 2 + (i * fh) / 3);
-    ctx.lineTo(-fl, -fh / 2 + (i * fh) / 3 + (wapper * (i + 1)) / 3);
-    ctx.lineTo(-fl, -fh / 2 + ((i + 1) * fh) / 3 + (wapper * (i + 1)) / 3);
-    ctx.lineTo(0, -fh / 2 + ((i + 1) * fh) / 3);
+    if (natie.vlagStaand) {
+      // Verticale banen (Franse driekleur).
+      const x0 = -(i * fl) / 3;
+      const x1 = -((i + 1) * fl) / 3;
+      ctx.moveTo(x0, -fh / 2);
+      ctx.lineTo(x1, -fh / 2 + (wapper * (i + 1)) / 6);
+      ctx.lineTo(x1, fh / 2 + (wapper * (i + 1)) / 6);
+      ctx.lineTo(x0, fh / 2);
+    } else {
+      // Horizontale banen: rood boven, wit midden, blauw onder.
+      ctx.moveTo(0, -fh / 2 + (i * fh) / 3);
+      ctx.lineTo(-fl, -fh / 2 + (i * fh) / 3 + (wapper * (i + 1)) / 3);
+      ctx.lineTo(-fl, -fh / 2 + ((i + 1) * fh) / 3 + (wapper * (i + 1)) / 3);
+      ctx.lineTo(0, -fh / 2 + ((i + 1) * fh) / 3);
+    }
     ctx.closePath();
     ctx.fill();
   }
@@ -1076,10 +1087,21 @@ export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
   for (let i = 0; i < 3; i++) {
     ctx.fillStyle = natie.vlag[i];
     ctx.beginPath();
-    ctx.moveTo(0, mastTop + i * 2.4);
-    ctx.lineTo(10, mastTop + i * 2.4 + (wapper * (i + 1)) / 3);
-    ctx.lineTo(10, mastTop + (i + 1) * 2.4 + (wapper * (i + 1)) / 3);
-    ctx.lineTo(0, mastTop + (i + 1) * 2.4);
+    if (natie.vlagStaand) {
+      // Verticale banen (Franse driekleur).
+      const x0 = (i * 10) / 3;
+      const x1 = ((i + 1) * 10) / 3;
+      ctx.moveTo(x0, mastTop);
+      ctx.lineTo(x1, mastTop + (wapper * (i + 1)) / 6);
+      ctx.lineTo(x1, mastTop + 7.2 + (wapper * (i + 1)) / 6);
+      ctx.lineTo(x0, mastTop + 7.2);
+    } else {
+      // Horizontale banen: rood boven, wit midden, blauw onder.
+      ctx.moveTo(0, mastTop + i * 2.4);
+      ctx.lineTo(10, mastTop + i * 2.4 + (wapper * (i + 1)) / 3);
+      ctx.lineTo(10, mastTop + (i + 1) * 2.4 + (wapper * (i + 1)) / 3);
+      ctx.lineTo(0, mastTop + (i + 1) * 2.4);
+    }
     ctx.closePath();
     ctx.fill();
   }

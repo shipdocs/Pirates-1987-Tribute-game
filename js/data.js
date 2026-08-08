@@ -21,6 +21,8 @@ export const NATIES = {
     kleur: '#4f7fd9',
     kleur2: '#f2f2f2',
     vlag: ['#0055a4', '#f4f4f4', '#ef4135'],
+    // De Franse driekleur staat verticaal; alle andere vlaggen liggen horizontaal.
+    vlagStaand: true,
   },
   nederland: {
     naam: 'Nederland',

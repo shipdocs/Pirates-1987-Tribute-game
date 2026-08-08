@@ -1,6 +1,9 @@
 // Zeeslag: laveren, de wind uitbuiten en de volle laag geven.
 import { clamp, lerp, normAngle, dist, TAU, turnToward, fmtGold } from './util.js';
-import { WAREN, SCHIP_INDEX, scheepsAanduiding, metLidwoord, MOEILIJKHEDEN, NATIES } from './data.js';
+import {
+  WAREN, SCHIP_INDEX, scheepsAanduiding, metLidwoord, MOEILIJKHEDEN, NATIES,
+  LEGENDE_INDEX, ITEMS, itemBonus,
+} from './data.js';
 import { zeilEfficiëntie } from './world.js';
 import { Game, roundRect, vlaggenschip, nieuwSchip, talentBonus, vlootBemanningMax } from './game.js';
 import * as R from './render.js';
@@ -44,9 +47,10 @@ export function maakZeeslag(vloot, opts) {
     y: 70,
     koers: 0,
     speler: true,
-    // Uitrusting telt mee in het gevecht.
-    upgradeZeil: (eigenUp.zeilen || 0) * 0.04,
-    upgradeRoer: (eigenUp.roer || 0) * 0.05,
+    // Uitrusting van de werf én buitstukken van verslagen legendes tellen mee.
+    upgradeZeil: (eigenUp.zeilen || 0) * 0.04 + itemBonus(speler, 'snelheid'),
+    upgradeRoer: (eigenUp.roer || 0) * 0.05 + itemBonus(speler, 'wend'),
+    upgradeHoogte: itemBonus(speler, 'hoogte'),
   });
 
   const type = SCHIP_INDEX[vloot.type];
@@ -306,7 +310,7 @@ export function maakZeeslag(vloot, opts) {
   function beweeg(s, dt) {
     const t = SCHIP_INDEX[s.type];
     const storm = wereld.stormWind ? wereld.stormWind(s.x, s.y) : { richting: wereld.windRichting, kracht: wereld.windKracht };
-    const eff = zeilEfficiëntie(s.koers, storm.richting, t.hoogte);
+    const eff = zeilEfficiëntie(s.koers, storm.richting, t.hoogte + (s.upgradeHoogte || 0));
     const romp = lerp(0.5, 1, clamp(s.romp / s.maxRomp, 0, 1));
     const upgrade = s.speler ? 1 + (mij.upgradeZeil || 0) : 1;
     const doel = t.snelheid * eff * storm.kracht * s.zeilstand * s.tuigage * romp * 1.15 * upgrade;
@@ -317,7 +321,9 @@ export function maakZeeslag(vloot, opts) {
 
   /** Dracht van dit schip met de munitie die er nu in zit. */
   function bereikVan(s, soort) {
-    return schootsafstand(SCHIP_INDEX[s.type], soort);
+    // Fijn kruit brandt sneller af en draagt daardoor verder.
+    const kruit = s.speler ? 1 + itemBonus(speler, 'dracht') : 1;
+    return schootsafstand(SCHIP_INDEX[s.type], soort) * kruit;
   }
 
   function munitieVan(s) {
@@ -360,7 +366,9 @@ export function maakZeeslag(vloot, opts) {
     const volkDeel = clamp(schutter.bemanning / Math.max(1, schutter.startBemanning), 0, 1);
     const kanonnier = schutter.speler ? talentBonus(speler, 'kanonnier') : 0;
     schutter.herlaadVol = herlaadTijd(t, volkDeel, kanonnier) *
-      (schutter.speler ? 1 : clamp(1.55 - vijandKracht * 0.42, 0.95, 1.6));
+      (schutter.speler
+        ? 1 - itemBonus(speler, 'herlaad') // dubbele affuiten lopen sneller terug in batterij
+        : clamp(1.55 - vijandKracht * 0.42, 0.95, 1.6));
     schutter.herlaad = schutter.herlaadVol;
 
     // Waar het doel straks zal zijn. De stukken staan dwars vast en mogen maar
@@ -632,11 +640,45 @@ export function maakZeeslag(vloot, opts) {
     beloonOverwinning('overgave');
   }
 
+  /** Afrekening met een beruchte kapitein: roem, een naam minder op zee, en zijn buitstuk. */
+  async function beloonLegende(id) {
+    const legende = LEGENDE_INDEX[id];
+    if (!legende) return;
+    if (!speler.legendes) speler.legendes = {};
+    if (!speler.legendes[id]) speler.legendes[id] = { verslagen: false, getipt: false, bij: null };
+    speler.legendes[id].verslagen = true;
+    speler.legendes[id].getipt = false;
+    speler.legendes[id].bij = null;
+    speler.roem += 80;
+    speler.moraal = clamp(speler.moraal + 15, 0, 100);
+
+    if (!Array.isArray(speler.items)) speler.items = [];
+    const item = ITEMS[legende.buit];
+    const nieuw = item && !speler.items.includes(legende.buit);
+    if (nieuw) speler.items.push(legende.buit);
+
+    audio.sfx.fanfare();
+    await UI.vraag(
+      `${legende.naam} is verslagen`,
+      `De zwarte vlag gaat neer. <b>${legende.naam}</b>, ${legende.bijnaam}, vaart niet meer. ` +
+        'Die naam gaat over de hele Caraïben — en die van jou erachteraan.' +
+        (nieuw
+          ? `<br><br>Uit het ruim haal je <b>${item.naam}</b>: ${item.omschrijving}`
+          : '<br><br>Van die uitrusting valt niets meer te halen dat je niet al hebt.'),
+      [{ label: 'Een naam erbij', waarde: 'ok' }],
+      { figuur: 'zeeman' }
+    );
+  }
+
   async function beloonOverwinning(hoe) {
     slaSchadeOp();
     speler.verslagenSchepen++;
     speler.roem += hoe === 'enteren' ? 14 : 10;
     speler.moraal = clamp(speler.moraal + 10, 0, 100);
+
+    // Een beruchte kapitein afrekenen is geen doorsnee prijs: het levert roem
+    // op én een uitrustingsstuk dat nergens te koop is.
+    if (vloot.legende) await beloonLegende(vloot.legende);
 
     // Jacht-opdracht: een vijandelijk schip van de gevraagde natie bewust tot
     // zinken brengen of strijken, vervult de opdracht.
@@ -997,5 +1039,6 @@ function maakStrijder(o) {
     munitie: 0,
     upgradeZeil: o.upgradeZeil || 0,
     upgradeRoer: o.upgradeRoer || 0,
+    upgradeHoogte: o.upgradeHoogte || 0,
   };
 }

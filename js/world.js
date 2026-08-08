@@ -1,6 +1,9 @@
 // Opbouw van de Caribische wereldkaart: land, steden, economie, wind en vloten.
 import { makeRng, rnd, rndInt, pick, clamp, lerp, dist, TAU, normAngle } from './util.js';
-import { STEDEN, WAREN, WAAR_INDEX, SOORT_ECONOMIE, NATIE_IDS, SCHEPEN, SCHIP_INDEX, KAPITEIN_NAMEN, SCHEEP_MAAT } from './data.js';
+import {
+  STEDEN, WAREN, WAAR_INDEX, SOORT_ECONOMIE, NATIE_IDS, SCHEPEN, SCHIP_INDEX, KAPITEIN_NAMEN,
+  SCHEEP_MAAT, LEGENDES, LEGENDE_INDEX, itemBonus,
+} from './data.js';
 
 // Kaartprojectie: rechttoe-rechtaan, met echte graden als basis.
 export const PPD = 92; // wereldeenheden per graad
@@ -265,6 +268,11 @@ export class Wereld {
 
     this.vloten = [];
     for (let i = 0; i < 24; i++) this.spawnVloot(true);
+
+    // Aanlooptijd voordat de eerste beruchte kapitein zich kan vertonen: een
+    // kersverse kapitein in een sloep hoort niet in zijn eerste minuut tegen
+    // een linieschip aan te lopen.
+    this.legendeKoeling = 240;
 
     this.tijd = 0;
   }
@@ -554,11 +562,14 @@ export class Wereld {
 
   // --- Vloten op zee ------------------------------------------------------
 
-  spawnVloot(overal = false, natie = null) {
+  spawnVloot(overal = false, natie = null, legendeId = null) {
     const rng = this.rng;
-    natie = natie || pick(rng, NATIE_IDS);
+    const legende = legendeId ? LEGENDE_INDEX[legendeId] : null;
+    // Een legende hangt rond in de wateren van zijn jachtgebied, maar vaart
+    // onder de zwarte vlag.
+    natie = legende ? legende.jachtgebied : natie || pick(rng, NATIE_IDS);
     const havens = this.stedenVanNatie(natie);
-    const isPiraat = !overal && rng() < 0.16;
+    const isPiraat = legende ? true : !overal && rng() < 0.16;
     const start = havens.length ? pick(rng, havens) : pick(rng, this.steden);
     const doel = pick(rng, this.steden.filter((s) => s !== start));
 
@@ -567,7 +578,7 @@ export class Wereld {
     if (isPiraat) kandidaten = ['sloep', 'pinas', 'bark', 'brigantijn', 'oorlogssloep'];
     else if (natie === 'spanje') kandidaten = ['koopvaarder', 'galjoen', 'grote_koopvaarder', 'oorlogsgaljoen', 'bark', 'fluit'];
     else kandidaten = ['sloep', 'bark', 'fluit', 'koopvaarder', 'brigantijn', 'vrachtfluit', 'fregat'];
-    const type = SCHIP_INDEX[pick(rng, kandidaten)];
+    const type = legende ? SCHIP_INDEX[legende.schip] : SCHIP_INDEX[pick(rng, kandidaten)];
 
     let x = start.ankerX,
       y = start.ankerY;
@@ -594,7 +605,10 @@ export class Wereld {
       natie: isPiraat ? 'piraat' : natie,
       marine,
       type: type.id,
-      naam: pick(rng, KAPITEIN_NAMEN),
+      naam: legende ? legende.naam : pick(rng, KAPITEIN_NAMEN),
+      // Alleen gezet bij een beruchte kapitein; de rest van het spel leest
+      // hieraan af dat dit geen doorsnee zeil aan de horizon is.
+      legende: legendeId,
       x,
       y,
       koers: rnd(rng, 0, TAU),
@@ -602,9 +616,14 @@ export class Wereld {
       doel,
       romp: type.romp,
       zeilen: 1,
-      bemanning: Math.round(type.bemanning * rnd(rng, 0.45, 0.85)),
-      kanonnen: Math.round(type.kanonnen * rnd(rng, 0.5, 1)),
-      goud: Math.round(rnd(rng, 200, 2600) * (marine ? 0.5 : 1) * (type.ruim / 100)),
+      // Een legende vaart vol bemand en zwaarder bewapend dan zijn scheepstype
+      // op papier draagt; de romp blijft normaal, zodat de zeewaardigheid in de
+      // zeeslag klopt.
+      bemanning: Math.round(type.bemanning * (legende ? legende.kracht : rnd(rng, 0.45, 0.85))),
+      kanonnen: Math.round(type.kanonnen * (legende ? legende.kracht : rnd(rng, 0.5, 1))),
+      goud: legende
+        ? Math.round(rnd(rng, 4000, 9000) * legende.kracht)
+        : Math.round(rnd(rng, 200, 2600) * (marine ? 0.5 : 1) * (type.ruim / 100)),
       lading: WAREN.map((w, i) =>
         isPiraat || marine ? rndInt(rng, 0, 12) : rndInt(rng, 0, Math.round(type.ruim / 7))
       ),
@@ -663,14 +682,19 @@ export class Wereld {
     }
   }
 
-  /** Bonus van de scheepsuitrusting op de snelheid (0..1) en -roer. */
+  /**
+   * Bonus op snelheid, roer en hoogte aan de wind. Twee bronnen: de niveaus die
+   * de werf op het schip zet (`upgrades`) en de buitstukken van verslagen
+   * legendes, die bij de kapitein horen en dus elk vlaggenschip volgen.
+   */
   scheepsBonus(speler) {
     const schip = speler && speler.schepen && speler.schepen[0];
-    if (!schip) return { zeil: 0, roer: 0 };
+    if (!schip) return { zeil: 0, roer: 0, hoogte: 0 };
     const up = schip.upgrades || {};
     return {
-      zeil: (up.zeilen || 0) * 0.04,
-      roer: (up.roer || 0) * 0.05,
+      zeil: (up.zeilen || 0) * 0.04 + itemBonus(speler, 'snelheid'),
+      roer: (up.roer || 0) * 0.05 + itemBonus(speler, 'wend'),
+      hoogte: itemBonus(speler, 'hoogte'),
     };
   }
 
@@ -734,9 +758,11 @@ export class Wereld {
         v.koers = normAngle(v.koers + 1.4 * dt);
       }
 
-      // Aangekomen? Nieuw doel kiezen, of verdwijnen in de haven.
+      // Aangekomen? Nieuw doel kiezen, of verdwijnen in de haven. Een beruchte
+      // kapitein loopt nooit zomaar een haven binnen: die blijft varen tot je
+      // hem verslaat.
       if (dist(v.x, v.y, v.doel.ankerX, v.doel.ankerY) < 45) {
-        if (this.rng() < 0.4 && dSpeler > 1400) {
+        if (!v.legende && this.rng() < 0.4 && dSpeler > 1400) {
           this.vloten.splice(i, 1);
           this.spawnVloot(false);
           continue;
@@ -746,6 +772,35 @@ export class Wereld {
     }
     // Voorraad aanvullen zodat de zee levendig blijft maar niet overvol raakt.
     while (this.vloten.length < 24) this.spawnVloot(true);
+    this.#legendeTik(dt, speler);
+  }
+
+  /**
+   * Houdt hoogstens één beruchte kapitein tegelijk op zee. Ze verschijnen niet
+   * meteen: het duurt even voordat er weer een naam op de kaart staat, zodat de
+   * zee niet in een parade van legendes verandert.
+   */
+  #legendeTik(dt, speler) {
+    if (!speler || !speler.legendes) return;
+    this.legendeKoeling = (this.legendeKoeling || 0) - dt;
+    if (this.legendeKoeling > 0) return;
+    this.legendeKoeling = 60 + this.rng() * 90;
+    if (this.vloten.some((v) => v.legende)) return;
+    // Ze komen op volgorde van naam: pas wie genoeg roem heeft, is het
+    // opzoeken waard. Zo loop je Dolle Jack tegen het lijf lang voordat het
+    // linieschip van de Kraai zich laat zien.
+    const vrij = LEGENDES.filter(
+      (l) => (speler.roem || 0) >= l.roem && (!speler.legendes[l.id] || !speler.legendes[l.id].verslagen)
+    );
+    if (!vrij.length) return;
+    // Niet elke gelegenheid grijpen: een legende hoort zeldzaam te blijven.
+    if (this.rng() > 0.4) return;
+    this.spawnVloot(false, null, pick(this.rng, vrij).id);
+  }
+
+  /** De vloot van de beruchte kapitein die nu op zee is, of null. */
+  legendeOpZee() {
+    return this.vloten.find((v) => v.legende) || null;
   }
 
   /**
@@ -753,6 +808,8 @@ export class Wereld {
    * hangen af van de relatie, en zwakkere schepen mijden een machtigere kapitein.
    */
   #jachtKans(v, speler) {
+    // Een beruchte kapitein wijkt voor niemand en zoekt je altijd op.
+    if (v.legende) return 1;
     const vType = SCHIP_INDEX[v.type];
     const eigen = speler.schepen && speler.schepen[0];
     const eType = SCHIP_INDEX[eigen ? eigen.type : 'sloep'];

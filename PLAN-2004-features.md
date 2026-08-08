@@ -25,10 +25,28 @@ code, canvas + SVG + Web Audio.*
 
 ---
 
-## Fase 1 — De cast (het grootste gat)
+## Fase 1 — De cast (het grootste gat) ✔ uitgevoerd
 
 > Doel: de zee bevolken met namen. Dit is de spil: fase 1 maakt fase 2 en 4
 > mogelijk, dus het gaat eerst.
+>
+> **Stand:** doorgevoerd. Zes legendes en zes buitstukken in
+> [`data.js`](js/data.js:266), spawnen en jagen in
+> [`world.js`](js/world.js:558), beloning in [`battle.js`](js/battle.js:643),
+> kroegtip in [`town.js`](js/town.js:517), doodskop op de zeekaart en het
+> trofeeënlijstje in [`sail.js`](js/sail.js:653). Save-versie staat op 5.
+>
+> Twee afwijkingen van het plan hieronder, beide bewust:
+>
+> 1. **Buitstukken horen bij de kapitein, niet bij het schip.** Het plan zette
+>    ze op het vlaggenschip met een overdracht op de werf. Dat betekent dat je
+>    ze kwijtraakt of moet verhuizen bij elk nieuw schip; `speler.items` is
+>    eenvoudiger en je verliest je zuurverdiende buit niet aan een aankoop.
+> 2. **Er is een roem-drempel bijgekomen.** Zonder die drempel kon een
+>    kersverse kapitein in een sloep in zijn eerste minuut het linieschip van
+>    de Kraai tegenkomen — dat gebeurde ook echt tijdens het proefvaren. Nu
+>    komen ze op volgorde van zwaarte (60 → 520 roem), en de wereld houdt de
+>    eerste vier minuten sowieso iedereen weg.
 
 ### 1.1 Data: `LEGENDES` in [`data.js`](js/data.js:204)
 

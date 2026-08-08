@@ -262,3 +262,116 @@ export const UPGRADES = {
 };
 
 export const FAMILIE_ROLLEN = ['broer', 'zus', 'vader', 'moeder'];
+
+// --- Beruchte kapiteins ---------------------------------------------------
+
+/**
+ * De zes namen die er op zee tóe doen. Ze varen onder de zwarte vlag, hangen
+ * rond in de wateren van hun `jachtgebied`, voeren hun schip voller bemand en
+ * zwaarder bewapend dan gewoon volk (`kracht`), en laten bij hun nederlaag een
+ * uitrustingsstuk achter dat nergens te koop is.
+ *
+ * `roem` is de drempel waarboven ze zich pas laten zien. Daardoor komen ze op
+ * volgorde van zwaarte: Dolle Jack in zijn brigantijn loopt een jonge kapitein
+ * al tegen het lijf, het linieschip van de Kraai pas na een halve loopbaan.
+ */
+export const LEGENDES = [
+  {
+    id: 'sotomayor',
+    naam: 'Ruy de Sotomayor',
+    bijnaam: 'de Zwarte Vloed',
+    schip: 'oorlogsgaljoen',
+    jachtgebied: 'spanje',
+    kracht: 1.3,
+    roem: 300,
+    buit: 'koperhuid',
+    verhaal: 'Voer ooit voor de kroon van Spanje en nam de vloot mee toen hij genoeg had van wachten op zijn soldij.',
+  },
+  {
+    id: 'ferrand',
+    naam: 'Isabeau Ferrand',
+    bijnaam: 'de Weduwe van Tortuga',
+    schip: 'fregat',
+    jachtgebied: 'frankrijk',
+    kracht: 1.25,
+    roem: 130,
+    buit: 'katoenzeil',
+    verhaal: 'Begroef drie echtgenoten en hun schepen. Van het derde hield ze het fregat.',
+  },
+  {
+    id: 'hollis',
+    naam: 'Jack Hollis',
+    bijnaam: 'Dolle Jack',
+    schip: 'brigantijn',
+    jachtgebied: 'engeland',
+    kracht: 1.2,
+    roem: 60,
+    buit: 'gebogenroer',
+    verhaal: 'Vaart dwars door de branding waar anderen omvaren, en lacht erbij.',
+  },
+  {
+    id: 'roggeveen',
+    naam: 'Sybrandt Roggeveen',
+    bijnaam: 'de IJzeren Bottelier',
+    schip: 'oorlogssloep',
+    jachtgebied: 'nederland',
+    kracht: 1.25,
+    roem: 210,
+    buit: 'hangmatten',
+    verhaal: 'Houdt zijn volk in leven waar andere kapiteins hun bemanning aan de honger verliezen.',
+  },
+  {
+    id: 'morvan',
+    naam: 'Yves Morvan',
+    bijnaam: 'de Slager van Petit Goave',
+    schip: 'oorlogsgaljoen',
+    jachtgebied: 'frankrijk',
+    kracht: 1.35,
+    roem: 400,
+    buit: 'dubbelaffuit',
+    verhaal: 'Neemt geen gevangenen en laat geen schip drijven dat hij niet zelf kan gebruiken.',
+  },
+  {
+    id: 'vance',
+    naam: 'Ezekiel Vance',
+    bijnaam: 'de Kraai',
+    schip: 'linieschip',
+    jachtgebied: 'engeland',
+    kracht: 1.4,
+    roem: 520,
+    buit: 'fijnkruit',
+    verhaal: 'Niemand weet hoe hij aan een linieschip komt. Wie het vroeg, vaart niet meer.',
+  },
+];
+
+export const LEGENDE_INDEX = Object.fromEntries(LEGENDES.map((l) => [l.id, l]));
+
+// --- Buitstukken ----------------------------------------------------------
+
+/**
+ * Uitrusting die je niet kunt kopen: ze komt van de beruchte kapiteins. In
+ * tegenstelling tot `UPGRADES` (niveaus op één schip) hoort een buitstuk bij de
+ * kapitein zelf en vaart het dus mee naar elk volgend vlaggenschip.
+ */
+export const ITEMS = {
+  koperhuid: { naam: 'Koperen huidbeslag', effect: 'snelheid', waarde: 0.06, omschrijving: 'Geen aangroei meer op de huid: het schip loopt harder.' },
+  katoenzeil: { naam: 'Katoenen zeilen', effect: 'hoogte', waarde: 0.05, omschrijving: 'Strak katoen houdt de wind vast; je ligt hoger aan de wind.' },
+  gebogenroer: { naam: 'Gebogen roerkoning', effect: 'wend', waarde: 0.09, omschrijving: 'Het roer bijt dieper: het schip draait korter.' },
+  fijnkruit: { naam: 'Fijn kruit', effect: 'dracht', waarde: 0.12, omschrijving: 'Fijner gemalen kruit brandt sneller af; de kogels dragen verder.' },
+  dubbelaffuit: { naam: 'Dubbele affuiten', effect: 'herlaad', waarde: 0.1, omschrijving: 'De stukken lopen zuiverder terug in batterij; je herlaadt sneller.' },
+  hangmatten: { naam: 'Driedubbele hangmatten', effect: 'volk', waarde: 0.15, omschrijving: 'Drie lagen diep slapen: er kan meer volk mee.' },
+};
+
+/**
+ * Opgetelde bonus van alle buitstukken met dit effect. Staat hier en niet in
+ * `game.js`, zodat ook `world.js` hem kan gebruiken zonder kringverwijzing.
+ */
+export function itemBonus(speler, effect) {
+  if (!speler || !speler.items) return 0;
+  let som = 0;
+  for (const id of speler.items) {
+    const it = ITEMS[id];
+    if (it && it.effect === effect) som += it.waarde;
+  }
+  return som;
+}

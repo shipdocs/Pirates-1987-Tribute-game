@@ -1,6 +1,8 @@
 // Spelkern: toestand, scènebeheer, invoer en opslag.
 import { clamp, makeRng, yearOf, pick } from './util.js';
-import { WAREN, SCHIP_INDEX, RANGEN, NATIE_IDS, MOEILIJKHEDEN, FAMILIE_ROLLEN } from './data.js';
+import {
+  WAREN, SCHIP_INDEX, RANGEN, NATIE_IDS, MOEILIJKHEDEN, FAMILIE_ROLLEN, LEGENDES, itemBonus,
+} from './data.js';
 import { Wereld } from './world.js';
 import * as audio from './audio.js';
 // ui.js leunt alleen op util en audio, dus dit levert geen kringetje op.
@@ -227,6 +229,11 @@ export function maakSpeler(opties) {
     familie: { rol: pick(Math.random, FAMILIE_ROLLEN), gevonden: false, gevondenDag: null },
     // Actieve gouverneursopdracht (zie town.js). null als er geen loopt.
     opdracht: null,
+    // Buitstukken van verslagen legendes; horen bij de kapitein, niet bij één schip.
+    items: [],
+    // Wat je van elke beruchte kapitein weet. `bij` is de laatste haven waar
+    // hij volgens de kroeg gezien is.
+    legendes: Object.fromEntries(LEGENDES.map((l) => [l.id, { verslagen: false, getipt: false, bij: null }])),
   };
 }
 
@@ -250,7 +257,9 @@ export function ruimVrij(schip) {
 }
 
 export function vlootBemanningMax(speler) {
-  return speler.schepen.reduce((a, s) => a + SCHIP_INDEX[s.type].bemanning, 0);
+  const romp = speler.schepen.reduce((a, s) => a + SCHIP_INDEX[s.type].bemanning, 0);
+  // Driedubbele hangmatten: er kan meer volk mee dan de werf had bedacht.
+  return Math.round(romp * (1 + itemBonus(speler, 'volk')));
 }
 
 export function talentBonus(speler, id) {
@@ -317,7 +326,7 @@ export function bewaar() {
   if (!Game.speler || !Game.wereld) return false;
   const w = Game.wereld;
   const data = {
-    versie: 4,
+    versie: 5,
     seed: w.seed,
     speler: Game.speler,
     // De wereldpolitiek staat op de wereld, niet op de speler, en volgt dus
@@ -389,6 +398,13 @@ export function laad() {
   if (sp.startLeeftijd == null) sp.startLeeftijd = 18;
   if (sp.leeftijd == null) sp.leeftijd = sp.startLeeftijd + (sp.dag || 0) / 365;
   if (sp.pensioenGevraagd == null) sp.pensioenGevraagd = 0;
+  // Saves van vóór versie 5 kenden de beruchte kapiteins nog niet. Nieuwe
+  // legendes die later worden toegevoegd komen er langs deze weg ook bij.
+  if (!Array.isArray(sp.items)) sp.items = [];
+  if (!sp.legendes) sp.legendes = {};
+  for (const l of LEGENDES) {
+    if (!sp.legendes[l.id]) sp.legendes[l.id] = { verslagen: false, getipt: false, bij: null };
+  }
   for (const schip of sp.schepen || []) {
     if (!schip.upgrades) schip.upgrades = { zeilen: 0, romp: 0, roer: 0 };
     if (schip.upgrades.weer === undefined) schip.upgrades.weer = 0;

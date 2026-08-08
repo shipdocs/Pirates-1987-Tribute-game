@@ -2,7 +2,10 @@
 import {
   clamp, lerp, normAngle, dist, TAU, fmtDate, fmtGold, compassName, turnToward, pick, el,
 } from './util.js';
-import { WAREN, WAAR_INDEX, SCHIP_INDEX, NATIES, RANGEN, scheepsAanduiding, MOEILIJKHEDEN } from './data.js';
+import {
+  WAREN, WAAR_INDEX, SCHIP_INDEX, NATIES, RANGEN, scheepsAanduiding, MOEILIJKHEDEN,
+  metLidwoord, LEGENDES, LEGENDE_INDEX, ITEMS,
+} from './data.js';
 import { WORLD_W, WORLD_H, zeilEfficiëntie } from './world.js';
 import {
   Game, roundRect, vlaggenschip, ruimTotaal, vlootBemanningMax, bewaar, talentBonus,
@@ -16,6 +19,45 @@ import { openHaven } from './town.js';
 
 const VOEDSEL = WAAR_INDEX.voedsel;
 const DAGEN_PER_SECONDE = 0.2; // één dag per vijf seconden varen
+
+/**
+ * Doodskopje op de zeekaart: waar een beruchte kapitein gezien is. Met een
+ * donkere halo eronder, anders verdwijnt het wit tussen de stadsstippen.
+ */
+function tekenDoodskop(g, x, y) {
+  g.save();
+  g.fillStyle = 'rgba(20,10,14,0.6)';
+  g.beginPath();
+  g.arc(x, y, 10, 0, TAU);
+  g.fill();
+
+  g.fillStyle = '#f2e9d4';
+  g.strokeStyle = '#140b0e';
+  g.lineWidth = 1.2;
+  // Schedel.
+  g.beginPath();
+  g.arc(x, y - 1, 5.6, 0, TAU);
+  g.fill();
+  g.stroke();
+  // Kaak.
+  g.beginPath();
+  roundRect(g, x - 3.2, y + 3, 6.4, 3.4, 1.2);
+  g.fill();
+  g.stroke();
+  // Oogkassen en neus.
+  g.fillStyle = '#140b0e';
+  g.beginPath();
+  g.arc(x - 2.1, y - 1.4, 1.8, 0, TAU);
+  g.arc(x + 2.1, y - 1.4, 1.8, 0, TAU);
+  g.fill();
+  g.beginPath();
+  g.moveTo(x, y + 0.4);
+  g.lineTo(x - 1.1, y + 2.2);
+  g.lineTo(x + 1.1, y + 2.2);
+  g.closePath();
+  g.fill();
+  g.restore();
+}
 
 /** Wat het scheepsvolk mompelt zodra de kapitein op leeftijd raakt. */
 const OUDERDOM_MELDINGEN = [
@@ -156,7 +198,7 @@ export function maakZeilScene() {
       }
 
       // --- Sturen ---------------------------------------------------------
-      const bonus = w.scheepsBonus ? w.scheepsBonus(s) : { zeil: 0, roer: 0 };
+      const bonus = w.scheepsBonus ? w.scheepsBonus(s) : { zeil: 0, roer: 0, hoogte: 0 };
       const wend = type.wend * (0.55 + 0.45 * schip.zeilen) * (1 + bonus.roer);
       let draaide = false;
       if (Game.toets('ArrowLeft') || Game.toets('KeyA')) {
@@ -189,7 +231,7 @@ export function maakZeilScene() {
       // telt hier lokaal mee, zodat je mét de storm mee sneller vaart en er
       // tegenin langzamer.
       const lokaal = w.stormWind ? w.stormWind(s.x, s.y) : { richting: w.windRichting, kracht: w.windKracht };
-      const eff = zeilEfficiëntie(s.koers, lokaal.richting, type.hoogte);
+      const eff = zeilEfficiëntie(s.koers, lokaal.richting, type.hoogte + (bonus.hoogte || 0));
       const navBonus = 1 + 0.16 * talentBonus(s, 'navigatie') + bonus.zeil;
       const beschadigd = lerp(0.55, 1, clamp(schip.romp / schip.maxRomp, 0, 1));
       const zwaarBeladen = clamp(1 - (ruimTotaal(schip) / type.ruim) * 0.28, 0.7, 1);
@@ -576,17 +618,27 @@ export function maakZeilScene() {
     const vijandig = vloot.natie === 'piraat' || s.relatie[vloot.natie] < -25;
     const rel = vloot.natie === 'piraat' ? -100 : s.relatie[vloot.natie];
 
-    const beschrijving =
-      `Aan de horizon doemt een <b>${scheepsAanduiding(vloot.natie, vloot.type)}</b> op, ` +
-      `naar schatting ${vloot.kanonnen} stukken geschut en ${vloot.bemanning} koppen aan boord.` +
-      (vijandig ? ' Ze zetten koers naar jóu toe.' : '');
+    const legende = vloot.legende ? LEGENDE_INDEX[vloot.legende] : null;
+
+    const beschrijving = legende
+      ? `De uitkijk roept het van de mast: het is <b>${legende.naam}</b>, ${legende.bijnaam}. ` +
+        `${metLidwoord(vloot.type, true)} draagt ${vloot.kanonnen} stukken geschut en ` +
+        `${vloot.bemanning} koppen. ${legende.verhaal}<br><br>Ze houden recht op je aan.`
+      : `Aan de horizon doemt een <b>${scheepsAanduiding(vloot.natie, vloot.type)}</b> op, ` +
+        `naar schatting ${vloot.kanonnen} stukken geschut en ${vloot.bemanning} koppen aan boord.` +
+        (vijandig ? ' Ze zetten koers naar jóu toe.' : '');
 
     const keuzes = [
       { label: 'Aanvallen', waarde: 'aanval', soort: 'gevaar' },
       { label: 'Aanroepen', waarde: 'roep' },
       { label: 'Wegvaren', waarde: 'weg' },
     ];
-    const keuze = await UI.vraag('Zeil in zicht!', beschrijving, keuzes, { figuur: 'zeeman' });
+    const keuze = await UI.vraag(
+      legende ? 'Een naam aan de horizon' : 'Zeil in zicht!',
+      beschrijving,
+      keuzes,
+      { figuur: 'zeeman' }
+    );
 
     if (keuze === 'aanval') {
       beginZeeslag(vloot);
@@ -698,6 +750,14 @@ export function maakZeilScene() {
           g.font = '10px Georgia, serif';
           g.fillStyle = 'rgba(240,230,205,0.85)';
           g.fillText(stad.naam, stad.x * sc + 6, stad.y * sc + 3);
+        }
+        // Waar een beruchte kapitein volgens de kroeg gezien is.
+        for (const l of LEGENDES) {
+          const st = s.legendes && s.legendes[l.id];
+          if (!st || st.verslagen || !st.getipt || !st.bij) continue;
+          const stad = Game.wereld.steden.find((x) => x.naam === st.bij);
+          if (!stad) continue;
+          tekenDoodskop(g, stad.x * sc, stad.y * sc - 12);
         }
         g.fillStyle = '#ffdf8a';
         g.strokeStyle = '#2b1d12';
@@ -811,6 +871,35 @@ export function maakZeilScene() {
           lange.appendChild(opdrachtInfo);
         }
         body.appendChild(lange);
+
+        // Beruchte kapiteins: wie er nog vaart, wie er verslagen is.
+        const namen = el('div', 'schipkaart');
+        namen.innerHTML = '<h3>Beruchte kapiteins</h3>';
+        const naamInfo = el('div', 'schipkaart-info');
+        naamInfo.innerHTML = LEGENDES.map((l) => {
+          const st = (s.legendes && s.legendes[l.id]) || {};
+          const stand = st.verslagen
+            ? 'verslagen ✓'
+            : st.getipt && st.bij
+              ? `gezien bij ${st.bij}`
+              : 'nog geen spoor';
+          return `<span>${l.naam}</span><span>${stand}</span>`;
+        }).join('');
+        namen.appendChild(naamInfo);
+        body.appendChild(namen);
+
+        // Buitstukken die je op ze veroverd hebt.
+        if (s.items && s.items.length) {
+          const buit = el('div', 'schipkaart');
+          buit.innerHTML = '<h3>Buitstukken</h3>';
+          const buitInfo = el('div', 'schipkaart-info');
+          buitInfo.innerHTML = s.items
+            .filter((id) => ITEMS[id])
+            .map((id) => `<span>${ITEMS[id].naam}</span><span>${ITEMS[id].omschrijving}</span>`)
+            .join('');
+          buit.appendChild(buitInfo);
+          body.appendChild(buit);
+        }
 
         const rel = document.createElement('div');
         rel.className = 'schipkaart';

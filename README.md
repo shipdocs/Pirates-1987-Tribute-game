@@ -95,6 +95,15 @@ scheepsbel en af en toe een meeuw. Alles ter plekke opgewekt uit oscillatoren
 en geruis — er is geen enkel geluidsbestand, ook niet voor de meeuw of de bel.
 Muziek en geluid staan los van elkaar in de scheepsraad.
 
+**Beruchte kapiteins.** Zes namen varen ergens op deze zee: Dolle Jack in zijn
+brigantijn, de Weduwe van Tortuga, de Kraai met een linieschip dat niemand hem
+heeft gegeven. Ze laten zich pas zien als je naam ver genoeg reikt — de zwaarste
+pas na een halve loopbaan — en ze wijken voor niemand. In de kroeg hoor je waar
+er een gezien is; op de zeekaart staat er dan een doodskop. Wie er een verslaat
+haalt uit het ruim een uitrustingsstuk dat op geen enkele werf te koop is:
+koperen huidbeslag, katoenen zeilen, fijn kruit. Die stukken horen bij jou en
+varen mee naar elk volgend vlaggenschip.
+
 **De lange lijn.** Roem, rang bij vier naties, grondbezit, huwelijk, veroverde
 steden — en je wordt ouder, en dat merk je. Na je veertigste wordt het venster
 waarin je een stoot kunt pareren korter en komt je adem trager terug; vanaf je

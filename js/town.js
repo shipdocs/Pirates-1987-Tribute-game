@@ -3,7 +3,7 @@ import { clamp, lerp, fmtGold, fmtDate, el, pick, makeRng } from './util.js';
 import {
   WAREN, SCHEPEN, SCHIP_INDEX, NATIES, NATIE_IDS, RANGEN, metLidwoord,
   GERUCHTEN, KAPITEIN_NAMEN, VOORNAMEN_V, ACHTERNAMEN, MOEILIJKHEDEN,
-  OPDRACHT_SOORTEN, UPGRADES, FAMILIE_ROLLEN,
+  OPDRACHT_SOORTEN, UPGRADES, FAMILIE_ROLLEN, LEGENDE_INDEX,
 } from './data.js';
 import {
   Game, vlaggenschip, ruimTotaal, ruimVrij, vlootBemanningMax, nieuwSchip, talentBonus, berekenScore,
@@ -522,6 +522,27 @@ function rondjeGeven(stad, sch) {
   s.moraal = clamp(s.moraal + 6, 0, 100);
   audio.sfx.munt();
   const w = Game.wereld;
+
+  // Vaart er een beruchte kapitein rond, dan gaat dát gerucht vóór op het
+  // gebruikelijke kroegpraat — en het klopt: het wijst de haven aan waar hij
+  // op dit moment het dichtst bij zit.
+  const legendeVloot = w.legendeOpZee ? w.legendeOpZee() : null;
+  if (legendeVloot && rng() < 0.6) {
+    const legende = LEGENDE_INDEX[legendeVloot.legende];
+    // Zonder straal: de haven waar hij op dit moment het dichtst bij zit.
+    const dichtbij = w.stadOp(legendeVloot.x, legendeVloot.y, Infinity);
+    if (legende && dichtbij) {
+      if (!s.legendes[legende.id]) s.legendes[legende.id] = { verslagen: false, getipt: false, bij: null };
+      s.legendes[legende.id].getipt = true;
+      s.legendes[legende.id].bij = dichtbij.naam;
+      sch._bericht =
+        `De kroeg wordt stil. "<b>${legende.naam}</b>, ${legende.bijnaam} — dat zeil is ` +
+        `gezien voor <b>${dichtbij.naam}</b>. Vaar erheen als u moe bent van leven, kapitein."`;
+      sch.ververs();
+      return;
+    }
+  }
+
   const sjabloon = pick(rng, GERUCHTEN);
   const tekst = sjabloon
     .replace('{stad}', pick(rng, w.steden).naam)

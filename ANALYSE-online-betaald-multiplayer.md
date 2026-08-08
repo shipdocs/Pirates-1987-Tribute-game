@@ -74,10 +74,11 @@ Praktisch betekent dat: zodra je het spel voor geld aanbiedt, mag elke koper het
 ook gratis doorgeven, verbouwen en opnieuw uitgeven. Een gesloten, betaalde
 "premium"-versie met kopieerbeveiliging is dus **niet** mogelijk onder de huidige
 licentie — en dat was precies de bedoeling, zoals de eigen analyse noteert
-(["zo kan niemand een gesloten, betaalde kloon maken"](ANALYSE-pirates-vergelijking.md:237)).
+(["Zo kan niemand een gesloten, betaalde kloon van dit eerbetoon
+maken zonder de bron vrij te geven"](ANALYSE-pirates-vergelijking.md:233)).
 
 Je kunt de licentie wél wisselen naar een verboden-clausule-model, of naar
-commercieel (e.g. "het spel is gratis, de dienst is betaald", zie 3.3). Omdat alle
+commercieel (bijvoorbeeld "het spel is gratis, de dienst is betaald", zie 3.3). Omdat alle
 rechten bij één auteur liggen, is zo'n wijziging juridisch haalbaar — maar hij
 zou de filosofie van het project (vrij eerbetoon) omdraaien.
 
@@ -91,7 +92,7 @@ duel hoog/midden/laag, het vermiste familielid, de erelijst.
 - **Gameplay-mechanieken zelf** zijn in het auteursrecht meestal niet
   beschermd — alleen de *expressie* (naam, teksten, beeld, geluid).
 - **Maar** zodra je geld vraagt, krijg je een commercieel product dat opvalt
-  bij de rechthebbenden van en merken rond "Pirates!" en "Sid Meier".
+  bij de rechthebbenden op en de merkhouders rond "Pirates!" en "Sid Meier".
   Een gratis open-source-hommage is een stuk veiliger dan een betaalde versie.
 
 Voor een **betaalde** release is aan te raden (minimaal): geen gebruik van de
@@ -110,7 +111,7 @@ afleidt. Concrete verdienmodellen:
 - **Betaalde accounts** voor online-functies (zie sectie 4): cloud-save,
   gedeelde wereld, PvP, wereldleaderboard.
 - **Cosmetica of uitbreidingspakketten** bovenop het gratis kernspel
-  (bijv. extra naties, scenario's, figuring) — als de client daarvoor niet
+  (bijv. extra naties, scenario's, portretten) — als de client daarvoor niet
   gekopieerd mag worden, moet dat deel apart gelicenseerd worden.
 - **Pay-what-you-want (itch.io)** — éénmalig, makkelijk, met de bron erbij
   publiceren om aan de GPL te voldoen.
@@ -118,8 +119,8 @@ afleidt. Concrete verdienmodellen:
 ### 3.4 Economisch
 
 Een tekst+vector-canvas eerbetoon heeft een klein maar trouw publiek
-(retro-fans, Pirates!-fans). Een betaalde prijskaartje zal de community
-schrikken en de opbrengst is bescheiden. De marktwaarde zit eerder in
+(retro-fans, Pirates!-fans). Een prijskaartje zal een deel van dat publiek
+afschrikken en de opbrengst is bescheiden. De marktwaarde zit eerder in
 **naamsbekendheid, portfolio en de liefde voor het project** dan in directe
 omzet. Realistisch: gratis hosten + donaties, en een betaalde
 multiplayer-dienst als het spel een publiek krijgt.
@@ -148,7 +149,7 @@ komen. Perfect passend bij een spel dat 90% singleplayer is.
   als "schepen van andere kapiteins".
 - Verandert de solitaire kern niet: geen realtime, geen autoritatieve server,
   geen anti-cheat nodig voor de scheepjes.
-- Wapen: de wereld wordt per speler uit een zaadje opgebouwd
+- Meevaller: de wereld wordt per speler uit een zaadje opgebouwd
   ([`begin()`](js/main.js:453), [`Wereld`](js/world.js:129)) — je kunt
   spelers dezelfde of een eigen Caraïben laten delen zonder simulatie-sync.
 
@@ -167,7 +168,7 @@ dat is precies wat een PvP-avond aantrekkelijk maakt. Wat erbij komt:
 - **Matchmaking, lobby, verbindingen** (STUN/TURN voor WebRTC), herverbindingen,
   afhakers — allemaal nieuw.
 
-### C. Volledig gedeelde live Caraïben ("ZMO") (maanden tot jaar)
+### C. Volledig gedeelde live Caraïben ("MMO") (maanden tot jaar)
 
 Eén wereld met honderden live spelers, handel die door iedereen schuift,
 realtime vloten, jacht op elkaar. Dit botst met de kern van de code: elke
@@ -187,20 +188,20 @@ identiteit van het spel.
    een gesloten betaalde versie is niet alleen lastig maar ondergraaft het
    eerbetoon.
 3. **Geld op de dienst, niet op de bron**: cloud-save, gedeeld leaderboard en
-   later een PvP-"club" als betaalde laag bovenop de gratis client (gerechtvaardigd
+   later een PvP-"club" als betaalde laag bovenop de gratis client (toegestaan
    onder GPL zolang de serverlogica eigen werk blijft).
 4. **Begin multiplayer met model A** (asynchrone gedeelde zee): weken werk,
    geen risico voor de solitaire spelvorm, en het is de snelste manier om de zee
-   ineens bevolkt ogen met andere kapers.
+   ineens bevolkt te laten ogen met andere kapers.
 5. **Daarna B** (PvP zeeslag/duel) via een WebSocket+Node-referee die
    [`gevechtsmodel.js`](js/gevechtsmodel.js:1) hergebruikt; dit is de sterkste
    demo en de natuurlijke plek voor een betaalmuur.
-6. **Vóór een betaalde release**: naam en vormgeving ontdoen van "Pirates!”-merken
+6. **Vóór een betaalde release**: naam en vormgeving ontdoen van "Pirates!"-merken
    en een jurist (IE) de hommage laten toetsen.
 
 ---
 
-## 6. Verdict
+## 6. Oordeel
 
 - **Online**: ✅ **Klaar**. Statische site + bestaande GitHub Pages-workflow; één
   push publiceert het spel.

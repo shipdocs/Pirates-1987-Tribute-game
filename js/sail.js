@@ -207,6 +207,10 @@ export function maakZeilScene() {
           );
           vertrek = { vx: s.x, vy: s.y, tx: wx, ty: wy, t: 0, duur: 1.1 };
           s.koers = hoek;
+          // Uitvaren is het natuurlijke rustpunt: handel gedaan, werf gehad,
+          // bemanning aangemonsterd. Hier bewaren scheelt de speler het verlies
+          // van een hele havenronde als hij het tabblad sluit.
+          if (bewaar()) Game.melding('Het logboek is bijgewerkt bij het uitvaren.');
         });
       }
     },
@@ -628,7 +632,7 @@ export function maakZeilScene() {
         }
         body.appendChild(legenda);
       },
-      knoppen: (sch) => [{ label: 'Sluiten', actie: () => sch.sluit() }],
+      knoppen: (sch) => [{ label: 'Sluiten', esc: true, actie: () => sch.sluit() }],
     });
   }
 
@@ -675,7 +679,7 @@ export function maakZeilScene() {
         );
         body.appendChild(lading);
       },
-      knoppen: (sch) => [{ label: 'Sluiten', actie: () => sch.sluit() }],
+      knoppen: (sch) => [{ label: 'Sluiten', esc: true, actie: () => sch.sluit() }],
     });
   }
 
@@ -738,7 +742,7 @@ export function maakZeilScene() {
         );
         body.appendChild(rel);
       },
-      knoppen: (sch) => [{ label: 'Sluiten', actie: () => sch.sluit() }],
+      knoppen: (sch) => [{ label: 'Sluiten', esc: true, actie: () => sch.sluit() }],
     });
   }
 
@@ -755,13 +759,24 @@ export function maakZeilScene() {
         );
       },
       knoppen: (sch) => [
-        { label: 'Verder varen', actie: () => sch.sluit() },
+        { label: 'Verder varen', esc: true, actie: () => sch.sluit() },
         {
           label: 'Spel bewaren',
           actie: () => {
             if (bewaar()) Game.melding('Het logboek is bijgewerkt.');
             else Game.melding('Bewaren mislukt.', 'rood');
             sch.sluit();
+          },
+        },
+        {
+          label: 'Bewaren en stoppen',
+          actie: () => {
+            if (bewaar()) {
+              window.location.reload();
+            } else {
+              Game.melding('Bewaren mislukt — er wordt niet gestopt.', 'rood');
+              sch.sluit();
+            }
           },
         },
         {
@@ -772,19 +787,26 @@ export function maakZeilScene() {
           },
         },
         {
-          label: 'Terug naar de titel',
+          label: 'Stoppen zonder bewaren',
           soort: 'gevaar',
           actie: async () => {
             sch.sluit();
-            const ja = await UI.vraag(
+            // Bewaren blijft hier gewoon als uitweg staan: wie per ongeluk op
+            // de rode knop drukt, hoeft zijn reis niet kwijt te raken.
+            const keuze = await UI.vraag(
               'Weet je het zeker?',
-              'Niet-bewaarde vorderingen gaan verloren.',
+              'Alles wat je sinds de laatste keer bewaren hebt gedaan, gaat verloren.',
               [
-                { label: 'Ja, stop', waarde: true, soort: 'gevaar' },
-                { label: 'Nee', waarde: false },
+                { label: 'Toch eerst bewaren', waarde: 'bewaar' },
+                { label: 'Ja, stoppen', waarde: 'stop', soort: 'gevaar' },
+                { label: 'Nee, verder varen', waarde: 'nee', esc: true },
               ]
             );
-            if (ja) window.location.reload();
+            if (keuze === 'stop') window.location.reload();
+            else if (keuze === 'bewaar') {
+              if (bewaar()) window.location.reload();
+              else Game.melding('Bewaren mislukt — er wordt niet gestopt.', 'rood');
+            }
           },
         },
       ],

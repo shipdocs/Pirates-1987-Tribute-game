@@ -247,7 +247,9 @@ export function maakZeeslag(vloot, opts) {
     if (Game.toets('ArrowLeft') || Game.toets('KeyA')) mij.koers = normAngle(mij.koers - wend * dt);
     if (Game.toets('ArrowRight') || Game.toets('KeyD')) mij.koers = normAngle(mij.koers + wend * dt);
     if (Game.toets('ArrowUp') || Game.toets('KeyW')) mij.zeilstand = clamp(mij.zeilstand + dt, 0, 1);
-    if (Game.toets('ArrowDown')) mij.zeilstand = clamp(mij.zeilstand - dt, 0, 1);
+    // In de slag is KeyS vrij (op zee opent die de vloot), dus WASD is hier wél
+    // compleet: wie met de linkerhand stuurt kan ook minderen.
+    if (Game.toets('ArrowDown') || Game.toets('KeyS')) mij.zeilstand = clamp(mij.zeilstand - dt, 0, 1);
   }
 
   function stuurVijand(dt) {

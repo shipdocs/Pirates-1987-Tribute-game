@@ -49,6 +49,8 @@ export function toonScherm(opts) {
     body,
     voet,
     kop,
+    // De knop die Escape indrukt, of null als dit scherm niet zomaar weg mag.
+    escKnop: null,
     sluit() {
       wrap.remove();
       stapel = stapel.filter((s) => s !== scherm);
@@ -66,8 +68,16 @@ export function toonScherm(opts) {
       body.innerHTML = '';
       voet.innerHTML = '';
       opts.bouw && opts.bouw(body, scherm);
-      for (const k of typeof opts.knoppen === 'function' ? opts.knoppen(scherm) : opts.knoppen || []) {
+      const lijst = typeof opts.knoppen === 'function' ? opts.knoppen(scherm) : opts.knoppen || [];
+      scherm.escKnop = null;
+      for (const k of lijst) {
         voet.appendChild(maakKnop(k));
+        if (k.esc && !k.uit) scherm.escKnop = k;
+      }
+      // Eén enkele knop is een mededeling, geen keuze: Escape bevestigt hem.
+      // Bij 'gevaar' niet, want dat is altijd een onomkeerbaar besluit.
+      if (!scherm.escKnop && lijst.length === 1 && !lijst[0].uit && lijst[0].soort !== 'gevaar') {
+        scherm.escKnop = lijst[0];
       }
     },
   };
@@ -96,6 +106,7 @@ export function vraag(titel, tekst, keuzes, opts = {}) {
         label: k.label,
         soort: k.soort,
         uit: k.uit,
+        esc: k.esc,
         actie: () => {
           scherm.sluit();
           resolve(k.waarde);
@@ -344,3 +355,23 @@ export function sluitAlles() {
 export function ietsOpen() {
   return stapel.length > 0;
 }
+
+/**
+ * Escape sluit het bovenste scherm. Welke knop dat is, bepaalt het scherm zelf
+ * met `esc: true` — anders zou Escape een keuze voor de speler maken die hij
+ * niet heeft gemaakt, en bij een dialoog uit `vraag()` zou de belofte nooit
+ * worden ingelost en het spel stilvallen.
+ *
+ * `stopImmediatePropagation` is nodig omdat `game.js` op hetzelfde venster naar
+ * Escape luistert: zonder dat zou het sluiten van dit scherm meteen de
+ * scheepsraad eronder openen.
+ */
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'Escape' || !stapel.length) return;
+  const boven = stapel[stapel.length - 1];
+  if (!boven.escKnop) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  audio.sfx.klik();
+  boven.escKnop.actie && boven.escKnop.actie();
+});

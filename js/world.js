@@ -426,6 +426,61 @@ export class Wereld {
     return vloot;
   }
 
+  /**
+   * Politieke verhoudingen verschuiven vanzelf: alles trekt langzaam naar
+   * neutraal, en af en toe verklaart een willekeurige natie de ander de oorlog
+   * (of sluit juist vrede). Zo dwingt de wereld je keuzes af zonder dat je er
+   * iets voor hoeft te doen.
+   */
+  relatieTik(dagen, speler) {
+    if (!speler || !speler.relatie) return;
+    const rng = this.rng;
+    for (const n of NATIE_IDS) {
+      // Jouw relaties kruipen langzaam terug naar neutraal zodra je ze uit het
+      // oog verliest; vijanden hoeven niet voor eeuwig vijand te blijven.
+      const v = speler.relatie[n];
+      if (v > 1) speler.relatie[n] = Math.max(1, v - 0.4 * dagen);
+      else if (v < -1) speler.relatie[n] = Math.min(-1, v + 0.4 * dagen);
+    }
+    // Af en toe een diplomatieke ruk in de wereldpolitiek die niet aan jou ligt.
+    this.diploTimer = (this.diploTimer || 0) - dagen;
+    if (this.diploTimer <= 0) {
+      this.diploTimer = 90 + rng() * 200;
+      const a = pick(rng, NATIE_IDS);
+      let b = pick(rng, NATIE_IDS);
+      if (b === a) b = NATIE_IDS[(NATIE_IDS.indexOf(a) + 1) % NATIE_IDS.length];
+      if (!this.oorlogen) this.oorlogen = {};
+      const sleutel = [a, b].sort().join('-');
+      const oorlog = this.oorlogen[sleutel];
+      if (oorlog !== undefined && Math.random() < 0.35) {
+        delete this.oorlogen[sleutel];
+        if (speler.natie === a) {
+          speler.relatie[b] = clamp(speler.relatie[b] - 5, -100, 100); // bondgenoten varen mee
+        }
+        if (speler.natie === b) speler.relatie[a] = clamp(speler.relatie[a] - 5, -100, 100);
+        for (const v of this.vloten) {
+          if (v.natie === b && v.marine) v.natie = 'piraat'; // verweesde oorlogsvloot
+        }
+      } else {
+        this.oorlogen[sleutel] = 1;
+        // Word je vijand, dan merkt jouw eigen natie dat ook.
+        if (speler.natie === a) speler.relatie[b] = clamp(speler.relatie[b] - 18, -100, 100);
+        if (speler.natie === b) speler.relatie[a] = clamp(speler.relatie[a] - 18, -100, 100);
+      }
+    }
+  }
+
+  /** Bonus van de scheepsuitrusting op de snelheid (0..1) en -roer. */
+  scheepsBonus(speler) {
+    const schip = speler && speler.schepen && speler.schepen[0];
+    if (!schip) return { zeil: 0, roer: 0 };
+    const up = schip.upgrades || {};
+    return {
+      zeil: (up.zeilen || 0) * 0.04,
+      roer: (up.roer || 0) * 0.05,
+    };
+  }
+
   vlotenTik(dt, speler) {
     const rng = this.rng;
     for (let i = this.vloten.length - 1; i >= 0; i--) {

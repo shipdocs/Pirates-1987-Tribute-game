@@ -1,6 +1,6 @@
 // Spelkern: toestand, scènebeheer, invoer en opslag.
-import { clamp, makeRng, yearOf } from './util.js';
-import { WAREN, SCHIP_INDEX, RANGEN, NATIE_IDS, MOEILIJKHEDEN } from './data.js';
+import { clamp, makeRng, yearOf, pick } from './util.js';
+import { WAREN, SCHIP_INDEX, RANGEN, NATIE_IDS, MOEILIJKHEDEN, FAMILIE_ROLLEN } from './data.js';
 import { Wereld } from './world.js';
 import * as audio from './audio.js';
 
@@ -159,13 +159,17 @@ export function roundRect(c, x, y, w, h, r) {
 
 export function nieuwSchip(typeId, opts = {}) {
   const t = SCHIP_INDEX[typeId];
+  // Versteviging telt de romp op en telt zo vanzelf mee in herstel en gevecht.
+  const romp = opts.maxRomp != null ? opts.maxRomp : t.romp;
   return {
     type: typeId,
-    maxRomp: t.romp,
-    romp: opts.romp != null ? opts.romp : t.romp,
+    maxRomp: romp,
+    romp: opts.romp != null ? opts.romp : romp,
     zeilen: opts.zeilen != null ? opts.zeilen : 1,
     kanonnen: opts.kanonnen != null ? opts.kanonnen : Math.round(t.kanonnen * 0.6),
     lading: opts.lading || new Array(WAREN.length).fill(0),
+    // Scheepsuitrusting: niveau 0..max per verbetering.
+    upgrades: opts.upgrades || { zeilen: 0, romp: 0, roer: 0 },
   };
 }
 
@@ -209,6 +213,10 @@ export function maakSpeler(opties) {
     gehuwd: null,
     laatsteVerdeling: 0,
     gestopt: false,
+    // Vermist familielid: rol wordt bij het begin bepaald.
+    familie: { rol: pick(Math.random, FAMILIE_ROLLEN), gevonden: false, gevondenDag: null },
+    // Actieve gouverneursopdracht (zie town.js). null als er geen loopt.
+    opdracht: null,
   };
 }
 
@@ -308,7 +316,14 @@ export function laad() {
     if (!wereld.steden[i]) return;
     Object.assign(wereld.steden[i], s);
   });
-  return { wereld, speler: data.speler };
+  // Oude saves saneren: ontbrekende velden krijgen hun standaardwaarde.
+  const sp = data.speler;
+  if (!sp.familie) sp.familie = { rol: pick(Math.random, FAMILIE_ROLLEN), gevonden: false, gevondenDag: null };
+  if (sp.opdracht === undefined) sp.opdracht = null;
+  for (const schip of sp.schepen || []) {
+    if (!schip.upgrades) schip.upgrades = { zeilen: 0, romp: 0, roer: 0 };
+  }
+  return { wereld, speler: sp };
 }
 
 export function wisOpslag() {

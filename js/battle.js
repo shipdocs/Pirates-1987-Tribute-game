@@ -1,8 +1,8 @@
 // Zeeslag: laveren, de wind uitbuiten en de volle laag geven.
 import { clamp, lerp, normAngle, dist, TAU, turnToward, fmtGold } from './util.js';
-import { WAREN, SCHIP_INDEX, scheepsAanduiding, metLidwoord, MOEILIJKHEDEN } from './data.js';
+import { WAREN, SCHIP_INDEX, scheepsAanduiding, metLidwoord, MOEILIJKHEDEN, NATIES } from './data.js';
 import { zeilEfficiëntie } from './world.js';
-import { Game, roundRect, vlaggenschip, nieuwSchip, talentBonus } from './game.js';
+import { Game, roundRect, vlaggenschip, nieuwSchip, talentBonus, vlootBemanningMax } from './game.js';
 import * as R from './render.js';
 import * as UI from './ui.js';
 import * as audio from './audio.js';
@@ -32,6 +32,7 @@ export function maakZeeslag(vloot, opts) {
   const moe = MOEILIJKHEDEN.find((m) => m.id === speler.moeilijkheid) || MOEILIJKHEDEN[1];
   const vijandKracht = moe ? moe.mult : 1;
 
+  const eigenUp = eigenSchip.upgrades || {};
   const mij = maakStrijder({
     type: eigenSchip.type,
     natie: 'piraat',
@@ -43,6 +44,9 @@ export function maakZeeslag(vloot, opts) {
     y: 70,
     koers: 0,
     speler: true,
+    // Uitrusting telt mee in het gevecht.
+    upgradeZeil: (eigenUp.zeilen || 0) * 0.04,
+    upgradeRoer: (eigenUp.roer || 0) * 0.05,
   });
 
   const type = SCHIP_INDEX[vloot.type];
@@ -226,6 +230,9 @@ export function maakZeeslag(vloot, opts) {
       tekenMistrand(c);
       c.restore();
 
+      // Stormflair in de slag: regen waait mee met de wind.
+      R.tekenRegen(c, Game.breedte, Game.hoogte, wereld.windRichting, wereld.windKracht, Game.tijd);
+
       tekenGevechtHud(c);
     },
   };
@@ -236,7 +243,7 @@ export function maakZeeslag(vloot, opts) {
     const t = SCHIP_INDEX[mij.type];
     // Het schipstype bepaalt het grootste deel van de wendbaarheid;
     // zeilstand heeft nog wel invloed, maar minder dominant.
-    const wend = t.wend * (0.30 + 0.70 * mij.zeilstand) * mij.tuigage;
+    const wend = t.wend * (0.30 + 0.70 * mij.zeilstand) * mij.tuigage * (1 + (mij.upgradeRoer || 0));
     if (Game.toets('ArrowLeft') || Game.toets('KeyA')) mij.koers = normAngle(mij.koers - wend * dt);
     if (Game.toets('ArrowRight') || Game.toets('KeyD')) mij.koers = normAngle(mij.koers + wend * dt);
     if (Game.toets('ArrowUp') || Game.toets('KeyW')) mij.zeilstand = clamp(mij.zeilstand + dt, 0, 1);
@@ -288,7 +295,8 @@ export function maakZeeslag(vloot, opts) {
     const t = SCHIP_INDEX[s.type];
     const eff = zeilEfficiëntie(s.koers, wereld.windRichting, t.hoogte);
     const romp = lerp(0.5, 1, clamp(s.romp / s.maxRomp, 0, 1));
-    const doel = t.snelheid * eff * wereld.windKracht * s.zeilstand * s.tuigage * romp * 1.15;
+    const upgrade = s.speler ? 1 + (mij.upgradeZeil || 0) : 1;
+    const doel = t.snelheid * eff * wereld.windKracht * s.zeilstand * s.tuigage * romp * 1.15 * upgrade;
     s.snelheid = lerp(s.snelheid, doel, clamp(dt * 1.4, 0, 1));
     s.x += Math.cos(s.koers) * s.snelheid * dt;
     s.y += Math.sin(s.koers) * s.snelheid * dt;
@@ -617,6 +625,13 @@ export function maakZeeslag(vloot, opts) {
     speler.roem += hoe === 'enteren' ? 14 : 10;
     speler.moraal = clamp(speler.moraal + 10, 0, 100);
 
+    // Jacht-opdracht: een vijandelijk schip van de gevraagde natie bewust tot
+    // zinken brengen of strijken, vervult de opdracht.
+    if (speler.opdracht && speler.opdracht.soort === 'jacht' && vloot.natie === speler.opdracht.natieV) {
+      speler.opdracht.klaar = true;
+      Game.melding('Het gevraagde oorlogsschip is verslagen — meld je bij de gouverneur.', 'goud');
+    }
+
     const buitGoud = Math.round(vloot.goud * (hoe === 'enteren' ? 1 : 0.8));
     speler.goud += buitGoud;
 
@@ -640,13 +655,50 @@ export function maakZeeslag(vloot, opts) {
       keuzes.push({ label: 'Het schip tot zinken brengen', waarde: 'zink', soort: 'gevaar' });
     }
 
+    // Losgeld voor een gevangen officier van een van de vier naties: officieren
+    // van je eigen natie ruil je terug voor gevangenen, vreemden voor goud.
+    const officier = !vloot.marine && vloot.natie !== 'piraat' && vloot.bemanning > 0;
+    // Het bedrag wordt één keer bepaald: wat op de knop staat, is wat je krijgt.
+    const losgeld = officier ? Math.round(1200 + Math.random() * 2600) : 0;
+    if (officier) {
+      keuzes.push({
+        label: speler.natie === vloot.natie
+          ? `Gevangenen ruilen (${vloot.natie})`
+          : `Losgeld voor de kapitein (${fmtGold(losgeld)})`,
+        waarde: 'los',
+      });
+    }
+
     const keuze = await UI.vraag(
       'Buit',
       `Je vindt <b>${fmtGold(buitGoud)} goudstukken</b> en ${genomen} eenheden lading. ` +
-        `${metLidwoord(vloot.type, true)} is ${Math.round((vijand.romp / vijandType.romp) * 100)}% zeewaardig.`,
+        `${metLidwoord(vloot.type, true)} is ${Math.round((vijand.romp / vijandType.romp) * 100)}% zeewaardig.` +
+        (officier
+          ? `<br><br>In de kajuit zit een <b>${vloot.naam}</b>, een officier van ${NATIES[vloot.natie].naam}. ` +
+            'Hij heeft het losgeld dat zijn familie voor hem biedt.'
+          : ''),
       keuzes,
       { figuur: 'zeeman' }
     );
+
+    if (keuze === 'los') {
+      if (speler.natie === vloot.natie) {
+        // Ruil: jouw gevangen landgenoten komen vrij.
+        speler.bemanning = clamp(speler.bemanning + 8, 0, vlootBemanningMax(speler));
+        speler.relatie[vloot.natie] = clamp(speler.relatie[vloot.natie] + 8, -100, 100);
+        speler.roem += 5;
+        Game.melding('De gevangenen zijn geruild — je landgenoten varen weer vrij.');
+      } else {
+        speler.goud += losgeld;
+        speler.relatie[vloot.natie] = clamp(speler.relatie[vloot.natie] + 6, -100, 100);
+        speler.roem += 4;
+        Game.melding(`Losgeld ontvangen voor de officier: ${fmtGold(losgeld)} goudstukken.`);
+      }
+      // Geen schip, geen lading meer — de officier gaat vrij.
+      verslechterRelatie();
+      beëindig({ vijandWeg: true, gewonnen: true });
+      return;
+    }
 
     if (keuze === 'neem') {
       if (speler.schepen.length >= 8) {
@@ -764,6 +816,9 @@ export function maakZeeslag(vloot, opts) {
       zeilen: s.zeilstand * s.tuigage,
       kanonnen: s.kanonnen,
       schaal: 2,
+      // Zichtbare schade: gescheurde zeilen + diepe waterlijn bij beschadiging.
+      tuigage: s.tuigage,
+      rompFractie: s.romp / s.maxRomp,
     });
     // Statusbalkje boven het schip; het schip is op dubbele schaal getekend,
     // dus de halve lengte is L.
@@ -927,5 +982,7 @@ function maakStrijder(o) {
     brand: 0,
     speler: !!o.speler,
     munitie: 0,
+    upgradeZeil: o.upgradeZeil || 0,
+    upgradeRoer: o.upgradeRoer || 0,
   };
 }

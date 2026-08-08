@@ -103,13 +103,54 @@ export function initPatronen(ctx) {
  * Tekent de open zee. `cam` = {x, y, zoom}, `vw/vh` = grootte van het beeld,
  * `wind` = {richting, kracht} zodat de deining met de wind meeloopt.
  */
+/**
+ * Schemertoestand van de dag (0..1): 0 = helder middaglicht, 1 = diepe schemer.
+ * De fases lopen langzaam mee met de speeldatum — een natuurlijke
+ * jaargetijde-schommeling zonder klok- of weersysteem.
+ */
+export function schemerFactor() {
+  try {
+    const dag = (globalThis.__G && __G.speler && __G.speler.dag) || 0;
+    const cyclus = Math.sin((dag / 365) * TAU + 0.6);
+    return clamp(cyclus * 0.32 + 0.12, 0, 1);
+  } catch (e) {
+    return 0.12;
+  }
+}
+
+function mengKleur(hex, zwart) {
+  const h = String(hex).replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+  const r = (n >> 16) & 255,
+    g = (n >> 8) & 255,
+    b = n & 255;
+  const f = (c) => Math.round(c * (1 - zwart));
+  return `rgb(${f(r)},${f(g)},${f(b)})`;
+}
+
 export function tekenZee(ctx, cam, vw, vh, t, wind) {
+  const schemer = schemerFactor();
   const g = ctx.createLinearGradient(0, 0, 0, vh);
-  g.addColorStop(0, '#10486f');
-  g.addColorStop(0.5, '#16648f');
-  g.addColorStop(1, '#0e4166');
+  g.addColorStop(0, mengKleur('#10486f', schemer));
+  g.addColorStop(0.5, mengKleur('#16648f', schemer * 0.8));
+  g.addColorStop(1, mengKleur('#0e4166', schemer * 0.65));
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, vw, vh);
+
+  // Schemering: een goudoranje gloed op de kim en een blauwige nevel.
+  if (schemer > 0.05) {
+    const s = schemer;
+    const gloed = ctx.createRadialGradient(vw * 0.5, vh * 0.35, 0, vw * 0.5, vh * 0.35, vh * 0.7);
+    gloed.addColorStop(0, `rgba(255,180,80,${0.18 * s})`);
+    gloed.addColorStop(1, 'rgba(255,180,80,0)');
+    ctx.fillStyle = gloed;
+    ctx.fillRect(0, 0, vw, vh);
+    const nevel = ctx.createLinearGradient(0, 0, 0, vh);
+    nevel.addColorStop(0, `rgba(24,42,70,${0.4 * s})`);
+    nevel.addColorStop(1, 'rgba(10,30,52,0)');
+    ctx.fillStyle = nevel;
+    ctx.fillRect(0, 0, vw, vh);
+  }
 
   if (!waterPatroon) return;
 
@@ -629,6 +670,10 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
   const zeilen = opts.zeilen == null ? 1 : clamp(opts.zeilen, 0, 1);
   const natie = NATIES[natieId] || NATIES.piraat;
   const vaart = clamp(opts.vaart || 0, 0, 1);
+  // Zichtbare staat: `tuigage` (0..1) en `romp`/`maxRomp` (fractie 0..1)
+  // sturen gaten in de zeilen, gekantelde masten en een diepe waterlijn.
+  const tuigage = opts.tuigage == null ? 1 : clamp(opts.tuigage, 0.15, 1);
+  const rompFractie = opts.rompFractie == null ? 1 : clamp(opts.rompFractie, 0, 1);
   const dichtheid = transformSchaal(ctx) * s;
   const st = sierTijd(opts.tijd || 0);
   // Optioneel van de scène meegegeven: aanwezig = het schip vaart langs echte
@@ -794,14 +839,47 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
       ctx.stroke();
       ctx.restore();
       // Mast met mars (het ronde platform, van bovenaf een schijfje om de mast).
+      // Bij lage tuigage kantelt de mast zichtbaar — los touwwerk, schade.
+      const kantel = (1 - tuigage) * 0.18 * (m % 2 ? -1 : 1);
+      ctx.save();
+      ctx.translate(px, 0);
+      ctx.rotate(kantel);
       ctx.fillStyle = 'rgba(58,42,24,0.5)';
       ctx.beginPath();
-      ctx.arc(px, 0, 3.4 * grootte, 0, TAU);
+      ctx.arc(0, 0, 3.4 * grootte, 0, TAU);
       ctx.fill();
       ctx.fillStyle = '#3a2a18';
       ctx.beginPath();
-      ctx.ellipse(px, 0, 1.8, 2.2, 0, 0, TAU);
+      ctx.ellipse(0, 0, 1.8, 2.2, 0, 0, TAU);
       ctx.fill();
+      // Hookje waar de ra ooit zat, achtergelaten als het touwwerk knapte.
+      if (tuigage < 0.7) {
+        ctx.strokeStyle = 'rgba(58,42,44,0.7)';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -2.4 * grootte);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Blokkade: gescheurde zeilen bij lage tuigage.
+      if (tuigage < 0.82) {
+        ctx.save();
+        ctx.translate(px, 0);
+        ctx.rotate(trim);
+        const gatAlfa = (0.82 - tuigage) * 1.6;
+        ctx.fillStyle = `rgba(4,20,36,${0.5 * gatAlfa})`;
+        const gn = 2 + Math.floor((1 - tuigage) * 5);
+        for (let g = 0; g < gn; g++) {
+          const gx = -zl * 0.2 + ((g * 37 + m * 11) % 60) / 60 * zl * 0.7;
+          const gy = -zb + ((g * 29 + m * 17) % 70) / 70 * zb * 1.6;
+          ctx.beginPath();
+          ctx.ellipse(gx, gy, 1.4, 1.8, 0, 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
     }
 
     // Wanten / tuigage tussen masten.
@@ -869,6 +947,25 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
     ctx.stroke();
   }
   ctx.restore();
+
+  // Diepe waterlijn: een zwaar geteisterde romp zakt zichtbaar in het water.
+  // Een donkere 'waterstreep' schuift over het onderste deel van de romp.
+  if (rompFractie < 0.85) {
+    const diepte = (1 - rompFractie) * B * 0.5; // in rompeenheden, onder de kiel
+    ctx.save();
+    ctx.translate(x, y + diepte * 0.35);
+    ctx.rotate(koers);
+    ctx.scale(s, s);
+    ctx.fillStyle = `rgba(8,38,58,${0.22 + 0.3 * (1 - rompFractie)})`;
+    ctx.beginPath();
+    ctx.moveTo(L * 0.5, -B * 0.05);
+    ctx.quadraticCurveTo(0, B * 0.4, -L * 0.5, -B * 0.05);
+    ctx.lineTo(-L * 0.5, B * 0.5);
+    ctx.quadraticCurveTo(0, B * 0.85, L * 0.5, B * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
 
   ctx.restore();
 }
@@ -1054,6 +1151,56 @@ export function tekenRook(ctx, p) {
   ctx.save();
   ctx.globalAlpha = a * 0.55;
   ctx.drawImage(sprite, p.x - r, p.y - r, r * 2, r * 2);
+  ctx.restore();
+}
+
+/**
+ * Storm: regenbuien die meebuigen met de wind. Eenvoudige lijntjes die voorbij
+ * waaien; hoe harder de wind, hoe meer en schuiner ze staan.
+ */
+export function tekenRegen(ctx, vw, vh, windRichting, kracht, tijd) {
+  const st = sierTijd(tijd);
+  const intensiteit = clamp((kracht - 1) / 0.8, 0, 1);
+  if (intensiteit <= 0.05) return;
+  const hoek = windRichting + Math.PI / 2; // regen valt in de windrichting mee
+  const dx = Math.cos(hoek) * 1.6 * (0.6 + intensiteit),
+    dy = Math.sin(hoek) * 1.6 * (0.6 + intensiteit);
+  const n = Math.round(70 * intensiteit);
+  ctx.save();
+  ctx.strokeStyle = `rgba(190,215,235,${0.16 + 0.2 * intensiteit})`;
+  ctx.lineWidth = 1;
+  for (let i = 0; i < n; i++) {
+    const x = ((i * 173 + Math.floor(st * 30)) % (vw + 120)) - 60;
+    const y = ((i * 97 + Math.floor(st * 190)) % (vh + 160)) - 80;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - dx, y - dy);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * Meeuwen: kleine v-vormige vogels die boven het water cirkelen. Puur sfeer —
+ * ze kosten bijna niets en doen het water meteen leven.
+ */
+export function tekenMeeuwen(ctx, vw, vh, tijd) {
+  const st = sierTijd(tijd);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(232,230,224,0.5)';
+  ctx.lineWidth = 1.1;
+  const n = 5;
+  for (let i = 0; i < n; i++) {
+    // Elke meeuw heeft een andere baan; de voorbeelden cirkelen over het beeld.
+    const sx = vw * (0.12 + 0.24 * i) + Math.sin(st * 0.11 + i * 2.1) * vw * 0.1;
+    const sy = vh * (0.16 + 0.05 * i) + Math.cos(st * 0.09 + i * 1.7) * 22;
+    const flap = Math.sin(st * 5 + i * 1.3) * 3;
+    ctx.beginPath();
+    ctx.moveTo(sx - 4, sy);
+    ctx.quadraticCurveTo(sx - 2, sy - 0.8 + flap, sx, sy + 0.6);
+    ctx.quadraticCurveTo(sx + 2, sy - 0.8 + flap, sx + 4, sy);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 

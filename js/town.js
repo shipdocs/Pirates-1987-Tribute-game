@@ -3,6 +3,7 @@ import { clamp, lerp, fmtGold, fmtDate, el, pick, makeRng } from './util.js';
 import {
   WAREN, SCHEPEN, SCHIP_INDEX, NATIES, NATIE_IDS, RANGEN, metLidwoord,
   GERUCHTEN, KAPITEIN_NAMEN, VOORNAMEN_V, ACHTERNAMEN, MOEILIJKHEDEN,
+  OPDRACHT_SOORTEN, UPGRADES, FAMILIE_ROLLEN,
 } from './data.js';
 import {
   Game, vlaggenschip, ruimTotaal, ruimVrij, vlootBemanningMax, nieuwSchip, talentBonus, berekenScore,
@@ -87,6 +88,15 @@ function hoofdmenu(stad, opVertrek) {
           bestormStad(stad, opVertrek);
         },
       },
+      // Langs de kade vragen naar het vermiste familielid.
+      ...(!s.familie?.gevonden && (s.familie?.zoekStad === stad.naam)
+        ? [
+            {
+              label: `${UI.ikoon('familie')}Naar uw ${s.familie.rol} vragen`,
+              actie: () => zoekFamilie(stad, sch),
+            },
+          ]
+        : []),
       {
         label: `${UI.ikoon('zeil')}Uitvaren`,
         actie: () => {
@@ -493,6 +503,16 @@ async function vreemdeling(stad, sch) {
       `Een oude stuurman fluistert: "In <b>${doelStad.naam}</b> ligt ` +
       `${pick(rng, WAREN).naam.toLowerCase()} voor een schijntje. Vaar erheen voor het rondgaat."`;
     sch.ververs();
+  } else if (rol < 0.68 && !s.familie?.gevonden) {
+    // Vermist familielid — de lange persoonlijke lijn uit het origineel.
+    const rolNaam = s.familie.rol;
+    const waar = pick(rng, Game.wereld.steden.filter((x) => x !== stad));
+    if (!s.familie.zoekStad) s.familie.zoekStad = waar.naam;
+    sch._bericht =
+      `Een bedelaar grijpt je pols: "U lijkt op iemand die ik ken. Mag ik een duit voor ` +
+      `een hertaling? Men zegt dat uw <b>${rolNaam}</b> ergens in <b>${s.familie.zoekStad}</b> gevangen zit."`;
+    s.familie.laatsteTip = s.dag;
+    sch.ververs();
   } else if (rol < 0.78 && s.bemanning > 20) {
     const n = Math.round(s.bemanning * 0.12);
     s.bemanning -= n;
@@ -701,9 +721,14 @@ function werf(stad, ouder) {
         const t = SCHIP_INDEX[sh.type];
         const rij = el('div', 'werf-rij');
         const kosten = herstelKosten(sh);
+        const up = sh.upgrades || {};
         rij.innerHTML =
           `<span class="werf-naam">${t.naam}${i === 0 ? ' <em>(vlaggenschip)</em>' : ''}</span>` +
-          `<span class="werf-stat">romp ${Math.round(sh.romp)}/${sh.maxRomp} · ${sh.kanonnen}/${t.kanonnen} kanon</span>`;
+          `<span class="werf-stat">romp ${Math.round(sh.romp)}/${sh.maxRomp} · ${sh.kanonnen}/${t.kanonnen} kanon` +
+          (up.roer || up.zeilen || up.romp
+            ? ` · uitrusting z${up.zeilen || 0}/r${up.roer || 0}/h${up.romp || 0}`
+            : '') +
+          `</span>`;
         const acties = el('div', 'werf-acties');
 
         const herstel = el('button', 'mini', kosten > 0 ? `Herstellen (${fmtGold(kosten)})` : 'Gaaf');
@@ -728,6 +753,28 @@ function werf(stad, ouder) {
           sch.ververs();
         };
         acties.appendChild(kanon);
+
+        // Uitrusting: verbeter zeilen, romp of roer op de werf.
+        for (const [key, upg] of Object.entries(UPGRADES)) {
+          const lvl = up[key] || 0;
+          const prijs = Math.round(upg.basis * Math.pow(1.6, lvl));
+          const k = el('button', 'mini', `+${key === 'zeilen' ? 'zeil' : key === 'roer' ? 'roer' : 'romp'} (${fmtGold(prijs)})`);
+          k.disabled = lvl >= upg.max || s.goud < prijs || (key === 'romp' && sh.romp < sh.maxRomp - 1);
+          k.onclick = () => {
+            s.goud -= prijs;
+            up[key] = lvl + 1;
+            if (key === 'romp') {
+              // Versteviging vergroot de max-romp en herstelt dat verschil.
+              const extra = Math.round(SCHIP_INDEX[sh.type].romp * upg.stap);
+              sh.maxRomp += extra;
+              sh.romp = Math.min(sh.maxRomp, sh.romp + extra);
+            }
+            audio.sfx.munt();
+            sch._bericht = `De ${upg.naam.toLowerCase()} van ${metLidwoord(sh.type)} is verbeterd (niveau ${lvl + 1}).`;
+            sch.ververs();
+          };
+          acties.appendChild(k);
+        }
 
         if (i > 0) {
           const verkoop = el('button', 'mini rood', `Verkopen (${fmtGold(scheepsWaarde(sh))})`);
@@ -792,7 +839,9 @@ function herstelKosten(schip) {
 
 function scheepsWaarde(schip) {
   const t = SCHIP_INDEX[schip.type];
-  return Math.round(t.prijs * 0.45 * clamp(schip.romp / t.romp, 0.2, 1));
+  const up = schip.upgrades || {};
+  const upgradeBonus = (up.zeilen || 0) * 0.06 + (up.roer || 0) * 0.05 + (up.romp || 0) * 0.08;
+  return Math.round(t.prijs * 0.45 * clamp(schip.romp / t.romp, 0.2, 1) * (1 + upgradeBonus));
 }
 
 function teKoop(stad) {
@@ -849,6 +898,14 @@ function gouverneur(stad, ouder) {
           actie: () => bevordering(stad, sch),
         });
         knoppen.push({ label: 'De dochter van de gouverneur groeten', actie: () => dochter(stad, sch) });
+        if (s.opdracht && s.opdracht.natie === stad.natie && s.opdracht.stad === stad.naam) {
+          knoppen.push({
+            label: `${UI.ikoon('opdracht')}Van de opdracht verslag doen`,
+            actie: () => rapporteerOpdracht(stad, sch),
+          });
+        } else if (!s.opdracht) {
+          knoppen.push({ label: `${UI.ikoon('opdracht')}Naar een opdracht vragen`, actie: () => vraagOpdracht(stad, sch) });
+        }
       }
       if (s.natie !== stad.natie && rel > -10) {
         knoppen.push({ label: `In dienst treden van ${natie.naam}`, actie: () => kaperbrief(stad, sch) });
@@ -991,6 +1048,146 @@ async function gratie(stad, sch) {
   sch.ververs();
 }
 
+// --- Gouverneursopdrachten ------------------------------------------------
+
+/** Maakt een nieuwe opdracht voor deze natie, bij deze gouverneur. */
+function maakOpdracht(stad) {
+  const s = Game.speler;
+  const w = Game.wereld;
+  const soorten = ['lever', 'spion', 'verover', 'jacht'];
+  const soort = soorten[Math.floor(Math.random() * soorten.length)];
+  const andere = w.steden.filter((x) => x !== stad && x.natie === stad.natie);
+  const bestemming = andere.length ? andere[Math.floor(Math.random() * andere.length)] : stad;
+
+  const opdracht = {
+    soort,
+    natie: stad.natie,
+    stad: stad.naam,
+    goud: 1200 + Math.floor(Math.random() * 2600),
+    // Of de opdracht al is volbracht (verover / jacht). Lading-opdrachten
+    // worden bij het rapporteren zelf gecontroleerd.
+    klaar: false,
+  };
+
+  if (soort === 'lever') {
+    const waar = WAREN[Math.floor(Math.random() * WAREN.length)];
+    opdracht.waar = waar.id;
+    opdracht.naam = waar.naam;
+    opdracht.aantal = 14 + Math.floor(Math.random() * 26);
+    opdracht.bestemming = bestemming.naam;
+    opdracht.doe = `breng ${opdracht.aantal} eenheden ${opdracht.naam.toLowerCase()} naar ${bestemming.naam}`;
+  } else if (soort === 'spion') {
+    const heen = w.steden[Math.floor(Math.random() * w.steden.length)];
+    opdracht.van = heen.naam;
+    opdracht.bestemming = bestemming.naam;
+    opdracht.doe = `haal het pakket op in ${heen.naam} en lever het af in ${bestemming.naam}`;
+  } else if (soort === 'verover') {
+    opdracht.stadV = bestemming.naam;
+    opdracht.doe = `neem ${bestemming.naam} in voor de kroon`;
+  } else {
+    const vijand = w.steden.find((x) => x.natie !== stad.natie);
+    opdracht.natieV = vijand ? vijand.natie : 'spanje';
+    opdracht.doe = `breng een ${NATIES[opdracht.natieV].bijv} oorlogsschip tot zinken`;
+  }
+  return opdracht;
+}
+
+async function vraagOpdracht(stad, sch) {
+  const s = Game.speler;
+  s.opdracht = maakOpdracht(stad);
+  const o = s.opdracht;
+  const sjabloon = OPDRACHT_SOORTEN[o.soort];
+  let tekst = sjabloon.omschrijving
+    .replace('{aantal}', o.aantal)
+    .replace('{waar}', (o.waar || '').toLowerCase())
+    .replace('{bestemming}', o.bestemming)
+    .replace('{van}', o.van)
+    .replace('{naar}', o.bestemming)
+    .replace('{stad}', o.stadV)
+    .replace('{natie}', o.natieV ? NATIES[o.natieV].bijv.toLowerCase() : '');
+  await UI.vraag(
+    sjabloon.titel,
+    `"Een opdracht voor een betrouwbaar kapitein.", zegt de gouverneur. ${tekst} ` +
+      `"Breng het af en er wacht <b>${fmtGold(o.goud)} goudstukken</b> plus een specerijenvoorraad."`,
+    [{ label: 'Ik neem de opdracht aan', waarde: 'ok' }],
+    { figuur: 'gouverneur' }
+  );
+  o.aangenomenDag = s.dag;
+  sch._bericht = `Je hebt een opdracht aangenomen: ${o.doe}. Zoek de gouverneur van ${o.stad} op voor je beloning.`;
+  sch.ververs();
+}
+
+async function rapporteerOpdracht(stad, sch) {
+  const s = Game.speler;
+  const o = s.opdracht;
+  // Verover- en jacht-opdrachten hebben een `klaar`-vlag van de gebeurtenis zelf.
+  if ((o.soort === 'verover' || o.soort === 'jacht') && !o.klaar) {
+    await UI.vraag(
+      'Nog niet af',
+      `De gouverneur schudt het hoofd. "U heeft de opdracht nog niet volbracht: ${o.doe}."`,
+      [{ label: 'Weer aan het werk', waarde: 'ok' }],
+      { figuur: 'gouverneur' }
+    );
+    sch._bericht = 'De opdracht is nog niet afgerond.';
+    sch.ververs();
+    return;
+  }
+  // Spion: je moet de tocht echt hebben gemaakt — minstens een paar dagen
+  // (1 week) na het aannemen om te rapporteren.
+  if (o.soort === 'spion' && s.dag - (o.aangenomenDag || 0) < 5) {
+    await UI.vraag(
+      'Nog onderweg?',
+      `De gouverneur kijkt op. "U was net nog hier. Het pakket moet in ${o.bestemming} zijn ` +
+        'afgegeven — geef het tijd, kapitein."',
+      [{ label: 'Terug op zee', waarde: 'ok' }],
+      { figuur: 'gouverneur' }
+    );
+    sch._bericht = 'Rapporteer pas nadat je de reis hebt gemaakt.';
+    sch.ververs();
+    return;
+  }
+  // Voor 'lever' moet de lading ook echt in het ruim zitten.
+  if (o.soort === 'lever') {
+    const schip = vlaggenschip(s);
+    const idx = WAREN.findIndex((x) => x.id === o.waar);
+    if (idx >= 0 && schip.lading[idx] < o.aantal) {
+      await UI.vraag(
+        'Nog niet klaar',
+        `De gouverneur telt de lading. "U heeft nog niet genoeg ${o.waar.toLowerCase()} in uw ruim.` +
+          ` Kom terug wanneer u er ${o.aantal} heeft."`,
+        [{ label: 'Voorlopig weer verder', waarde: 'ok' }],
+        { figuur: 'gouverneur' }
+      );
+      sch._bericht = `Opdracht nog niet afgerond. Je mist nog ${Math.max(0, o.aantal - (idx >= 0 ? schip.lading[idx] : 0))} eenheden.`;
+      sch.ververs();
+      return;
+    }
+    if (idx >= 0) schip.lading[idx] -= o.aantal;
+  }
+  // Beloning: goud + specerijen + roem.
+  s.goud += o.goud;
+  s.gespaard = (s.gespaard || 0) + Math.round(o.goud * 0.4);
+  s.roem += o.soort === 'verover' ? 40 : o.soort === 'jacht' ? 30 : 20;
+  s.relatie[stad.natie] = clamp(s.relatie[stad.natie] + 12, -100, 100);
+  // Extra lading als beloning (specerijen), als er ruim is.
+  const schip = vlaggenschip(s);
+  const spIdx = WAREN.findIndex((x) => x.id === 'specerijen');
+  if (spIdx >= 0 && schip.lading[spIdx] + 10 <= SCHIP_INDEX[schip.type].ruim - schip.kanonnen * 2) {
+    schip.lading[spIdx] += 10;
+  }
+  audio.sfx.fanfare();
+  await UI.vraag(
+    'Opdracht volbracht',
+    `De gouverneur glundert. "Magnifiek! De kroon vergeet dit niet." Je ontvangt ` +
+      `<b>${fmtGold(o.goud)} goudstukken</b> en een voorraad specerijen in uw ruim.`,
+    [{ label: 'Met genoegen', waarde: 'ok' }],
+    { figuur: 'gouverneur' }
+  );
+  s.opdracht = null;
+  sch._bericht = 'De opdracht is afgerond.';
+  sch.ververs();
+}
+
 // --- Stadsbestorming ------------------------------------------------------
 
 async function bestormStad(stad, opVertrek) {
@@ -1100,12 +1297,24 @@ async function veroverStad(stad, opVertrek) {
     stad.garnizoen = 30 + stad.grootte * 12;
     s.relatie[s.natie] = clamp(s.relatie[s.natie] + 30, -100, 100);
     Game.melding(`${stad.naam} vaart nu onder de vlag van ${NATIES[s.natie].naam}.`);
+    // Een 'verover'-opdracht voor deze stad is nu afgerond.
+    if (s.opdracht && s.opdracht.soort === 'verover' && s.opdracht.stadV === stad.naam) {
+      s.opdracht.klaar = true;
+    }
   } else if (keuze === 'hou') {
     stad.natie = 'piraat';
     stad.garnizoen = 20 + stad.grootte * 8;
     Game.melding(`${stad.naam} is nu een vrijhaven.`);
+    // Ook dan telt de verovering voor de opdracht (de vlag hangt niet meer van de oude kroon).
+    if (s.opdracht && s.opdracht.soort === 'verover' && s.opdracht.stadV === stad.naam) {
+      s.opdracht.klaar = true;
+    }
   } else {
     s.goud += Math.round(schat * 0.5);
+    // Plunderen vervult de opdracht niet — de gouverneur wilde de stad, geen ruïne.
+    if (s.opdracht && s.opdracht.soort === 'verover' && s.opdracht.stadV === stad.naam) {
+      s.opdracht.klaar = false;
+    }
     stad.bevolking = Math.round(stad.bevolking * 0.6);
     stad.welvaart *= 0.7;
     stad.garnizoen = 10;
@@ -1114,6 +1323,41 @@ async function veroverStad(stad, opVertrek) {
   }
 
   opVertrek();
+}
+
+// --- Vermist familielid ---------------------------------------------------
+
+/** Vraag langs de kade naar de vermiste vader/moeder/broer/zus. */
+async function zoekFamilie(stad, sch) {
+  const s = Game.speler;
+  const rol = s.familie ? s.familie.rol : 'familielid';
+  // Hogere roem en charme helpen; anders een loos spoor.
+  const kans = clamp(0.45 + s.roem / 900 + (talentBonus(s, 'charme') ? 0.15 : 0), 0.2, 0.95);
+  if (Math.random() < kans) {
+    s.familie.gevonden = true;
+    s.familie.gevondenDag = s.dag;
+    s.roem += 60;
+    s.moraal = clamp(s.moraal + 20, 0, 100);
+    audio.sfx.fanfare();
+    await UI.vraag(
+      `Uw ${rol} is gevonden!`,
+      `In een stoffige steeg vind je ten slotte je ${rol}. Na jaren van scheiding is de familie ` +
+        `weer herenigd. De hele Caraïben spreekt erover. "U bent een van ons, kapitein."`,
+      [{ label: 'Een traan wegpinken', waarde: 'ok' }],
+      { figuur: 'gouverneur' }
+    );
+    sch._bericht = `Je ${rol} is veilig. De familie is weer bij elkaar.`;
+  } else {
+    await UI.vraag(
+      'Een dood spoor',
+      `Niemand hier herkent de beschrijving. "Uw ${rol}? Weet u het zeker?"`,
+      [{ label: 'Verder zoeken', waarde: 'ok' }],
+      { figuur: 'zeeman' }
+    );
+    s.roem = Math.max(0, s.roem - 2);
+    sch._bericht = 'Geen spoor van je familielid in deze stad.';
+  }
+  sch.ververs();
 }
 
 // --- Aftreden -------------------------------------------------------------

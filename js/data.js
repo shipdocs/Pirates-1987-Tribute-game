@@ -219,3 +219,42 @@ export const GERUCHTEN = [
 export const VOORNAMEN_M = ['Roderick', 'Willem', 'Diego', 'Jean', 'Thomas', 'Cornelis', 'Alonso', 'Pieter'];
 export const VOORNAMEN_V = ['Isabella', 'Marieke', 'Anne', 'Lucia', 'Catharina', 'Elena', 'Margriet'];
 export const ACHTERNAMEN = ['van Dijck', 'Morgan', 'de la Vega', 'Bonnet', 'Sterling', 'van Heemskerck', 'Rojas'];
+
+// --- Gouverneursopdrachten -------------------------------------------------
+
+/** Tekstsjablonen per opdrachtsoort; {…} wordt ingevuld door het spel. */
+export const OPDRACHT_SOORTEN = {
+  lever: {
+    titel: 'Een levering',
+    omschrijving: 'Breng {aantal} eenheden {waar} naar {bestemming}. De papieren liggen klaar bij de koopman.',
+  },
+  spion: {
+    titel: 'Koerierswerk',
+    omschrijving: 'Haal het verzegelde pakket op in {van} en lever het af in {naar}. Niets openmaken.',
+  },
+  verover: {
+    titel: 'De vlag veroveren',
+    omschrijving: 'Neem {stad} in voor de kroon. De koning wil die stad.',
+  },
+  jacht: {
+    titel: 'De zee zuiveren',
+    omschrijving: 'Breng een {natie} oorlogsschip tot zinken of strijk hun vlag. De reede is onveilig.',
+  },
+};
+
+// --- Scheepsuitrusting -----------------------------------------------------
+
+/**
+ * Verbeteringen die de werf op een schip kan aanbrengen. `basis` is de prijs
+ * van het eerste niveau; elk volgend niveau kost meer. `stap` is de bonus per
+ * niveau. `romp` verhoogt maxRomp permanent (die telt zo vanzelf mee in
+ * herstel, HUD en gevecht); `zeilen` en `roer` zijn vermenigvuldigers die de
+ * beweging op zee gebruiken.
+ */
+export const UPGRADES = {
+  zeilen: { naam: 'Zeilen', omschrijving: 'kruidt de snelheid op', basis: 900, max: 3, stap: 0.04 },
+  romp: { naam: 'Rompversteviging', omschrijving: 'verstevigt de spanten', basis: 1200, max: 3, stap: 0.05 },
+  roer: { naam: 'Roer', omschrijving: 'scherpt de wendbaarheid', basis: 700, max: 3, stap: 0.05 },
+};
+
+export const FAMILIE_ROLLEN = ['broer', 'zus', 'vader', 'moeder'];

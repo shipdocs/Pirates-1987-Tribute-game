@@ -139,6 +139,15 @@ const IKONEN = {
     '<path d="M8.7 2.6 13 10.8H8.7z" fill="currentColor"/>' +
     '<path d="M7.3 3.6 3.6 10.8h3.7z" fill="currentColor" opacity="0.72"/>' +
     '<path d="M1.4 12h13.2l-1.9 2.8H3.3z" fill="currentColor"/>',
+  // Een samengerold bevelschrift (voor gouverneursopdrachten).
+  opdracht:
+    '<path d="M3.4 13.8V3.2L6.6 5.4 8.8 3.2l2.2 2.2 3-2.2v10.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>' +
+    '<path d="M4.4 7.8h7M4.4 9.8h5.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>',
+  familie:
+    '<circle cx="5" cy="4.6" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/>' +
+    '<path d="M1.8 8.5a3.4 3.4 0 0 1 6.4 0M8.6 4.4a1.8 1.8 0 0 1 .6 0" fill="none" stroke="currentColor" stroke-width="1.2"/>' +
+    '<circle cx="11" cy="5" r="2.4" fill="none" stroke="currentColor" stroke-width="1.3"/>' +
+    '<path d="M8.6 8.6a3.6 3.6 0 0 1 5.4 0" fill="none" stroke="currentColor" stroke-width="1.2"/>',
 };
 
 /** Klein gestileerd portret voor kroegbazen, gouverneurs en gasten. */

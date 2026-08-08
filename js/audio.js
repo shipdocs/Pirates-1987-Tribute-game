@@ -14,6 +14,10 @@ const state = {
   muziekTimer: null,
   golfBron: null,
   galm: null,
+  // Welk thema er klinkt, en welke de speler het laatst heeft gehad.
+  thema: null,
+  themaNaam: 'zee',
+  ruisBuf: null,
 };
 
 function ctx() {
@@ -153,101 +157,256 @@ export const sfx = {
     toon(392, 0.3, 'triangle', 0.18);
     toon(523, 0.4, 'triangle', 0.16, 0.14);
   },
-};
-// --- Muziek ---------------------------------------------------------------
+};// --- Muziek ---------------------------------------------------------------
 //
-// Een tropische deun voor de Caraïben, op de tresillo: het 3+3+2-ritme met
-// Afro-Caribische wortels dat later de bodem werd van zowat alle eilandmuziek.
-// De bas valt op één, op de tweede helft van twee, en op vier; de akkoorden
-// vallen er telkens náást, op de tegentel. Dat schuren van de twee tegen
-// elkaar is wat de maat laat wiegen zonder dat er iets hard hoeft te slaan.
+// Twee thema's, allebei op de tresillo: het 3+3+2-ritme met Afro-Caribische
+// wortels dat later de bodem werd van zowat alle eilandmuziek. De bas valt op
+// één, op de tegentel van twee en op vier; de akkoorden vallen er telkens
+// náást. Dat schuren van de twee tegen elkaar laat de maat wiegen zonder dat
+// er iets hard hoeft te slaan.
 //
-// F-groot, rustig tempo, en alles wordt geplukt in plaats van aangehouden —
-// korte aanslagen met een boventoon die sneller uitdooft dan de grondtoon,
-// waardoor het naar hout klinkt in plaats van naar een orgel.
+//   'zee'      F-groot, 103 slagen — geplukt, ruim, met branding en meeuwen.
+//   'gevecht'  D-klein, 143 slagen — gehamerd, met een A7 die naar bloed ruikt.
 //
-// Alles wordt hier opgewekt: melodie, bas, akkoorden, schudritme en de meeuw.
-// Geen enkel geluidsbestand, net als de rest van het spel.
+// Beide zijn opgebouwd uit delen van acht maten. Per deel wisselt de bezetting:
+// niet elke stem speelt altijd mee. Dát is wat een korte lus lang houdt — niet
+// meer noten, maar minder, op de juiste momenten.
+//
+// Alles wordt hier opgewekt: melodie, bas, akkoorden, slagwerk, koor, branding,
+// krakend hout, de scheepsbel en de meeuw. Geen enkel geluidsbestand.
 
 /** Middelbare toonhoogte (MIDI) naar frequentie. */
 const mf = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
-/** Duur van een zestiende. Zestien daarvan vullen een maat van vier tellen. */
-const ZESTIENDE = 0.145;
-const MAAT = ZESTIENDE * 16;
-
-/**
- * De melodie als [toon, lengte-in-zestienden]; `null` is een rust. De ruimte zit
- * hier niet in de rusten maar in de aanslag: geplukte noten doven uit, dus een
- * lange noot is grotendeels stilte met een naklank. De meeste zinnen beginnen
- * bovendien op de tegentel in plaats van op de tel — dat is de syncope die het
- * geheel laat wiegen.
- */
+/** `null` in een melodie is een rust. */
 const R = null;
-const MELODIE = [
-  // A-deel: I - vi - ii - V, de zonnige omkeer, twee keer rond.
-  [R, 2], [69, 3], [72, 3], [77, 6], [R, 2],
-  [R, 2], [76, 3], [74, 3], [69, 6], [R, 2],
-  [R, 2], [74, 3], [72, 3], [70, 4], [67, 4],
-  [72, 6], [R, 2], [67, 4], [72, 4],
-  [R, 2], [69, 3], [72, 3], [77, 4], [79, 4],
-  [77, 3], [76, 3], [74, 6], [R, 4],
-  [R, 2], [70, 3], [72, 3], [74, 4], [72, 4],
-  [72, 4], [76, 4], [74, 4], [72, 4],
-  // B-deel: naar de onderdominant en langs de zesde weer terug.
-  [R, 2], [70, 3], [74, 3], [77, 8],
-  [79, 4], [77, 4], [76, 4], [74, 4],
-  [R, 2], [72, 3], [76, 3], [81, 8],
-  [79, 4], [77, 4], [74, 8],
-  [R, 2], [70, 3], [74, 3], [79, 4], [77, 4],
-  [76, 4], [74, 4], [72, 6], [R, 2],
-  [R, 2], [69, 3], [72, 3], [77, 4], [76, 4],
-  [74, 4], [72, 4], [69, 8],
-];
 
-/**
- * Eén akkoord per maat. `bas` en `vijfde` dragen de tresillo, `greep` is de
- * viertonige ligging die op de tegentel wordt aangeslagen.
- */
+// --- Akkoorden ------------------------------------------------------------
+// `bas` en `vijfde` dragen de tresillo, `greep` is de ligging die op de
+// tegentel wordt aangeslagen.
+
 const Fmaj = { bas: 41, vijfde: 48, greep: [65, 69, 72, 76] };
 const Dm7 = { bas: 38, vijfde: 45, greep: [62, 65, 69, 72] };
 const Gm7 = { bas: 43, vijfde: 50, greep: [67, 70, 74, 77] };
 const C7 = { bas: 36, vijfde: 43, greep: [60, 64, 67, 70] };
 const Bbmaj = { bas: 46, vijfde: 53, greep: [58, 62, 65, 69] };
 const Am7 = { bas: 45, vijfde: 52, greep: [57, 60, 64, 67] };
-const AKKOORDEN = [
-  Fmaj, Dm7, Gm7, C7, Fmaj, Dm7, Gm7, C7,
-  Bbmaj, Bbmaj, Am7, Dm7, Gm7, C7, Fmaj, C7,
+// Voor het gevecht, in D-klein.
+const Dm = { bas: 38, vijfde: 45, greep: [62, 65, 69, 74] };
+const Bb = { bas: 46, vijfde: 53, greep: [58, 62, 65, 70] };
+const Cdur = { bas: 36, vijfde: 43, greep: [60, 64, 67, 72] };
+const Gm = { bas: 43, vijfde: 50, greep: [67, 70, 74, 79] };
+// De grote terts van A7 (de cis) hoort niet in D-klein. Juist daarom staat hij
+// er: die ene vreemde noot is wat de maat naar de volgende toe laat trekken.
+const A7 = { bas: 45, vijfde: 52, greep: [61, 64, 67, 69] };
+
+// --- De delen -------------------------------------------------------------
+// Elk deel is acht maten van zestien zestienden.
+
+const DELEN = {
+  // Zee, A: de zonnige omkeer I-vi-ii-V, twee keer rond.
+  A: {
+    akkoorden: [Fmaj, Dm7, Gm7, C7, Fmaj, Dm7, Gm7, C7],
+    melodie: [
+      [R, 2], [69, 3], [72, 3], [77, 6], [R, 2],
+      [R, 2], [76, 3], [74, 3], [69, 6], [R, 2],
+      [R, 2], [74, 3], [72, 3], [70, 4], [67, 4],
+      [72, 6], [R, 2], [67, 4], [72, 4],
+      [R, 2], [69, 3], [72, 3], [77, 4], [79, 4],
+      [77, 3], [76, 3], [74, 6], [R, 4],
+      [R, 2], [70, 3], [72, 3], [74, 4], [72, 4],
+      [72, 4], [76, 4], [74, 4], [72, 4],
+    ],
+  },
+  // Zee, B: naar de onderdominant en langs de zesde weer terug.
+  B: {
+    akkoorden: [Bbmaj, Bbmaj, Am7, Dm7, Gm7, C7, Fmaj, C7],
+    melodie: [
+      [R, 2], [70, 3], [74, 3], [77, 8],
+      [79, 4], [77, 4], [76, 4], [74, 4],
+      [R, 2], [72, 3], [76, 3], [81, 8],
+      [79, 4], [77, 4], [74, 8],
+      [R, 2], [70, 3], [74, 3], [79, 4], [77, 4],
+      [76, 4], [74, 4], [72, 6], [R, 2],
+      [R, 2], [69, 3], [72, 3], [77, 4], [76, 4],
+      [74, 4], [72, 4], [69, 8],
+    ],
+  },
+  // Zee, A': hetzelfde harmonische pad als A, maar een octaaf hoger opgevat.
+  A2: {
+    akkoorden: [Fmaj, Dm7, Gm7, C7, Fmaj, Dm7, Gm7, C7],
+    melodie: [
+      [R, 2], [77, 3], [81, 3], [84, 4], [81, 4],
+      [R, 2], [81, 3], [79, 3], [77, 8],
+      [R, 2], [79, 3], [77, 3], [74, 4], [70, 4],
+      [72, 4], [76, 4], [79, 4], [76, 4],
+      [R, 2], [77, 3], [81, 3], [84, 6], [R, 2],
+      [81, 3], [79, 3], [77, 6], [R, 4],
+      [R, 2], [77, 3], [79, 3], [81, 4], [79, 4],
+      [79, 4], [76, 4], [74, 4], [72, 4],
+    ],
+  },
+  // Zee, C: wijde horizon. Lange noten, hoog, weinig beweging.
+  C: {
+    akkoorden: [Gm7, C7, Fmaj, Dm7, Bbmaj, Am7, Gm7, C7],
+    melodie: [
+      [R, 4], [74, 4], [77, 8],
+      [76, 4], [79, 4], [76, 8],
+      [R, 2], [77, 3], [81, 3], [79, 8],
+      [77, 4], [76, 4], [74, 8],
+      [R, 2], [74, 3], [77, 3], [82, 8],
+      [81, 4], [79, 4], [76, 8],
+      [R, 2], [77, 3], [74, 3], [70, 8],
+      [72, 4], [70, 4], [67, 8],
+    ],
+  },
+  // Gevecht, X: korte stoten, steeds dezelfde kop, telkens anders afgemaakt.
+  X: {
+    akkoorden: [Dm, Dm, Bb, Cdur, Dm, Gm, A7, Dm],
+    melodie: [
+      [74, 2], [74, 2], [77, 2], [R, 2], [74, 2], [R, 2], [72, 4],
+      [74, 2], [74, 2], [77, 2], [R, 2], [81, 4], [79, 4],
+      [77, 2], [77, 2], [74, 2], [R, 2], [70, 4], [74, 4],
+      [72, 2], [72, 2], [76, 2], [R, 2], [79, 4], [76, 4],
+      [74, 2], [74, 2], [77, 2], [R, 2], [74, 2], [R, 2], [81, 4],
+      [79, 2], [79, 2], [74, 2], [R, 2], [77, 4], [74, 4],
+      [76, 2], [76, 2], [73, 2], [R, 2], [76, 4], [69, 4],
+      [74, 4], [R, 2], [74, 2], [R, 2], [74, 6],
+    ],
+  },
+  // Gevecht, Y: het wordt menens. Hoger, en de A7 blijft twee maten hangen.
+  Y: {
+    akkoorden: [Gm, Gm, A7, A7, Bb, Cdur, Dm, A7],
+    melodie: [
+      [R, 2], [79, 2], [82, 2], [79, 2], [77, 4], [74, 4],
+      [R, 2], [79, 2], [82, 2], [79, 2], [86, 4], [82, 4],
+      [81, 2], [81, 2], [85, 2], [R, 2], [81, 4], [76, 4],
+      [81, 2], [81, 2], [85, 2], [R, 2], [88, 4], [85, 4],
+      [86, 2], [R, 2], [82, 2], [R, 2], [81, 4], [77, 4],
+      [84, 2], [R, 2], [79, 2], [R, 2], [76, 4], [72, 4],
+      [86, 2], [86, 2], [81, 2], [R, 2], [77, 4], [74, 4],
+      [76, 4], [73, 4], [69, 8],
+    ],
+  },
+};
+
+/**
+ * Wie er speelt, per deel van acht maten. De lijst loopt rond, en omdat hij een
+ * andere lengte heeft dan de vorm schuiven de twee langs elkaar: pas na twaalf
+ * delen staat dezelfde bezetting weer op hetzelfde deel. Dat is bijna vier
+ * minuten voordat er iets letterlijk wordt herhaald.
+ */
+const BEZETTING_ZEE = [
+  { melodie: 1, tegen: 0, akkoord: 0, schud: 0, koor: 0, meeuw: 0, zee: 1, versier: 0 },
+  { melodie: 1, tegen: 0, akkoord: 1, schud: 1, koor: 0, meeuw: 1, zee: 1, versier: 0 },
+  { melodie: 1, tegen: 1, akkoord: 1, schud: 1, koor: 1, meeuw: 1, zee: 1, versier: 0 },
+  // Adempauze: de melodie zwijgt en de tegenstem draagt hem in haar eentje.
+  { melodie: 0, tegen: 1, akkoord: 1, schud: 1, koor: 0, meeuw: 1, zee: 1, versier: 0 },
+  { melodie: 1, tegen: 1, akkoord: 1, schud: 1, koor: 1, meeuw: 0, zee: 1, versier: 1 },
+  { melodie: 1, tegen: 0, akkoord: 0, schud: 1, koor: 0, meeuw: 1, zee: 1, versier: 0 },
 ];
 
-const MATEN = AKKOORDEN.length;
-const ZESTIENDEN_TOTAAL = MATEN * 16;
+// Vijf bezettingen tegen een vorm van vier delen: daardoor valt niet elke ronde
+// dezelfde bezetting op hetzelfde deel, en duurt het twintig delen voordat er
+// iets letterlijk wordt herhaald. Bij vier zou dat al na één ronde zijn.
+const BEZETTING_GEVECHT = [
+  { melodie: 0, tegen: 0, akkoord: 1, schud: 0, trom: 1, roep: 0, versier: 0 },
+  { melodie: 1, tegen: 0, akkoord: 1, schud: 1, trom: 1, roep: 0, versier: 0 },
+  { melodie: 1, tegen: 1, akkoord: 1, schud: 1, trom: 1, roep: 1, versier: 0 },
+  // Stilte voor de storm: geen slagwerk, alleen de bas en een lage tegenstem.
+  // Dat het even wegvalt is wat de klap erna hard maakt.
+  { melodie: 0, tegen: 1, akkoord: 1, schud: 0, trom: 0, roep: 0, versier: 0 },
+  { melodie: 1, tegen: 0, akkoord: 1, schud: 1, trom: 1, roep: 1, versier: 1 },
+];
 
-/** De tresillo: 3+3+2, hier in zestienden dus op 0, 6 en 12. */
+const THEMAS = {
+  zee: {
+    eenheid: 0.145,
+    vorm: ['A', 'B', 'A2', 'C'],
+    bezetting: BEZETTING_ZEE,
+    stem: 'pluk',
+  },
+  gevecht: {
+    eenheid: 0.105,
+    vorm: ['X', 'Y', 'X', 'X'],
+    bezetting: BEZETTING_GEVECHT,
+    stem: 'hamer',
+  },
+};
+
+const MATEN_PER_DEEL = 8;
+const EENHEDEN_PER_DEEL = MATEN_PER_DEEL * 16;
+
+/** De tresillo: 3+3+2, in zestienden dus op 0, 6 en 12. */
 const TRESILLO = [0, 6, 12];
 /** De tegentel waarop het akkoord wordt aangeslagen — telkens náást de bas. */
 const TEGENTEL = [2, 6, 10, 14];
 
-/** Melodie omgerekend naar: op welke zestiende begint welke noot. */
-const MELODIE_OP = new Map();
-{
+/** Per deel: op welke zestiende begint welke noot. Eén keer uitgerekend. */
+for (const deel of Object.values(DELEN)) {
+  deel.op = new Map();
   let pos = 0;
-  for (const [toon, lengte] of MELODIE) {
-    if (toon !== null) MELODIE_OP.set(pos, [toon, lengte]);
+  for (const [toon, lengte] of deel.melodie) {
+    if (toon !== null) deel.op.set(pos, [toon, lengte]);
     pos += lengte;
   }
+  deel.lengte = pos;
+}
+
+// --- Instrumenten ---------------------------------------------------------
+
+/**
+ * Eén gedeelde ruisbuffer voor alles wat ruist. Ruis is ruis; hem elke keer
+ * opnieuw uitrekenen kost geheugen zonder dat iemand het hoort.
+ */
+function ruisBuffer() {
+  if (!state.ruisBuf) {
+    const c = state.ctx;
+    const len = Math.floor(c.sampleRate * 2);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    state.ruisBuf = buf;
+  }
+  return state.ruisBuf;
+}
+
+/** Ruis met een eigen filter en omhullende. De werkpaard-bouwsteen. */
+function ruisje(start, duur, opts) {
+  const c = state.ctx;
+  const src = c.createBufferSource();
+  src.buffer = ruisBuffer();
+  src.loop = true;
+  // Elke keer ergens anders in de buffer beginnen, anders hoor je het patroon.
+  const bron = Math.random() * 1.5;
+  const f = c.createBiquadFilter();
+  f.type = opts.type || 'lowpass';
+  f.frequency.setValueAtTime(opts.van, start);
+  if (opts.naar) {
+    f.frequency.linearRampToValueAtTime(opts.top || opts.naar, start + duur * (opts.topOp || 0.35));
+    f.frequency.linearRampToValueAtTime(opts.naar, start + duur);
+  }
+  if (opts.q) f.Q.value = opts.q;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.linearRampToValueAtTime(opts.vol, start + duur * (opts.aan || 0.02));
+  g.gain.exponentialRampToValueAtTime(0.0001, start + duur);
+  src.connect(f);
+  f.connect(g);
+  g.connect(state.muziekGain);
+  if (opts.galm && state.galm) g.connect(state.galm);
+  src.start(start, bron);
+  src.stop(start + duur + 0.02);
 }
 
 /**
  * Een geplukte noot. Een marimba is in de kern een sinus met een boventoon die
  * veel sneller uitdooft dan de grondtoon; dat verschil in uitdoving is wat het
- * naar hout laat klinken. `helder` regelt hoeveel boventoon er mee mag.
+ * naar hout laat klinken in plaats van naar een orgel.
  */
 function pluk(toon, start, duur, vol, helder = 0.3, naarGalm = false) {
   const c = state.ctx;
   const f = mf(toon);
-  // Een geplukte noot klinkt uit op eigen tempo, niet op de genoteerde lengte —
-  // maar nooit zo lang dat hij over de volgende heen blijft hangen.
   const uit = Math.min(duur * 1.5, 1.3);
 
   const osc = c.createOscillator();
@@ -277,43 +436,223 @@ function pluk(toon, start, duur, vol, helder = 0.3, naarGalm = false) {
   bov.stop(start + uit * 0.3 + 0.02);
 }
 
-/** Schudritme: een kort ruisje, hoog weggefilterd. Zacht, het is geen dansvloer. */
-function schud(start, sterk) {
+/**
+ * De gevechtsstem: dezelfde noot, maar met een zaagtand door een filter dat
+ * dichtklapt. Dat geeft de aanslag een randje, alsof er hard op wordt geslagen
+ * in plaats van zacht geplukt.
+ */
+function hamer(toon, start, duur, vol, helder = 0.3, naarGalm = false) {
   const c = state.ctx;
-  const duur = sterk ? 0.055 : 0.035;
-  const len = Math.max(1, Math.floor(c.sampleRate * duur));
-  const buf = c.createBuffer(1, len, c.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
-  const src = c.createBufferSource();
-  src.buffer = buf;
-  const f = c.createBiquadFilter();
-  f.type = 'highpass';
-  f.frequency.value = 6200;
+  const f = mf(toon);
+  const uit = Math.min(duur * 1.2, 0.7);
+  const osc = c.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(f, start);
+  const lp = c.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(f * 7, start);
+  lp.frequency.exponentialRampToValueAtTime(Math.max(200, f * 1.6), start + uit * 0.8);
+  lp.Q.value = 3;
   const g = c.createGain();
-  g.gain.value = sterk ? 0.085 : 0.045;
-  src.connect(f);
-  f.connect(g);
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.exponentialRampToValueAtTime(vol, start + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, start + uit);
+  osc.connect(lp);
+  lp.connect(g);
   g.connect(state.muziekGain);
-  src.start(start);
+  if (naarGalm && state.galm) g.connect(state.galm);
+  osc.start(start);
+  osc.stop(start + uit + 0.02);
+}
+
+/** Schudritme: kort en hoog. Zacht, het is geen dansvloer. */
+function schud(start, sterk) {
+  ruisje(start, sterk ? 0.055 : 0.035, {
+    type: 'highpass', van: 6200, vol: sterk ? 0.085 : 0.045, aan: 0.15,
+  });
+}
+
+/** Trom voor het gevecht: een klap met een toon die er meteen onderuit zakt. */
+function trom(start, zwaar) {
+  const c = state.ctx;
+  ruisje(start, zwaar ? 0.11 : 0.06, {
+    type: 'lowpass', van: zwaar ? 420 : 1400, vol: zwaar ? 0.16 : 0.07, aan: 0.05,
+  });
+  const osc = c.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(zwaar ? 132 : 196, start);
+  osc.frequency.exponentialRampToValueAtTime(zwaar ? 46 : 92, start + 0.14);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.exponentialRampToValueAtTime(zwaar ? 0.3 : 0.15, start + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, start + 0.19);
+  osc.connect(g);
+  g.connect(state.muziekGain);
+  osc.start(start);
+  osc.stop(start + 0.22);
 }
 
 /**
- * Een meeuw. De roep is een nasaal "kie-auw": de toon schiet omhoog en zakt dan
- * langzamer terug, door een smalle band gehaald zodat het schril wordt in plaats
+ * Een zingende stem. Een klinker is niets anders dan een paar vaste
+ * resonanties boven op een toon: zet drie smalle banden op de juiste
+ * frequenties en een zaagtand wordt een "oh". Schuif die banden van de ene
+ * klinker naar de andere en het klinkt als een woord — alleen niet als een
+ * woord dat je verstaat. Dat is precies de bedoeling: het scheepsvolk zingt
+ * mee, maar je hoort niet wát.
+ */
+const KLINKERS = {
+  o: [570, 840, 2410],
+  a: [730, 1090, 2440],
+  e: [530, 1840, 2480],
+  u: [300, 870, 2240],
+};
+
+function zangStem(toon, start, duur, van, naar, vol) {
+  const c = state.ctx;
+  // Geen twee kelen staan precies gelijk; die kleine verstemming maakt van een
+  // stapel stemmen een koor in plaats van een orgelpijp.
+  const f = mf(toon) * (1 + (Math.random() - 0.5) * 0.012);
+
+  const osc = c.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(f * 0.93, start);
+  osc.frequency.exponentialRampToValueAtTime(f, start + 0.1);
+  // Vibrato: een zanger houdt een lange noot nooit stil.
+  const lfo = c.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 4.4 + Math.random() * 1.4;
+  const lfoDiep = c.createGain();
+  lfoDiep.gain.value = f * 0.011;
+  lfo.connect(lfoDiep);
+  lfoDiep.connect(osc.frequency);
+  lfo.start(start);
+  lfo.stop(start + duur + 0.1);
+
+  const bus = c.createGain();
+  bus.gain.value = 1;
+  for (let i = 0; i < 3; i++) {
+    const bp = c.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(van[i], start);
+    bp.frequency.linearRampToValueAtTime(naar[i], start + duur * 0.7);
+    bp.Q.value = 7 - i * 1.6;
+    const fg = c.createGain();
+    fg.gain.value = [1, 0.6, 0.28][i];
+    osc.connect(bp);
+    bp.connect(fg);
+    fg.connect(bus);
+  }
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.exponentialRampToValueAtTime(vol, start + 0.09);
+  g.gain.setValueAtTime(vol, start + duur * 0.68);
+  g.gain.exponentialRampToValueAtTime(0.0001, start + duur);
+  bus.connect(g);
+  g.connect(state.muziekGain);
+  if (state.galm) g.connect(state.galm);
+  osc.start(start);
+  osc.stop(start + duur + 0.05);
+}
+
+/** Het scheepsvolk valt in. Twee kelen per partij, net niet gelijk. */
+function koor(tonen, start, duur, van, naar, vol = 0.075) {
+  for (const t of tonen) {
+    zangStem(t, start, duur, van, naar, vol);
+    zangStem(t, start + 0.02 + Math.random() * 0.04, duur * 0.94, van, naar, vol * 0.65);
+  }
+}
+
+/** Een korte schreeuw voor in het gevecht — geen woord, alleen lucht en lef. */
+function roep(tonen, start) {
+  for (const t of tonen) {
+    zangStem(t, start, 0.22 + Math.random() * 0.08, KLINKERS.a, KLINKERS.o, 0.075);
+  }
+}
+
+/**
+ * Branding. Een golf komt aanrollen, breekt, en trekt terug: het filter gaat
+ * open op het moment dat hij breekt en zakt daarna weer dicht.
+ */
+function golfslag(start) {
+  const duur = 2.4 + Math.random() * 1.6;
+  ruisje(start, duur, {
+    type: 'lowpass', van: 320, top: 1500, naar: 260, topOp: 0.38, vol: 0.075, aan: 0.38,
+  });
+}
+
+/** Werkend hout: een lage toon die onregelmatig van hoogte schiet. */
+function kraak(start) {
+  const c = state.ctx;
+  const duur = 0.45 + Math.random() * 0.5;
+  const osc = c.createOscillator();
+  osc.type = 'sawtooth';
+  const basis = 52 + Math.random() * 44;
+  osc.frequency.setValueAtTime(basis, start);
+  // Het schokkerige is wat kraken hoorbaar maakt; een vloeiende glijder klinkt
+  // als een dier, een reeks sprongetjes klinkt als een schip.
+  const stappen = 5 + Math.floor(Math.random() * 6);
+  for (let i = 1; i <= stappen; i++) {
+    osc.frequency.setValueAtTime(basis * (0.82 + Math.random() * 0.55), start + (i / stappen) * duur);
+  }
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 300 + Math.random() * 240;
+  bp.Q.value = 2.4;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.exponentialRampToValueAtTime(0.05, start + 0.07);
+  g.gain.exponentialRampToValueAtTime(0.0001, start + duur);
+  osc.connect(bp);
+  bp.connect(g);
+  g.connect(state.muziekGain);
+  if (state.galm) g.connect(state.galm);
+  osc.start(start);
+  osc.stop(start + duur + 0.03);
+}
+
+/**
+ * De scheepsbel. Een klok klinkt naar metaal doordat zijn boventonen scheef
+ * liggen: geen hele veelvouden, maar 2,76 en 5,40 keer de grondtoon. Precies
+ * dat scheve is het verschil tussen een klok en een fluit.
+ */
+function scheepsbel(start) {
+  const c = state.ctx;
+  const grond = 560 + Math.random() * 90;
+  for (const slag of [0, 0.42]) {
+    [1, 2.76, 5.4, 8.9].forEach((verhouding, i) => {
+      const osc = c.createOscillator();
+      // Driehoek in plaats van sinus: een klok heeft een randje, geen fluittoon.
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(grond * verhouding, start + slag);
+      const g = c.createGain();
+      const uit = 2.2 / (1 + i * 0.9);
+      g.gain.setValueAtTime(0.0001, start + slag);
+      g.gain.exponentialRampToValueAtTime(0.05 / (i + 1), start + slag + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + slag + uit);
+      osc.connect(g);
+      g.connect(state.muziekGain);
+      if (state.galm) g.connect(state.galm);
+      osc.start(start + slag);
+      osc.stop(start + slag + uit + 0.02);
+    });
+  }
+}
+
+/**
+ * Een meeuw. De roep is een nasaal "kie-auw": de toon schiet omhoog en zakt
+ * trager terug, door een smalle band gehaald zodat het schril wordt in plaats
  * van muzikaal. Twee tot vier kreten achter elkaar, want één meeuw roept nooit
- * één keer. Hij gaat naar de echo, zodat hij van ver over het water lijkt te komen.
+ * één keer. Hij gaat door de echo, zodat hij van ver lijkt te komen.
  */
 function meeuw(start) {
   const c = state.ctx;
   const kreten = 2 + Math.floor(Math.random() * 3);
-  const hoog = 780 + Math.random() * 260; // elke meeuw zijn eigen stem
+  const hoog = 780 + Math.random() * 260;
   let t = start;
   for (let i = 0; i < kreten; i++) {
     const duur = 0.17 + Math.random() * 0.1;
     const osc = c.createOscillator();
     osc.type = 'sawtooth';
-    // Omhoog schieten, dan trager terugzakken: dat is de vorm van de roep.
     osc.frequency.setValueAtTime(hoog * 0.62, t);
     osc.frequency.exponentialRampToValueAtTime(hoog * 1.28, t + duur * 0.16);
     osc.frequency.exponentialRampToValueAtTime(hoog * 0.72, t + duur);
@@ -323,8 +662,8 @@ function meeuw(start) {
     band.Q.value = 3.2;
     const g = c.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.12, t + 0.03);
-    g.gain.exponentialRampToValueAtTime(0.06, t + duur * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.1, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.05, t + duur * 0.6);
     g.gain.exponentialRampToValueAtTime(0.0001, t + duur);
     osc.connect(band);
     band.connect(g);
@@ -332,52 +671,85 @@ function meeuw(start) {
     if (state.galm) g.connect(state.galm);
     osc.start(t);
     osc.stop(t + duur + 0.02);
-    // Steeds iets korter achter elkaar, zoals een meeuw die zich opwindt.
     t += duur + 0.16 - i * 0.02;
   }
 }
 
-/** Plant alles wat op deze zestiende begint. */
-function planZestiende(index, start) {
-  const inLus = ((index % ZESTIENDEN_TOTAAL) + ZESTIENDEN_TOTAAL) % ZESTIENDEN_TOTAAL;
-  const maat = Math.floor(inLus / 16);
-  const tel = inLus % 16;
-  const akkoord = AKKOORDEN[maat];
-  // Vanaf de tweede ronde komt het schudritme erbij, zodat de lus ergens
-  // naartoe groeit in plaats van in zichzelf te blijven rondlopen.
-  const ronde = Math.floor(index / ZESTIENDEN_TOTAAL);
-  const vol = ronde > 0;
+// --- De planner -----------------------------------------------------------
 
-  const noot = MELODIE_OP.get(inLus);
+/** Plant alles wat op deze zestiende begint. */
+function planEenheid(index, start) {
+  const thema = state.thema;
+  const eenheid = thema.eenheid;
+  const deelNr = Math.floor(index / EENHEDEN_PER_DEEL);
+  const inDeel = index % EENHEDEN_PER_DEEL;
+  const deel = DELEN[thema.vorm[deelNr % thema.vorm.length]];
+  const bez = thema.bezetting[deelNr % thema.bezetting.length];
+  const maat = Math.floor(inDeel / 16);
+  const tel = inDeel % 16;
+  const akkoord = deel.akkoorden[maat];
+  const stem = thema.stem === 'hamer' ? hamer : pluk;
+
+  // --- Melodie en tegenstem ---
+  const noot = deel.op.get(inDeel);
   if (noot) {
     const [toon, lengte] = noot;
-    pluk(toon, start, lengte * ZESTIENDE, 0.34, 0.34, true);
+    const duur = lengte * eenheid;
+    if (bez.melodie) stem(toon, start, duur, 0.34, 0.34, true);
+    // De tegenstem loopt een octaaf lager mee: hij kan nooit vals staan, en in
+    // de adempauze draagt hij de melodie in zijn eentje.
+    if (bez.tegen) stem(toon - 12, start, duur, bez.melodie ? 0.12 : 0.24, 0.15);
+    // Versiering: halverwege een lange noot een tweede aanslag op een toon uit
+    // hetzelfde akkoord. Uit het akkoord, dus hij kan niet verkeerd vallen.
+    if (bez.versier && lengte >= 6) {
+      const extra = akkoord.greep[1 + Math.floor(Math.random() * (akkoord.greep.length - 1))];
+      stem(extra, start + (lengte / 2) * eenheid, (lengte / 2) * eenheid, 0.13, 0.4);
+    }
   }
 
-  // Bas op de tresillo: grondtoon op één en op vier, de kwint op de tegentel
-  // van twee. Dat middelste aanslagje is het hele geheim van de maat.
-  if (tel === TRESILLO[0]) pluk(akkoord.bas, start, ZESTIENDE * 5, 0.3, 0.06);
-  if (tel === TRESILLO[1]) pluk(akkoord.vijfde, start, ZESTIENDE * 4, 0.2, 0.06);
-  if (tel === TRESILLO[2]) pluk(akkoord.bas, start, ZESTIENDE * 4, 0.26, 0.06);
+  // --- Bas op de tresillo ---
+  if (tel === TRESILLO[0]) stem(akkoord.bas, start, eenheid * 5, 0.3, 0.06);
+  if (tel === TRESILLO[1]) stem(akkoord.vijfde, start, eenheid * 4, 0.2, 0.06);
+  if (tel === TRESILLO[2]) stem(akkoord.bas, start, eenheid * 4, 0.26, 0.06);
 
-  // Akkoord op de tegentel, kort en zacht — het tikje van een cuatro.
-  if (TEGENTEL.includes(tel)) {
+  // --- Akkoord op de tegentel: het tikje van een cuatro ---
+  if (bez.akkoord && TEGENTEL.includes(tel)) {
     akkoord.greep.forEach((t, i) => {
-      pluk(t, start + i * 0.008, ZESTIENDE * 1.6, 0.05, 0.5);
+      stem(t, start + i * 0.008, eenheid * 1.6, 0.05, 0.5);
     });
   }
 
-  // Schudritme op de achtsten, met de nadruk op de tegentellen.
-  if (vol && tel % 2 === 0) schud(start, tel % 4 === 2);
+  // --- Slagwerk ---
+  if (bez.schud && tel % 2 === 0) schud(start, tel % 4 === 2);
+  if (bez.trom) {
+    if (TRESILLO.includes(tel)) trom(start, tel === 0 || tel === 12);
+    if (tel === 8) trom(start, false);
+  }
 
-  // En af en toe een meeuw: hooguit één kans per vier maten, en nooit in de
-  // eerste ronde — dan is de deun aan het woord. Dat komt neer op ongeveer één
-  // meeuw per halve minuut, vaak genoeg om te leven, zelden genoeg om niet te
-  // gaan storen. Hoger of lager? Alleen deze kans hoeft te veranderen.
-  if (vol && tel === 0 && maat % 4 === 1 && Math.random() < 0.35) {
-    meeuw(start + Math.random() * MAAT * 0.5);
+  // --- Koor: het volk valt in op het eind van een zin ---
+  if (bez.koor && tel === 10 && (maat === 3 || maat === 7)) {
+    koor([akkoord.greep[0] - 12, akkoord.greep[2] - 12, akkoord.greep[0]],
+      start, eenheid * 6, KLINKERS.o, KLINKERS.a);
+  }
+  // --- Roep: kort en hard, tegen de tresillo in ---
+  if (bez.roep && tel === 12 && maat % 2 === 1) {
+    roep([akkoord.greep[0] - 12, akkoord.greep[2] - 12], start);
+  }
+
+  // --- De zee eromheen ---
+  if (bez.zee) {
+    // Branding rolt door: elke twee maten een nieuwe golf, die over de vorige
+    // heen loopt. Zo is er altijd water te horen zonder dat het een lus wordt.
+    if (tel === 0 && maat % 2 === 0) golfslag(start + Math.random() * MAAT_ZEE * 0.4);
+    if (tel === 0 && maat === 5 && Math.random() < 0.4) kraak(start + Math.random() * MAAT_ZEE);
+    if (tel === 0 && maat === 1 && Math.random() < 0.35) meeuw(start + Math.random() * MAAT_ZEE * 0.5);
+    // De scheepsbel luidt zelden. Juist daarom is het leuk als hij komt.
+    if (tel === 0 && maat === 0 && deelNr > 0 && Math.random() < 0.12) scheepsbel(start);
   }
 }
+
+/** De maatduur van het zeethema, voor het uitsmeren van de zeegeluiden. */
+const MAAT_ZEE = THEMAS.zee.eenheid * 16;
 
 // De planner kijkt een stukje vooruit en zet noten op de klok van de
 // audiokaart, niet op die van de browser. setTimeout loopt onder belasting
@@ -386,49 +758,68 @@ function planZestiende(index, start) {
 const VOORUIT = 0.25; // seconden die we vooruit plannen
 const TIK = 45; // milliseconden tussen twee controles
 
-let volgendeZestiende = 0;
+let volgendeEenheid = 0;
 let positie = 0;
 
 function planner() {
-  if (!state.muziekAan) return;
+  if (!state.muziekAan || !state.thema) return;
   const c = state.ctx;
   if (!c) return;
-  // Bij het hervatten na een pauze ligt de klok verder; sluit dan gewoon aan.
-  if (volgendeZestiende < c.currentTime) volgendeZestiende = c.currentTime + 0.06;
-  while (volgendeZestiende < c.currentTime + VOORUIT) {
-    if (state.aan) planZestiende(positie, volgendeZestiende);
-    volgendeZestiende += ZESTIENDE;
+  if (volgendeEenheid < c.currentTime) volgendeEenheid = c.currentTime + 0.06;
+  while (volgendeEenheid < c.currentTime + VOORUIT) {
+    if (state.aan) planEenheid(positie, volgendeEenheid);
+    volgendeEenheid += state.thema.eenheid;
     positie++;
   }
 }
 
-/** De scène wil muziek. Blijft stil als de speler haar heeft uitgezet. */
-export function startMuziek() {
-  if (state.muziekTimer || !state.muziekGewenst) return;
+/**
+ * De scène wil muziek, en welke. `zee` op de kaart en in de haven, `gevecht`
+ * in de zeeslag en het duel. Speelt het gevraagde thema al, dan gebeurt er
+ * niets — zo loopt de deun gewoon door als je van de zeeslag in een enterduel
+ * rolt. Blijft stil als de speler de muziek heeft uitgezet.
+ */
+export function startMuziek(naam = 'zee') {
+  const thema = THEMAS[naam] || THEMAS.zee;
+  state.themaNaam = THEMAS[naam] ? naam : 'zee';
+  if (!state.muziekGewenst) return;
   const c = ctx();
   if (!c) return;
+  if (state.muziekTimer && state.thema === thema) return;
+  if (state.muziekTimer) {
+    clearInterval(state.muziekTimer);
+    state.muziekTimer = null;
+  }
+  state.thema = thema;
   state.muziekAan = true;
-  volgendeZestiende = c.currentTime + 0.12;
+  // Een nieuw thema begint bij zijn eigen begin, anders val je middenin een
+  // deel binnen met een bezetting die nergens op slaat.
+  positie = 0;
+  volgendeEenheid = c.currentTime + 0.1;
   state.muziekTimer = setInterval(planner, TIK);
   planner();
 }
 
-/** De scène legt de muziek stil (zeeslag, duel). Verandert de wens niet. */
+/** Alles stil. Verandert de wens van de speler niet. */
 export function stopMuziek() {
   state.muziekAan = false;
   if (state.muziekTimer) {
     clearInterval(state.muziekTimer);
     state.muziekTimer = null;
   }
-  // De melodie hervat waar hij was; alleen de lus telt door, niet de maat.
-  volgendeZestiende = 0;
+  volgendeEenheid = 0;
 }
 
 /** De speler zet de muziek aan of uit. Dit ís de wens. */
 export function zetMuziek(aan) {
   state.muziekGewenst = aan;
-  if (aan) startMuziek();
+  if (aan) startMuziek(state.themaNaam || 'zee');
   else stopMuziek();
+}
+
+/** Welk thema er nu aan de beurt is. Voor scènes die het straks moeten teruggeven. */
+export function huidigThema() {
+  return state.themaNaam || 'zee';
 }
 
 /** Wat de speler wil — niet of er op dit moment geluid uit de luidspreker komt. */
@@ -436,9 +827,14 @@ export function muziekAan() {
   return state.muziekGewenst;
 }
 
-/** Hoe ver de deun is, in maten. Alleen voor de zekerheid bij het testen. */
-export function muziekMaat() {
-  return Math.floor(positie / 16) % MATEN;
+/** Waar de deun staat. Alleen voor het testen. */
+export function muziekStand() {
+  const thema = state.thema || THEMAS.zee;
+  const deelNr = Math.floor(positie / EENHEDEN_PER_DEEL);
+  return {
+    thema: state.themaNaam || 'zee',
+    deel: thema.vorm[deelNr % thema.vorm.length],
+    bezetting: deelNr % thema.bezetting.length,
+    maat: Math.floor((positie % EENHEDEN_PER_DEEL) / 16),
+  };
 }
-
-export { MAAT as MUZIEK_MAATDUUR };

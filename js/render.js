@@ -432,6 +432,17 @@ function tekenRompDetail(ctx, L, B, poorten) {
   ctx.strokeStyle = '#2a1d10';
   ctx.stroke();
 
+  // Planken: horizontale naden tussen de gangen, lichter in het middenvlak.
+  ctx.strokeStyle = 'rgba(43,29,16,0.35)';
+  ctx.lineWidth = 0.7;
+  for (let i = 0; i < 4; i++) {
+    const py = -B * 0.42 + i * B * 0.21;
+    ctx.beginPath();
+    ctx.moveTo(L * 0.38, py);
+    ctx.quadraticCurveTo(L * 0.1, py + B * 0.03, -L * 0.42, py);
+    ctx.stroke();
+  }
+
   // Walen (dikke planken langs de zijkant).
   ctx.strokeStyle = 'rgba(60,42,22,0.55)';
   ctx.lineWidth = 1.4;
@@ -442,8 +453,11 @@ function tekenRompDetail(ctx, L, B, poorten) {
   ctx.quadraticCurveTo(0, B * 0.48, -L * 0.44, B * 0.3);
   ctx.stroke();
 
-  // Dek.
-  ctx.fillStyle = '#b08d58';
+  // Dek met een warme gloed naar de boeg.
+  const dekGrad = ctx.createLinearGradient(L * 0.4, 0, -L * 0.4, 0);
+  dekGrad.addColorStop(0, '#c09a62');
+  dekGrad.addColorStop(1, '#a3814b');
+  ctx.fillStyle = dekGrad;
   romPad(ctx, L * 0.8, B * 0.56);
   ctx.fill();
   ctx.strokeStyle = 'rgba(60,42,22,0.4)';
@@ -451,22 +465,34 @@ function tekenRompDetail(ctx, L, B, poorten) {
   romPad(ctx, L * 0.8, B * 0.56);
   ctx.stroke();
 
-  // Dekplanken.
-  ctx.strokeStyle = 'rgba(60,42,22,0.18)';
+  // Dekplanken: fijnere, gebogen naden en een donkere kielzwarte streep.
+  ctx.strokeStyle = 'rgba(60,42,22,0.22)';
   ctx.lineWidth = 0.5;
-  for (let i = 1; i < 4; i++) {
-    const py = -B * 0.18 + i * B * 0.12;
+  for (let i = 1; i < 6; i++) {
+    const py = -B * 0.22 + i * B * 0.088;
     ctx.beginPath();
-    ctx.moveTo(-L * 0.35, py);
-    ctx.lineTo(L * 0.35, py);
+    ctx.moveTo(-L * 0.36, py);
+    ctx.quadraticCurveTo(0, py + B * 0.045, L * 0.36, py);
     ctx.stroke();
   }
+  ctx.strokeStyle = 'rgba(40,26,14,0.5)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(L * 0.38, 0);
+  ctx.quadraticCurveTo(0, B * 0.05, -L * 0.4, 0);
+  ctx.stroke();
 
   // Achterkasteel.
   ctx.fillStyle = '#6b4a28';
   ctx.beginPath();
   ctx.ellipse(-L * 0.34, 0, L * 0.14, B * 0.4, 0, 0, TAU);
   ctx.fill();
+  // Sierrand op het kasteel.
+  ctx.strokeStyle = '#d9b98a';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.ellipse(-L * 0.34, 0, L * 0.1, B * 0.32, 0, -2.4, 2.4);
+  ctx.stroke();
   // Balkon/railing achter.
   ctx.strokeStyle = '#3a2a18';
   ctx.lineWidth = 1;
@@ -484,12 +510,37 @@ function tekenRompDetail(ctx, L, B, poorten) {
     ctx.stroke();
   }
 
-  // Boegspriet / galjoen.
+  // Roer aan de spiegel.
+  ctx.strokeStyle = '#3a2a18';
+  ctx.lineWidth = Math.max(0.7, B * 0.07);
+  ctx.beginPath();
+  ctx.moveTo(-L * 0.485, 0);
+  ctx.lineTo(-L * 0.53, -B * 0.16);
+  ctx.stroke();
+
+  // Boegspriet / galjoen met een vage figuurbalk eronder.
   ctx.strokeStyle = '#5c4023';
   ctx.lineWidth = 1.4;
   ctx.beginPath();
   ctx.moveTo(L * 0.48, 0);
   ctx.quadraticCurveTo(L * 0.62, -B * 0.08, L * 0.7, -B * 0.02);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(60,42,22,0.6)';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(L * 0.48, B * 0.05);
+  ctx.quadraticCurveTo(L * 0.58, B * 0.22, L * 0.63, B * 0.1);
+  ctx.stroke();
+
+  // Spil/capstan vóór op het dek.
+  ctx.fillStyle = '#4a331b';
+  ctx.beginPath();
+  ctx.arc(L * 0.2, 0, B * 0.11, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = '#d9b98a';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.arc(L * 0.2, 0, B * 0.06, 0, TAU);
   ctx.stroke();
 
   // Geschutspoorten: precies zoveel als het schip stukken aan een boord voert.
@@ -502,6 +553,11 @@ function tekenRompDetail(ctx, L, B, poorten) {
       ctx.fillStyle = '#0d0a06';
       ctx.fillRect(px - 1, -B / 2 + 2.4, 2, 1);
       ctx.fillRect(px - 1, B / 2 - 3.4, 2, 1);
+      // Koperen randje om het geschutspoort.
+      ctx.strokeStyle = 'rgba(214,178,92,0.6)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(px - 1.2, -B / 2 + 0.5, 2.4, 1.8);
+      ctx.strokeRect(px - 1.2, B / 2 - 2.3, 2.4, 1.8);
     }
   }
 
@@ -673,17 +729,18 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
       ctx.save();
       ctx.translate(px, 0);
       ctx.rotate(trim);
-      // Zeil.
-      const zg = ctx.createLinearGradient(0, -B, 0, B);
-      zg.addColorStop(0, '#fffdf4');
-      zg.addColorStop(0.5, '#eee5cf');
+      // Zeil met een warme schaduw naar de ra en een lichte buik op de lij.
+      const zb = B * 1.7 * grootte;
+      const zl = L * 0.34 * grootte;
+      const zg = ctx.createLinearGradient(0, -zb, 0, zb);
+      zg.addColorStop(0, '#e8dfc4');
+      zg.addColorStop(0.45, '#f7f2e0');
+      zg.addColorStop(0.9, '#e3d8b8');
       zg.addColorStop(1, '#cfc3a6');
       ctx.fillStyle = zg;
       ctx.strokeStyle = 'rgba(90,75,50,0.55)';
       ctx.lineWidth = 0.8;
       ctx.beginPath();
-      const zb = B * 1.7 * grootte;
-      const zl = L * 0.34 * grootte;
       // Bol staand zeil: de buik staat naar lij.
       ctx.moveTo(-zl * 0.25, -zb);
       ctx.quadraticCurveTo(zl * 1.25, 0, -zl * 0.25, zb);
@@ -691,16 +748,35 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-      // Reeflijnen / naden.
-      ctx.strokeStyle = 'rgba(90,75,50,0.35)';
-      ctx.lineWidth = 0.5;
-      for (let r = 1; r < 4; r++) {
-        const ry = -zb + r * ((zb * 2) / 4);
+      // Bloem-/panellijnen: verticale baanstiksels en een bonnet-zoom onderaan.
+      ctx.save();
+      ctx.clip();
+      ctx.strokeStyle = 'rgba(120,95,62,0.28)';
+      ctx.lineWidth = 0.45;
+      for (let p = 0; p < 3; p++) {
+        const sx = -zl * 0.18 + p * zl * 0.42;
         ctx.beginPath();
-        ctx.moveTo(-zl * 0.15, ry);
+        ctx.moveTo(sx, -zb + 1);
+        ctx.quadraticCurveTo(sx + zl * 0.18, 0, sx, zb - 1);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(120,95,62,0.42)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-zl * 0.22, zb - 1);
+      ctx.quadraticCurveTo(zl * 0.55, zb - 1.5, -zl * 0.05, zb - 1);
+      ctx.stroke();
+      // Bug: de ra-lijn met de reefpunten.
+      ctx.strokeStyle = 'rgba(90,75,50,0.4)';
+      ctx.lineWidth = 0.5;
+      for (let r = 1; r < 5; r++) {
+        const ry = -zb + r * ((zb * 2) / 5);
+        ctx.beginPath();
+        ctx.moveTo(-zl * 0.2, ry);
         ctx.quadraticCurveTo(zl * 0.55, ry * 0.9, -zl * 0.05, ry);
         ctx.stroke();
       }
+      ctx.restore();
       // Ra.
       ctx.strokeStyle = '#3a2a18';
       ctx.lineWidth = 1.2;

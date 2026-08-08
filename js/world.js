@@ -1,6 +1,6 @@
 // Opbouw van de Caribische wereldkaart: land, steden, economie, wind en vloten.
 import { makeRng, rnd, rndInt, pick, clamp, lerp, pointInPoly, dist, TAU, normAngle } from './util.js';
-import { STEDEN, WAREN, WAAR_INDEX, SOORT_ECONOMIE, NATIE_IDS, SCHEPEN, SCHIP_INDEX, KAPITEIN_NAMEN } from './data.js';
+import { STEDEN, WAREN, WAAR_INDEX, SOORT_ECONOMIE, NATIE_IDS, SCHEPEN, SCHIP_INDEX, KAPITEIN_NAMEN, SCHEEP_MAAT } from './data.js';
 
 // Kaartprojectie: rechttoe-rechtaan, met echte graden als basis.
 export const PPD = 92; // wereldeenheden per graad
@@ -122,7 +122,9 @@ function maakEilandje(lon, lat, straal, rng) {
 
 // --- Wereld ---------------------------------------------------------------
 
-const RASTER = 8; // wereldeenheden per cel in het landmasker
+// Fijn landmasker: fijn genoeg dat zelfs de kleinste eilandjes (straal ~7
+// eenheden) voldoende cellen raken, robuust genoeg voor snelle botsingsstraat.
+const RASTER = 4; // wereldeenheden per cel in het landmasker
 
 export class Wereld {
   constructor(seed = 1337) {
@@ -207,6 +209,26 @@ export class Wereld {
     return this.masker[cy * this.mw + cx] === 1;
   }
 
+  /**
+   * Past een schip van `typeId` op de plek (x, y)? Controleert het hele
+   * rompoppervlak — een ring van punten rond het middelpunt op boeg-afstand —
+   * niet alleen het middelpunt. Zo blijft een romp nooit over de kust hangen.
+   */
+  isVaren(x, y, typeId) {
+    if (this.isLand(x, y)) return false;
+    const maat = SCHEEP_MAAT[typeId] || [24, 9, 1];
+    // Omgeschreven straal van de getekende romp (tot aan de boegspriet); met
+    // een klein beetje speling mag een schip nergens land binnen die afstand
+    // hebben, zodat ook het uiterste houtwerk over water blijft.
+    const r = maat[0] * 0.62 + 3;
+    const n = 8;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
+      if (this.isLand(x + Math.cos(a) * r, y + Math.sin(a) * r)) return false;
+    }
+    return true;
+  }
+
   /** Zoekt het dichtstbijzijnde vrije water rond een punt. */
   dichtstbijWater(x, y, maxR = 260) {
     if (!this.isLand(x, y)) return [x, y];
@@ -217,6 +239,24 @@ export class Wereld {
         const px = x + Math.cos(a) * r,
           py = y + Math.sin(a) * r;
         if (!this.isLand(px, py)) return [px, py];
+      }
+    }
+    return [x, y];
+  }
+
+  /**
+   * Zoekt de dichtstbijzijnde plek waar een schip van dit type daadwerkelijk
+   * kan liggen (hele romp in het water). Wordt gebruikt bij uitvaren en bij
+   * het plaatsen van vloten.
+   */
+  dichtstbijVaren(x, y, typeId, maxR = 420) {
+    for (let r = RASTER; r <= maxR; r += RASTER) {
+      const n = Math.max(12, Math.round((TAU * r) / (RASTER * 2)));
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU;
+        const px = x + Math.cos(a) * r,
+          py = y + Math.sin(a) * r;
+        if (this.isVaren(px, py, typeId)) return [px, py];
       }
     }
     return [x, y];
@@ -338,17 +378,22 @@ export class Wereld {
 
     let x = start.ankerX,
       y = start.ankerY;
+    // Eerst over open zee verspreiden…
     if (overal) {
-      // Verspreid de beginvloot over open zee.
       for (let poging = 0; poging < 60; poging++) {
         const px = rnd(rng, 60, WORLD_W - 60),
           py = rnd(rng, 60, WORLD_H - 60);
-        if (!this.isLand(px, py)) {
+        if (this.isVaren(px, py, type.id)) {
           x = px;
           y = py;
           break;
         }
       }
+    } else if (!this.isVaren(x, y, type.id)) {
+      // …anders zet de vloot koers vanuit de rede, waar de hele romp past.
+      const [vx, vy] = this.dichtstbijVaren(x, y, type.id);
+      x = vx;
+      y = vy;
     }
 
     const marine = !isPiraat && rng() < 0.14;
@@ -425,7 +470,7 @@ export class Wereld {
       }
 
       const gewenst = Math.atan2(doelY - v.y, doelX - v.x);
-      const koers = this.#ontwijkLand(v, gewenst);
+      const koers = this.#ontwijkLand(v, gewenst, type);
       const draai = type.wend * 0.75 * dt;
       const d = normAngle(koers - v.koers);
       v.koers = normAngle(v.koers + clamp(d, -draai, draai));
@@ -434,7 +479,7 @@ export class Wereld {
       v.snelheid = type.snelheid * eff * this.windKracht * 0.62;
       const nx = v.x + Math.cos(v.koers) * v.snelheid * dt;
       const ny = v.y + Math.sin(v.koers) * v.snelheid * dt;
-      if (!this.isLand(nx, ny)) {
+      if (this.isVaren(nx, ny, v.type)) {
         v.x = nx;
         v.y = ny;
       } else {
@@ -506,13 +551,17 @@ export class Wereld {
   }
 
   /** Simpele koersvoorspelling: kijk vooruit en wijk uit voor land. */
-  #ontwijkLand(v, gewenst) {
+  #ontwijkLand(v, gewenst, type) {
     const vooruit = 150;
     for (const off of [0, 0.45, -0.45, 0.9, -0.9, 1.5, -1.5, 2.2, -2.2]) {
       const a = gewenst + off;
       let vrij = true;
       for (let t = 40; t <= vooruit; t += 35) {
-        if (this.isLand(v.x + Math.cos(a) * t, v.y + Math.sin(a) * t)) {
+        // Ook met de romp meegerekend, zodat een zwaar schip niet pal langs de
+        // kust probeert te laveren wat voor de romp te krap is.
+        const px = v.x + Math.cos(a) * t,
+          py = v.y + Math.sin(a) * t;
+        if (this.isLand(px, py) || (t >= vooruit && !this.isVaren(px, py, v.type))) {
           vrij = false;
           break;
         }

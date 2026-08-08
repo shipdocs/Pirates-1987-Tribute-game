@@ -48,7 +48,10 @@ function maakTitelScene() {
       for (const s of schepen) {
         s.x += Math.cos(s.koers) * s.snelheid * dt;
         s.y += Math.sin(s.koers) * s.snelheid * dt;
-        if (wereld.isLand(s.x + Math.cos(s.koers) * 60, s.y + Math.sin(s.koers) * 60)) s.koers += dt * 1.2;
+        // Draai bij zodra de hele romp vooruit op een eiland dreigt te lopen.
+        if (wereld.isLand(s.x + Math.cos(s.koers) * 90, s.y + Math.sin(s.koers) * 90)) {
+          s.koers += dt * 1.2;
+        }
       }
     },
     teken(c) {
@@ -374,11 +377,12 @@ function begin(keuze) {
   const eigen = wereld.stedenVanNatie(keuze.natie);
   const start = eigen.length ? eigen[Math.floor(Math.random() * eigen.length)] : wereld.steden[0];
   let beste = [start.ankerX, start.ankerY];
+  // Zoek een plek op de rede waar de hele romp van de sloep in het water past.
   for (let i = 0; i < 24; i++) {
     const a = (i / 24) * TAU;
     const px = start.ankerX + Math.cos(a) * 230;
     const py = start.ankerY + Math.sin(a) * 230;
-    if (!wereld.isLand(px, py)) {
+    if (wereld.isVaren(px, py, speler.schepen[0].type)) {
       beste = [px, py];
       speler.koers = a;
       break;

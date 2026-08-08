@@ -1,6 +1,6 @@
 // Alles wat op het canvas getekend wordt: zee, land, steden en schepen.
 import { TAU, clamp, lerp, normAngle, sierTijd } from './util.js';
-import { NATIES, SCHIP_INDEX } from './data.js';
+import { NATIES, SCHIP_INDEX, SCHEEP_MAAT } from './data.js';
 import { WORLD_W, WORLD_H } from './world.js';
 
 // --- Kleine hulpjes -------------------------------------------------------
@@ -330,6 +330,56 @@ export function tekenLand(ctx, wereld, cam, vw, vh) {
   ctx.drawImage(landLaag.canvas, dx, dy, landLaag.w, landLaag.h);
 }
 
+/**
+ * Levendige kustrand, getekend ná de gebufferde landlaag zodat hij kan
+ * bewegen zonder de cache ongeldig te maken. Geeft de kust een lappende
+ * brandingstrook en een zachte, langzaam 'ademende' diepte-gloed die de
+ * bevaarbaarheidsmarge van het grootste schip volgt.
+ */
+const GROOTSTE_ROMPSSTRAAL = 49 * 0.62 + 3; // linieschip: wat isVaren() toelaat
+
+export function tekenKustEffecten(ctx, wereld, cam, vw, vh, tijd) {
+  const zx0 = cam.x - vw / 2 / cam.zoom,
+    zx1 = cam.x + vw / 2 / cam.zoom,
+    zy0 = cam.y - vh / 2 / cam.zoom,
+    zy1 = cam.y + vh / 2 / cam.zoom;
+  const zichtbaar = [];
+  for (const l of wereld.land) {
+    const b = bbox(l);
+    if (b.x1 < zx0 || b.x0 > zx1 || b.y1 < zy0 || b.y0 > zy1) continue;
+    zichtbaar.push(l);
+  }
+  if (!zichtbaar.length) return;
+
+  const st = sierTijd(tijd);
+  const pulseren = 0.5 + 0.5 * Math.sin(st * 1.6);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  // Bewegende branding: drie lagen schuim die als golven tegen de kust lopen.
+  for (const [w, alfa, snel, fase] of [
+    [16, 0.22 + 0.1 * pulseren, 1.9, 0],
+    [9, 0.5 + 0.18 * pulseren, 1.35, 2.2],
+    [4, 0.72, 0.95, 4.1],
+  ]) {
+    ctx.save();
+    ctx.lineWidth = w;
+    ctx.strokeStyle = `rgba(238,250,253,${alfa})`;
+    ctx.setLineDash([16, 13 + 7 * Math.sin(st * snel + fase)]);
+    ctx.lineDashOffset = st * 11 * snel + fase * 28;
+    for (const l of zichtbaar) ctx.stroke(l.path);
+    ctx.restore();
+  }
+
+  // Zachte 'no-go'-gloed: de diepte-omtrek waar ook het grootste schip nog
+  // met de hele romp kan varen, zodat bevaarbaar en ondiep elkaar kleuren.
+  ctx.save();
+  ctx.lineWidth = GROOTSTE_ROMPSSTRAAL * 2;
+  ctx.strokeStyle = `rgba(70,196,212,${0.09 + 0.05 * pulseren})`;
+  for (const l of zichtbaar) ctx.stroke(l.path);
+  ctx.restore();
+}
+
 /** Vage lengte- en breedtelijnen, als op een oude zeekaart. */
 export function tekenKaartlijnen(ctx, cam, vw, vh) {
   const stap = 92 * 2; // elke twee graden
@@ -351,16 +401,8 @@ export function tekenKaartlijnen(ctx, cam, vw, vh) {
 
 // --- Schepen --------------------------------------------------------------
 
-const MAAT = {
-  pinas: [21, 8, 1], sloep: [24, 9, 1], oorlogssloep: [27, 10, 2],
-  bark: [27, 11, 2], brigantijn: [30, 11, 2], koopvaarder: [32, 14, 3],
-  grote_koopvaarder: [36, 16, 3], fluit: [32, 14.5, 3], vrachtfluit: [36, 16.5, 3],
-  fregat: [38, 14, 3], galjoen: [41, 17, 3], oorlogsgaljoen: [45, 18, 3],
-  linieschip: [49, 19, 3],
-};
-
 export function scheepMaat(typeId) {
-  return MAAT[typeId] || [20, 8, 2];
+  return SCHEEP_MAAT[typeId] || [20, 8, 2];
 }
 
 function romPad(ctx, L, B) {
@@ -533,6 +575,20 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
   const vaart = clamp(opts.vaart || 0, 0, 1);
   const dichtheid = transformSchaal(ctx) * s;
   const st = sierTijd(opts.tijd || 0);
+  // Optioneel van de scène meegegeven: aanwezig = het schip vaart langs echte
+  // kust, zodat we kielzog, schaduw en boegspat kunnen laten reageren.
+  const isLand = opts.isLand || (() => false);
+
+  // Hoe dicht is het schip bij land? 0 = open zee, 1 = pal langs de kust.
+  let landFactor = 0;
+  if (opts.isLand) {
+    let raak = 0;
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU;
+      if (isLand(x + Math.cos(a) * L, y + Math.sin(a) * L)) raak++;
+    }
+    landFactor = raak / 6;
+  }
 
   // Zoveel geschutspoorten als het schip werkelijk stukken aan een boord heeft.
   const stukken = opts.kanonnen != null ? opts.kanonnen : SCHIP_INDEX[typeId]?.kanonnen ?? 0;
@@ -545,9 +601,11 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
     ctx.rotate(koers);
     ctx.scale(s, s);
     const w = vaart;
-    const len = L * 2.4 * w;
+    // Vlak langs de kust wordt het kielzog korter en ijler: het schuim kan
+    // niet door het strand lopen.
+    const len = L * 2.4 * w * (1 - 0.45 * landFactor);
     const wake = ctx.createLinearGradient(-L * 0.5, 0, -L * 0.5 - len, 0);
-    wake.addColorStop(0, `rgba(230,248,252,${0.34 * w})`);
+    wake.addColorStop(0, `rgba(230,248,252,${0.34 * w * (1 - 0.3 * landFactor)})`);
     wake.addColorStop(1, 'rgba(230,248,252,0)');
     ctx.fillStyle = wake;
     ctx.beginPath();
@@ -557,24 +615,28 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
     ctx.quadraticCurveTo(-L * 0.5 - len * 0.5, B * 0.62, -L * 0.46, B * 0.3);
     ctx.closePath();
     ctx.fill();
-    // Boeggolf.
-    ctx.globalAlpha = 0.3 * w;
+    // Boeggolf: op open zee een strakke krul; dichter bij de kust schuimt-ie
+    // breder uit en deint hij sterker.
+    const spat = 0.3 * w + 0.25 * w * landFactor;
+    ctx.globalAlpha = spat;
     ctx.strokeStyle = '#eafbff';
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.6 + 1.4 * landFactor;
     ctx.beginPath();
-    ctx.moveTo(L * 0.42, -B * 0.34);
-    ctx.quadraticCurveTo(L * 0.62, 0, L * 0.42, B * 0.34);
+    ctx.moveTo(L * 0.42, -B * (0.34 + 0.5 * landFactor * Math.sin(st * 9)));
+    ctx.quadraticCurveTo(L * (0.62 + 0.1 * landFactor), -B * 0.04 * landFactor, L * 0.42, B * (0.34 + 0.5 * landFactor * Math.sin(st * 9 + 1.4)));
     ctx.stroke();
     ctx.restore();
   }
 
   // Schaduw op het water. De verschuiving staat in wereldruimte, zodat de zon
-  // voor de hele vloot uit dezelfde hoek schijnt.
+  // voor de hele vloot uit dezelfde hoek schijnt. Op de branding vervaagt de
+  // schaduw mee, anders lijkt het schip boven het strand te zweven.
+  const schaduwAlfa = 0.4 * (1 - 0.45 * landFactor);
   ctx.save();
   ctx.translate(x + ZON_X * s, y + ZON_Y * s);
   ctx.rotate(koers);
   ctx.scale(s, s);
-  ctx.fillStyle = 'rgba(4,22,36,0.4)';
+  ctx.fillStyle = `rgba(4,22,36,${schaduwAlfa})`;
   romPad(ctx, L, B);
   ctx.fill();
   ctx.restore();
@@ -587,6 +649,17 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
   // Romp met al het vaste houtwerk, uit de sprite.
   const sp = rompSprite(typeId, poorten, dichtheid);
   ctx.drawImage(sp.canvas, sp.ox, sp.oy, sp.w, sp.h);
+
+  // Onderwater-silhouet: een vage donkere romp die onder het vlak steekt en
+  // het water een beetje 'diep' maakt. Dichter bij de kust wordt hij lichter,
+  // alsof de kiel naar de ondiepte omhoog komt.
+  ctx.save();
+  ctx.translate(0, 1.6 * (1 + landFactor));
+  ctx.globalAlpha = 0.35 * (1 - 0.6 * landFactor);
+  ctx.fillStyle = 'rgba(8,38,58,0.85)';
+  romPad(ctx, L * 0.94, B * 0.7);
+  ctx.fill();
+  ctx.restore();
 
   // Zeilen: staan dwars op de wind, dus draaien mee met de relatieve windhoek.
   // Halveringsregel voor een razeil: bij wind pal van achteren staan de ra's

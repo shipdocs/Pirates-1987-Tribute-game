@@ -77,6 +77,19 @@ export const SCHEPEN = [
 
 export const SCHIP_INDEX = Object.fromEntries(SCHEPEN.map((s) => [s.id, s]));
 
+/**
+ * Rompafmetingen per scheepstype, in wereldeenheden: [lengte, breedte, aantal
+ * masten]. Delen botsting en tekenwerk, zodat de romp die op het scherm staat
+ * ook de ruimte is die het schip op zee inneemt.
+ */
+export const SCHEEP_MAAT = {
+  pinas: [21, 8, 1], sloep: [24, 9, 1], oorlogssloep: [27, 10, 2],
+  bark: [27, 11, 2], brigantijn: [30, 11, 2], koopvaarder: [32, 14, 3],
+  grote_koopvaarder: [36, 16, 3], fluit: [32, 14.5, 3], vrachtfluit: [36, 16.5, 3],
+  fregat: [38, 14, 3], galjoen: [41, 17, 3], oorlogsgaljoen: [45, 18, 3],
+  linieschip: [49, 19, 3],
+};
+
 /** Met bepaald lidwoord: "de sloep", "het fluitschip". */
 export function metLidwoord(typeId, hoofdletterL = false) {
   const t = SCHIP_INDEX[typeId];

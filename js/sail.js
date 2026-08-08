@@ -23,6 +23,9 @@ export function maakZeilScene() {
   let hongerKoeling = 0;
   let doelKoers = null;
   let sporen = [];
+  // Vertrek-animatie: het schip schuift bij het uitvaren van de kade het water
+  // in (vanuit) -> (naar), in plaats van plotseling op open zee te staan.
+  let vertrek = null;
 
   const scene = {
     naam: 'zeilen',
@@ -64,6 +67,30 @@ export function maakZeilScene() {
       const schip = vlaggenschip(s);
       const type = SCHIP_INDEX[schip.type];
 
+      // Vertrek-animatie: eerst van de kade het water in, daarna pas sturen.
+      if (vertrek) {
+        vertrek.t += dt;
+        const v = clamp(vertrek.t / vertrek.duur, 0, 1);
+        const zacht = v * v * (3 - 2 * v); // ease in-out
+        s.x = lerp(vertrek.vx, vertrek.tx, zacht);
+        s.y = lerp(vertrek.vy, vertrek.ty, zacht);
+        s.snelheid = 20 * zacht;
+        if (vertrek.t >= vertrek.duur) {
+          s.x = vertrek.tx;
+          s.y = vertrek.ty;
+          s.snelheid = 0;
+          cam.x = s.x;
+          cam.y = s.y;
+          vertrek = null;
+        } else {
+          // Nog even extra schuim bij de kiel tijdens de aftocht.
+          if (Math.random() < dt * 10) {
+            sporen.push({ x: s.x, y: s.y, t: 0, duur: 1.6, r: 2 + Math.random() * 2 });
+          }
+          return;
+        }
+      }
+
       w.windTik(dt);
 
       // --- Sturen ---------------------------------------------------------
@@ -104,15 +131,16 @@ export function maakZeilScene() {
 
       const nx = s.x + Math.cos(s.koers) * s.snelheid * dt;
       const ny = s.y + Math.sin(s.koers) * s.snelheid * dt;
-      if (!w.isLand(nx, ny)) {
+      if (w.isVaren(nx, ny, schip.type)) {
         s.x = nx;
         s.y = ny;
       } else {
-        // Zachtjes afketsen langs de kust in plaats van muurvast lopen.
+        // Zachtjes afketsen langs de kust in plaats van muurvast lopen. De
+        // hele romp telt mee, zodat een groot schip niet over het land vaart.
         const langsX = s.x + Math.cos(s.koers) * s.snelheid * dt;
         const langsY = s.y;
-        if (!w.isLand(langsX, langsY)) s.x = langsX;
-        else if (!w.isLand(s.x, ny)) s.y = ny;
+        if (w.isVaren(langsX, langsY, schip.type)) s.x = langsX;
+        else if (w.isVaren(s.x, ny, schip.type)) s.y = ny;
         else s.snelheid *= 0.3;
       }
       s.x = clamp(s.x, 20, WORLD_W - 20);
@@ -160,17 +188,17 @@ export function maakZeilScene() {
       if (stad) {
         ontmoetingKoeling = 3;
         openHaven(stad, () => {
-          // Bij vertrek een eindje van de kade wegzetten, richting open zee.
+          // Bij vertrek een eindje van de kade wegzetten, richting open zee,
+          // op een plek waar de hele romp in het water past — en dat als een
+          // korte uitzeil-animatie in plaats van een plotselinge sprong.
           const hoek = Math.atan2(s.y - stad.ankerY, s.x - stad.ankerX);
-          const [wx, wy] = Game.wereld.dichtstbijWater(
+          const [wx, wy] = Game.wereld.dichtstbijVaren(
             stad.ankerX + Math.cos(hoek) * 80,
-            stad.ankerY + Math.sin(hoek) * 80
+            stad.ankerY + Math.sin(hoek) * 80,
+            schip.type
           );
-          s.x = wx;
-          s.y = wy;
-          s.snelheid = 0;
-          cam.x = s.x;
-          cam.y = s.y;
+          vertrek = { vx: s.x, vy: s.y, tx: wx, ty: wy, t: 0, duur: 1.1 };
+          s.koers = hoek;
         });
       }
     },
@@ -190,6 +218,7 @@ export function maakZeilScene() {
 
       R.tekenKaartlijnen(c, cam, vw, vh);
       R.tekenLand(c, w, cam, vw, vh);
+      R.tekenKustEffecten(c, w, cam, vw, vh, Game.tijd);
 
       for (const p of sporen) R.tekenRook(c, { ...p, kleur: '#cfe9f2' });
 
@@ -203,6 +232,7 @@ export function maakZeilScene() {
       // sloep op de hele kaart nog maar een paar pixels groot.
       const scheepSchaal = clamp(0.7 / cam.zoom, 1, 2.2);
 
+      const doeLandCheck = (wx, wy) => w.isLand(wx, wy);
       for (const v of w.vloten) {
         if (Math.abs(v.x - cam.x) * cam.zoom > vw / 2 + 120) continue;
         if (Math.abs(v.y - cam.y) * cam.zoom > vh / 2 + 120) continue;
@@ -211,21 +241,30 @@ export function maakZeilScene() {
           tijd: Game.tijd,
           kanonnen: v.kanonnen,
           schaal: scheepSchaal,
+          isLand: doeLandCheck,
         });
       }
 
       const schip = vlaggenschip(s);
-      // Extra schepen uit de vloot varen in kielzog mee.
+      // Extra schepen uit de vloot varen in kielzog mee. Pal langs de kust kan
+      // de plek in kielzog voor hun eigen romp te krap zijn; dan schuiven we
+      // ze een eindje verder weg tot het hele scheepje in het water past.
       for (let i = 1; i < s.schepen.length; i++) {
-        const off = i * 34;
-        const bx = s.x - Math.cos(s.koers) * off - Math.sin(s.koers) * (i % 2 ? 22 : -22);
-        const by = s.y - Math.sin(s.koers) * off + Math.cos(s.koers) * (i % 2 ? 22 : -22);
-        R.tekenSchip(c, bx, by, s.koers, s.schepen[i].type, 'piraat', w.windRichting, {
+        const btype = s.schepen[i].type;
+        const zijde = i % 2 ? 22 : -22;
+        let bx = s.x - Math.cos(s.koers) * (i * 34) - Math.sin(s.koers) * zijde;
+        let by = s.y - Math.sin(s.koers) * (i * 34) + Math.cos(s.koers) * zijde;
+        for (let stap = 0; stap < 6 && !w.isVaren(bx, by, btype); stap++) {
+          bx = s.x - Math.cos(s.koers) * (i * 34 + stap * 16) - Math.sin(s.koers) * zijde;
+          by = s.y - Math.sin(s.koers) * (i * 34 + stap * 16) + Math.cos(s.koers) * zijde;
+        }
+        R.tekenSchip(c, bx, by, s.koers, btype, 'piraat', w.windRichting, {
           vaart: s.snelheid / 90,
           tijd: Game.tijd,
           zeilen: schip.zeilen,
           kanonnen: s.schepen[i].kanonnen,
           schaal: scheepSchaal,
+          isLand: doeLandCheck,
         });
       }
       R.tekenSchip(c, s.x, s.y, s.koers, schip.type, 'piraat', w.windRichting, {
@@ -234,6 +273,7 @@ export function maakZeilScene() {
         zeilen: schip.zeilen,
         kanonnen: schip.kanonnen,
         schaal: scheepSchaal,
+        isLand: doeLandCheck,
       });
 
       c.restore();

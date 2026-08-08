@@ -7,7 +7,7 @@ import {
 } from './data.js';
 import {
   Game, vlaggenschip, ruimTotaal, ruimVrij, vlootBemanningMax, nieuwSchip, talentBonus, berekenScore,
-  bewaarInErelijst, wisOpslag,
+  bewaarInErelijst, wisOpslag, PENSIOEN_DRANG,
 } from './game.js';
 import * as UI from './ui.js';
 import * as audio from './audio.js';
@@ -54,7 +54,63 @@ export function openHaven(stad, opVertrek) {
   }
 
   audio.sfx.haven();
-  hoofdmenu(stad, opVertrek);
+  if (magPensioenVragen(stad)) pensioenAanbod(stad, opVertrek);
+  else hoofdmenu(stad, opVertrek);
+}
+
+// --- Op leeftijd ----------------------------------------------------------
+
+/**
+ * Een bevriende haven waar hij rang genoeg heeft, legt een oude kapitein het
+ * commando neer. Hoogstens één keer per half jaar, zodat het aandringen blijft
+ * en niet gaat zeuren.
+ */
+function magPensioenVragen(stad) {
+  const s = Game.speler;
+  return (
+    s.leeftijd >= PENSIOEN_DRANG &&
+    !s.gestopt &&
+    s.rang[stad.natie] >= 2 &&
+    s.relatie[stad.natie] > -25 &&
+    s.dag - (s.pensioenGevraagd || 0) > 180
+  );
+}
+
+function pensioenAanbod(stad, opVertrek) {
+  const s = Game.speler;
+  s.pensioenGevraagd = s.dag;
+  UI.toonScherm({
+    titel: 'De jaren tellen',
+    onder: `${stad.naam} · ${Math.floor(s.leeftijd)} jaar`,
+    klasse: 'overlay-smal',
+    bouw(body) {
+      body.appendChild(UI.maakFiguur('gouverneur'));
+      const p = el('p', 'verhaal');
+      p.innerHTML =
+        `De gouverneur laat je naast het vuur plaatsnemen. "Kapitein, u vaart al ` +
+        `<b>${Math.max(1, Math.floor(s.leeftijd - s.startLeeftijd))} jaar</b>. Er is een huis vrij ` +
+        `boven de rede, en de kroon zou het u niet kwalijk nemen. Het staal wordt zwaar, ` +
+        'en de zee wacht op niemand."';
+      body.appendChild(p);
+    },
+    knoppen: (sch) => [
+      {
+        label: 'Het commando neerleggen',
+        actie: () => {
+          sch.sluit();
+          tredAf(stad);
+        },
+      },
+      {
+        label: 'Nog één reis',
+        esc: true,
+        actie: () => {
+          sch.sluit();
+          hoofdmenu(stad, opVertrek);
+        },
+      },
+    ],
+  });
 }
 
 function hoofdmenu(stad, opVertrek) {

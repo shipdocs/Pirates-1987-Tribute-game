@@ -96,8 +96,13 @@ en geruis — er is geen enkel geluidsbestand, ook niet voor de meeuw of de bel.
 Muziek en geluid staan los van elkaar in de scheepsraad.
 
 **De lange lijn.** Roem, rang bij vier naties, grondbezit, huwelijk, veroverde
-steden — en je wordt ouder. Wie aftreedt krijgt een eindscore over zijn hele
-loopbaan, en komt op de erelijst van de tien grootste kapiteins.
+steden — en je wordt ouder, en dat merk je. Na je veertigste wordt het venster
+waarin je een stoot kunt pareren korter en komt je adem trager terug; vanaf je
+vijfenvijftigste begint het volk erover, en een bevriende haven waar je rang
+hebt biedt je vanaf je tweeënzestigste een huis boven de rede aan. Wie op tijd
+aftreedt telt zwaarder op de erelijst dan wie tot zijn tachtigste doorvaart.
+Aftreden geeft een eindscore over de hele loopbaan en een plaats op de erelijst
+van de tien grootste kapiteins.
 
 ## Bediening
 

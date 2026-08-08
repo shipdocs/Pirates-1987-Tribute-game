@@ -1,7 +1,7 @@
 // Degengevecht: hoog, midden of laag — pareren en meteen terugstoten.
 import { clamp, lerp, TAU, sierTijd } from './util.js';
 import { NATIES } from './data.js';
-import { Game, roundRect, talentBonus } from './game.js';
+import { Game, roundRect, talentBonus, leeftijdFactor } from './game.js';
 import * as UI from './ui.js';
 import * as audio from './audio.js';
 
@@ -22,8 +22,13 @@ export function maakDuel(opts) {
   const speler = Game.speler;
   const schermer = talentBonus(speler, 'schermen');
 
+  // Ouderdom kort het venster in waarin je kunt pareren en laat de adem
+  // trager terugkomen. Het meesterschermer-talent weegt daar ruwweg tegenop:
+  // een oude meester haalt het nog van een jonge onbenul.
+  const fit = leeftijdFactor(speler);
+
   const vaardigheid = clamp(opts.vaardigheid, 0.1, 0.95);
-  const windupTijd = lerp(0.8, 0.38, vaardigheid) + schermer * 0.12;
+  const windupTijd = (lerp(0.8, 0.38, vaardigheid) + schermer * 0.12) * (0.5 + 0.5 * fit);
   const pareerKans = clamp(lerp(0.22, 0.72, vaardigheid) - schermer * 0.12, 0.05, 0.85);
   const aanvalPauze = lerp(1.7, 0.8, vaardigheid);
 
@@ -152,7 +157,7 @@ export function maakDuel(opts) {
       faseT += dt;
       berichtT += dt;
       schud = Math.max(0, schud - dt);
-      uithoudingSpeler = clamp(uithoudingSpeler + dt * 0.3, 0, 1);
+      uithoudingSpeler = clamp(uithoudingSpeler + dt * 0.3 * fit, 0, 1);
       positie = clamp(positie + drift * dt, -1.05, 1.05);
 
       for (let i = vonken.length - 1; i >= 0; i--) {
@@ -979,7 +984,8 @@ export function maakDuel(opts) {
     c.font = '10px Georgia, serif';
     c.fillStyle = '#dcd0b4';
     c.textAlign = 'left';
-    c.fillText('adem', 26, vh - 52);
+    // Wie op leeftijd is, moet weten waaróm de adem korter is dan vroeger.
+    c.fillText(fit < 0.95 ? `adem · ${Math.floor(Game.speler.leeftijd)} jaar` : 'adem', 26, vh - 52);
 
     // Bediening.
     c.textAlign = 'center';

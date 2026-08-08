@@ -6,6 +6,7 @@ import { WAREN, WAAR_INDEX, SCHIP_INDEX, NATIES, RANGEN, scheepsAanduiding, MOEI
 import { WORLD_W, WORLD_H, zeilEfficiëntie } from './world.js';
 import {
   Game, roundRect, vlaggenschip, ruimTotaal, vlootBemanningMax, bewaar, talentBonus,
+  conditieWoord, PENSIOEN_HINT,
 } from './game.js';
 import * as R from './render.js';
 import * as UI from './ui.js';
@@ -15,6 +16,14 @@ import { openHaven } from './town.js';
 
 const VOEDSEL = WAAR_INDEX.voedsel;
 const DAGEN_PER_SECONDE = 0.2; // één dag per vijf seconden varen
+
+/** Wat het scheepsvolk mompelt zodra de kapitein op leeftijd raakt. */
+const OUDERDOM_MELDINGEN = [
+  'De stuurman zegt dat hij een huis heeft gezien met uitzicht op de rede.',
+  'Je knieën kraken bij het opgaan van de trap naar de kampanje.',
+  'Het volk vraagt zich hardop af hoeveel reizen u er nog in heeft.',
+  'De bottelier merkt op dat u de laatste tijd langer over de kaart gebogen zit.',
+];
 
 export function maakZeilScene() {
   const cam = { x: 0, y: 0, zoom: 1 };
@@ -388,6 +397,11 @@ export function maakZeilScene() {
       schip.romp = Math.min(schip.maxRomp, schip.romp + 0.6);
     }
     if (s.moraal < 12 && Math.random() < 0.2) muiterij(s);
+    // De jaren gaan tellen: het volk begint erover, lang voordat een haven het
+    // hardop zegt.
+    if (s.leeftijd >= PENSIOEN_HINT && Math.random() < 0.012) {
+      Game.melding(pick(Math.random, OUDERDOM_MELDINGEN), 'goud');
+    }
   }
 
   function muiterij(s) {
@@ -770,7 +784,7 @@ export function maakZeilScene() {
           `<span>Buit in het ruim</span><span>${fmtGold(s.goud)} goudstukken</span>` +
           `<span>Eigen spaargeld</span><span>${fmtGold(s.gespaard)} goudstukken</span>` +
           `<span>Roem</span><span>${Math.round(s.roem)}</span>` +
-          `<span>Leeftijd</span><span>${Math.floor(s.leeftijd)} jaar</span>` +
+          `<span>Leeftijd</span><span>${Math.floor(s.leeftijd)} jaar · ${conditieWoord(s)}</span>` +
           `</div>`;
         body.appendChild(d);
         body.appendChild(UI.balk(s.moraal, 100, s.moraal < 30 ? '#c65b45' : '#7bb36a', 'Moraal'));

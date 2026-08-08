@@ -221,6 +221,8 @@ export function maakSpeler(opties) {
     gehuwd: null,
     laatsteVerdeling: 0,
     gestopt: false,
+    // Wanneer een haven hem voor het laatst op zijn leeftijd wees.
+    pensioenGevraagd: 0,
     // Vermist familielid: rol wordt bij het begin bepaald.
     familie: { rol: pick(Math.random, FAMILIE_ROLLEN), gevonden: false, gevondenDag: null },
     // Actieve gouverneursopdracht (zie town.js). null als er geen loopt.
@@ -259,6 +261,37 @@ export function rangVan(speler, natie) {
   return RANGEN[clamp(speler.rang[natie], 0, RANGEN.length - 1)];
 }
 
+// --- Verouderen -----------------------------------------------------------
+
+/** Vanaf deze leeftijd begint de kapitein te slijten. */
+export const FIT_TOT = 40;
+/** Vanaf hier dringt de bemanning aan op rust. */
+export const PENSIOEN_HINT = 55;
+/** Vanaf hier legt een bevriende haven hem het commando neer. */
+export const PENSIOEN_DRANG = 62;
+
+/**
+ * Hoe fit de kapitein nog is, van 1 tot 0,6. Tot zijn veertigste verandert er
+ * niets; daarna zakt het langzaam. Op de laagste moeilijkheidsgraad slijt het
+ * half zo snel — daar is het leren zeilen al zwaar genoeg.
+ */
+export function leeftijdFactor(speler) {
+  if (!speler || speler.leeftijd == null) return 1;
+  const moeilijk = MOEILIJKHEDEN.find((m) => m.id === speler.moeilijkheid) || MOEILIJKHEDEN[1];
+  const slijtage = 0.011 * clamp(moeilijk.mult, 0.5, 1.2);
+  return clamp(1 - Math.max(0, speler.leeftijd - FIT_TOT) * slijtage, 0.6, 1);
+}
+
+/** Kort woord voor de conditie, voor het bemanningsscherm. */
+export function conditieWoord(speler) {
+  const f = leeftijdFactor(speler);
+  if (f > 0.97) return 'in de kracht van de jaren';
+  if (f > 0.9) return 'nog vast ter been';
+  if (f > 0.8) return 'op leeftijd';
+  if (f > 0.7) return 'stram in de ochtend';
+  return 'te oud voor het staal';
+}
+
 /** Score zoals bij het aftreden: goud, land, rang en roem samen. */
 export function berekenScore(speler) {
   const moeilijk = MOEILIJKHEDEN.find((m) => m.id === speler.moeilijkheid) || MOEILIJKHEDEN[1];
@@ -271,7 +304,11 @@ export function berekenScore(speler) {
   score += speler.veroverdeSteden * 400;
   score += speler.verslagenSchepen * 25;
   if (speler.gehuwd) score += 600;
-  return Math.round(score * moeilijk.mult);
+  // Wie op tijd stopt, houdt zijn naam hoog. Na zijn vijftigste levert elk jaar
+  // op zee minder op dan het kost — zo wordt aftreden een keuze en niet alleen
+  // het einde van het spel.
+  const rust = clamp(1.2 - Math.max(0, (speler.leeftijd || 18) - 50) * 0.012, 0.85, 1.2);
+  return Math.round(score * moeilijk.mult * rust);
 }
 
 // --- Opslag ---------------------------------------------------------------
@@ -280,7 +317,7 @@ export function bewaar() {
   if (!Game.speler || !Game.wereld) return false;
   const w = Game.wereld;
   const data = {
-    versie: 3,
+    versie: 4,
     seed: w.seed,
     speler: Game.speler,
     // De wereldpolitiek staat op de wereld, niet op de speler, en volgt dus
@@ -347,6 +384,11 @@ export function laad() {
   const sp = data.speler;
   if (!sp.familie) sp.familie = { rol: pick(Math.random, FAMILIE_ROLLEN), gevonden: false, gevondenDag: null };
   if (sp.opdracht === undefined) sp.opdracht = null;
+  // Saves van vóór versie 4 kenden het verouderen nog niet. De leeftijd volgt
+  // uit de verstreken dagen, dus die is altijd terug te rekenen.
+  if (sp.startLeeftijd == null) sp.startLeeftijd = 18;
+  if (sp.leeftijd == null) sp.leeftijd = sp.startLeeftijd + (sp.dag || 0) / 365;
+  if (sp.pensioenGevraagd == null) sp.pensioenGevraagd = 0;
   for (const schip of sp.schepen || []) {
     if (!schip.upgrades) schip.upgrades = { zeilen: 0, romp: 0, roer: 0 };
     if (schip.upgrades.weer === undefined) schip.upgrades.weer = 0;

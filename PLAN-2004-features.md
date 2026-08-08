@@ -140,9 +140,19 @@ een eigen dialoog met fanfare.
 
 ---
 
-## Fase 3 — Verouderen met gevolgen
+## Fase 3 — Verouderen met gevolgen ✔ uitgevoerd
 
 > Losstaand en goedkoop; kan parallel aan fase 1.
+>
+> **Stand:** doorgevoerd. `leeftijdFactor()` en `conditieWoord()` staan in
+> [`game.js`](js/game.js:254), het duel leest ze
+> ([`duel.js`](js/duel.js:21)), het volk mort vanaf 55
+> ([`sail.js`](js/sail.js:371)) en een bevriende haven biedt vanaf 62 het
+> pensioen aan ([`town.js`](js/town.js:57)). Save-versie staat op 4, met
+> migratie voor `startLeeftijd`, `leeftijd` en `pensioenGevraagd`.
+> Eén afwijking van het plan hieronder: het meesterschermer-talent blijkt
+> ruwweg de héle verouderingsspanne waard, niet tien jaar — zie de noot bij
+> punt 2.
 
 `s.leeftijd` bestaat al ([`sail.js`](js/sail.js:226)) maar wordt nergens
 gelezen. Toevoegen:
@@ -154,10 +164,16 @@ gelezen. Toevoegen:
      return clamp(1 - Math.max(0, s.leeftijd - 40) * 0.011, 0.6, 1);
    }
    ```
-2. **Duel** ([`duel.js`](js/duel.js:21)): `windupTijd` van de tegenstander
-   voelt korter en `uithoudingSpeler` zakt sneller naarmate de factor daalt.
-   Het meesterschermer-talent compenseert ruwweg tien jaar — dat maakt de
-   talentkeuze op lange termijn interessanter.
+2. **Duel** ([`duel.js`](js/duel.js:21)): `windupTijd` — het venster waarin je
+   kunt pareren — wordt vermenigvuldigd met `0,5 + 0,5 × fit`, en de adem komt
+   trager terug (`dt * 0.3 * fit`). Op zijn oudst is het pareervenster dus een
+   vijfde korter.
+   *Noot na uitvoering:* het meesterschermer-talent zet `+0.12` op een
+   windup van ruwweg een halve seconde en is daarmee ongeveer de hele
+   verouderingsspanne waard, niet tien jaar zoals hierboven eerst stond.
+   Aging zó steil maken dat één talent precies tien jaar dekt, zou het spel
+   na je vijftigste onspeelbaar hard maken; de talentkeuze wordt er ook zo al
+   interessanter op de lange baan.
 3. **Aandringen op pensioen**: vanaf 55 jaar af en toe een melding via de
    bemanning; vanaf 62 een dialoog bij binnenkomst in een bevriende haven met
    `tredAf()` als eerste knop.

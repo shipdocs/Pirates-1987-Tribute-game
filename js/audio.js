@@ -165,7 +165,8 @@ export const sfx = {
 // náást. Dat schuren van de twee tegen elkaar laat de maat wiegen zonder dat
 // er iets hard hoeft te slaan.
 //
-//   'zee'      F-groot, 103 slagen — geplukt, ruim, met branding en meeuwen.
+//   'zee'      F-groot, 96 slagen — geplukt, warm, gewiegd door son clave en
+//              lage conga's, met branding en meeuwen.
 //   'gevecht'  D-klein, 143 slagen — gehamerd, met een A7 die naar bloed ruikt.
 //
 // Beide zijn opgebouwd uit delen van acht maten. Per deel wisselt de bezetting:
@@ -297,13 +298,17 @@ const DELEN = {
  * minuten voordat er iets letterlijk wordt herhaald.
  */
 const BEZETTING_ZEE = [
-  { melodie: 1, tegen: 0, akkoord: 0, schud: 0, koor: 0, meeuw: 0, zee: 1, versier: 0 },
-  { melodie: 1, tegen: 0, akkoord: 1, schud: 1, koor: 0, meeuw: 1, zee: 1, versier: 0 },
-  { melodie: 1, tegen: 1, akkoord: 1, schud: 1, koor: 1, meeuw: 1, zee: 1, versier: 0 },
+  // Rustige delen: alleen de bas, de clave en af en toe een conga-tik houden
+  // het fundament. De clave klinkt er hoe dan ook: hij is het anker van de
+  // warmte, dus alleen in de adempauze valt hij éven stil.
+  { melodie: 1, tegen: 0, akkoord: 0, schud: 0, clave: 1, conga: 0, koor: 0, meeuw: 0, zee: 1, versier: 0 },
+  { melodie: 1, tegen: 0, akkoord: 1, schud: 1, clave: 1, conga: 1, koor: 0, meeuw: 1, zee: 1, versier: 0 },
+  { melodie: 1, tegen: 1, akkoord: 1, schud: 1, clave: 1, conga: 1, koor: 1, meeuw: 1, zee: 1, versier: 0 },
   // Adempauze: de melodie zwijgt en de tegenstem draagt hem in haar eentje.
-  { melodie: 0, tegen: 1, akkoord: 1, schud: 1, koor: 0, meeuw: 1, zee: 1, versier: 0 },
-  { melodie: 1, tegen: 1, akkoord: 1, schud: 1, koor: 1, meeuw: 0, zee: 1, versier: 1 },
-  { melodie: 1, tegen: 0, akkoord: 0, schud: 1, koor: 0, meeuw: 1, zee: 1, versier: 0 },
+  // De clave valt stil, zodat het ademen ook echt lucht is.
+  { melodie: 0, tegen: 1, akkoord: 1, schud: 1, clave: 0, conga: 1, koor: 0, meeuw: 1, zee: 1, versier: 0 },
+  { melodie: 1, tegen: 1, akkoord: 1, schud: 1, clave: 1, conga: 1, koor: 1, meeuw: 0, zee: 1, versier: 1 },
+  { melodie: 1, tegen: 0, akkoord: 0, schud: 1, clave: 1, conga: 1, koor: 0, meeuw: 1, zee: 1, versier: 0 },
 ];
 
 // Vijf bezettingen tegen een vorm van vier delen: daardoor valt niet elke ronde
@@ -321,7 +326,8 @@ const BEZETTING_GEVECHT = [
 
 const THEMAS = {
   zee: {
-    eenheid: 0.145,
+    // Iets trager dan voorheen (ruim onder de honderd): de caravan wiegt meer.
+    eenheid: 0.156,
     vorm: ['A', 'B', 'A2', 'C'],
     bezetting: BEZETTING_ZEE,
     stem: 'pluk',
@@ -341,6 +347,8 @@ const EENHEDEN_PER_DEEL = MATEN_PER_DEEL * 16;
 const TRESILLO = [0, 6, 12];
 /** De tegentel waarop het akkoord wordt aangeslagen — telkens náást de bas. */
 const TEGENTEL = [2, 6, 10, 14];
+/** Son clave 2-3, in zestienden: de vaste houten handtekening van de tropen. */
+const SON_CLAVE = [0, 3, 6, 10, 12];
 
 /** Per deel: op welke zestiende begint welke noot. Eén keer uitgerekend. */
 for (const deel of Object.values(DELEN)) {
@@ -407,7 +415,8 @@ function ruisje(start, duur, opts) {
 function pluk(toon, start, duur, vol, helder = 0.3, naarGalm = false) {
   const c = state.ctx;
   const f = mf(toon);
-  const uit = Math.min(duur * 1.5, 1.3);
+  // De noot krijgt iets meer tijd om uit te klinken; dat slijt de scherpte af.
+  const uit = Math.min(duur * 1.6, 1.4);
 
   const osc = c.createOscillator();
   osc.type = 'sine';
@@ -423,17 +432,19 @@ function pluk(toon, start, duur, vol, helder = 0.3, naarGalm = false) {
   osc.stop(start + uit + 0.02);
 
   if (helder <= 0) return;
+  // De boventoon op 2,8× (niet 4×) houdt de klank rond en houtachtig in plaats
+  // van naaldig; hoe lager de boventoon, hoe warmer de aanslag klinkt.
   const bov = c.createOscillator();
   bov.type = 'sine';
-  bov.frequency.setValueAtTime(f * 4, start);
+  bov.frequency.setValueAtTime(f * 2.8, start);
   const bg = c.createGain();
   bg.gain.setValueAtTime(0.0001, start);
-  bg.gain.exponentialRampToValueAtTime(vol * helder, start + 0.004);
-  bg.gain.exponentialRampToValueAtTime(0.0001, start + uit * 0.28);
+  bg.gain.exponentialRampToValueAtTime(vol * helder * 0.85, start + 0.004);
+  bg.gain.exponentialRampToValueAtTime(0.0001, start + uit * 0.3);
   bov.connect(bg);
   bg.connect(state.muziekGain);
   bov.start(start);
-  bov.stop(start + uit * 0.3 + 0.02);
+  bov.stop(start + uit * 0.32 + 0.02);
 }
 
 /**
@@ -490,6 +501,45 @@ function trom(start, zwaar) {
   g.connect(state.muziekGain);
   osc.start(start);
   osc.stop(start + 0.22);
+}
+
+/**
+ * Lage conga ('doem'): een ronde, toonloze klap die de tresillo-bas een
+ * lichamelijkheid geeft. De frequentie zakt in één beweging, anders klinkt het
+ * als een trommel die niet durft; en hij gaat een beetje door de galm, zodat de
+ * warmte over het water draagt zonder hard te worden.
+ */
+function conga(start, zwaar = true) {
+  const c = state.ctx;
+  ruisje(start, zwaar ? 0.09 : 0.055, {
+    type: 'lowpass', van: zwaar ? 460 : 1600, vol: zwaar ? 0.13 : 0.07, aan: 0.04,
+  });
+  const osc = c.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(zwaar ? 118 : 178, start);
+  osc.frequency.exponentialRampToValueAtTime(zwaar ? 52 : 96, start + 0.13);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.exponentialRampToValueAtTime(zwaar ? 0.22 : 0.12, start + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, start + 0.24);
+  osc.connect(g);
+  g.connect(state.muziekGain);
+  if (state.galm) g.connect(state.galm);
+  osc.start(start);
+  osc.stop(start + 0.28);
+}
+
+/**
+ * De son clave: het vaste houten hamerpatroon dat onder de hele Caribische
+ * muziek ligt. Het is een kort, droog tikje op nauwkeurig hoge frequentie — het
+ * hoort juist níét door de galm, anders verliest het zijn ankerende rol. De
+ * toonloze klap wordt door een piepkleine offset aangeslagen, zoals een echt
+ * houtblok dat tussen twee maten doorklopt.
+ */
+function clave(start) {
+  ruisje(start, 0.028, {
+    type: 'highpass', van: 3800, vol: 0.055, aan: 0.05,
+  });
 }
 
 /**
@@ -724,6 +774,15 @@ function planEenheid(index, start) {
   if (bez.trom) {
     if (TRESILLO.includes(tel)) trom(start, tel === 0 || tel === 12);
     if (tel === 8) trom(start, false);
+  }
+
+  // --- Son clave: het houten anker van de warmte ---
+  if (bez.clave && SON_CLAVE.includes(tel)) clave(start);
+
+  // --- Lage conga's vullen de tresillo-bas aan ---
+  if (bez.conga) {
+    if (TRESILLO.includes(tel)) conga(start, tel === 0 || tel === 12);
+    if (tel === 8) conga(start, false);
   }
 
   // --- Koor: het volk valt in op het eind van een zin ---

@@ -81,15 +81,21 @@ export function maakDuel(opts) {
     schud = 0.25;
   }
 
+  // Welk muziekthema er speelde toen we hier binnenkwamen.
+  let vorigThema = 'zee';
+
   const scene = {
     naam: 'duel',
 
     betreed() {
-      audio.stopMuziek();
+      // Onthouden wat er speelde: een enterduel begint middenin een zeeslag,
+      // en dan moet daarna de zeeslag weer klinken en niet de open zee.
+      vorigThema = audio.huidigThema();
+      audio.startMuziek('gevecht');
     },
 
     verlaat() {
-      audio.startMuziek();
+      audio.startMuziek(vorigThema);
     },
 
     toets(code) {

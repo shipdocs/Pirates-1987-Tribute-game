@@ -76,6 +76,8 @@ export function maakZeeslag(vloot, opts) {
   let afgelopen = false;
   let vijandMoraal = 100;
   const cam = { x: 0, y: 0, zoom: 0.85 };
+  // Welk muziekthema er speelde toen we hier binnenkwamen.
+  let vorigThema = 'zee';
 
   const scene = {
     naam: 'zeeslag',
@@ -85,12 +87,15 @@ export function maakZeeslag(vloot, opts) {
     betreed() {
       cam.x = (mij.x + vijand.x) / 2;
       cam.y = (mij.y + vijand.y) / 2;
-      audio.stopMuziek();
+      // Onthouden wat er speelde: een enterduel begint middenin een zeeslag,
+      // en dan moet daarna de zeeslag weer klinken en niet de open zee.
+      vorigThema = audio.huidigThema();
+      audio.startMuziek('gevecht');
       Game.melding(`Gevecht met een ${scheepsAanduiding(vloot.natie, vloot.type)}!`, 'rood');
     },
 
     verlaat() {
-      audio.startMuziek();
+      audio.startMuziek(vorigThema);
     },
 
     toets(code) {

@@ -182,6 +182,15 @@ html, body {
 .knop-gevaar { background: linear-gradient(180deg, #8e3a2a, #5f2418); }
 .knop-start { background: linear-gradient(180deg, #4f7a3f, #33532a); }
 
+/* Gegraveerde knopiconen; ze nemen de tekstkleur over. */
+.ikoon {
+  width: 1.06em;
+  height: 1.06em;
+  margin-right: 9px;
+  vertical-align: -0.17em;
+  color: currentColor;
+}
+
 .knop-sleutel {
   display: inline-block;
   margin-right: 8px;
@@ -328,14 +337,16 @@ button.mini:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* --- Haven -------------------------------------------------------------- */
 
+/* De prent houdt zijn eigen verhouding (400:130). Vroeger werd hij in een vak
+   van vaste hoogte geperst, waardoor de zon een ovaal werd en de gevels breder
+   of smaller uitvielen naargelang de vensterbreedte. */
 .haven-prent {
   margin: -18px -26px 16px;
-  height: 150px;
   overflow: hidden;
   border-bottom: 3px solid rgba(120, 96, 52, 0.45);
 }
 
-.haven-prent svg { width: 100%; height: 100%; display: block; }
+.haven-prent svg { width: 100%; height: auto; display: block; }
 
 .haven-info,
 .schipkaart-info {
@@ -458,9 +469,14 @@ button.mini:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* --- Kaart -------------------------------------------------------------- */
 
+/* De kaart houdt zijn eigen verhouding en past binnen het paneel; met een
+   vaste breedte van 100% stak hij onderuit en moest je scrollen. */
 .kaart-canvas {
-  width: 100%;
+  width: auto;
   height: auto;
+  max-width: 100%;
+  max-height: 56vh;
+  margin: 0 auto;
   display: block;
   border: 2px solid #8d7442;
   border-radius: 2px;
@@ -515,9 +531,19 @@ kbd {
 @media (max-width: 700px) {
   .paneel-kop h2 { font-size: 22px; }
   .paneel-body, .paneel-kop, .paneel-voet { padding-left: 16px; padding-right: 16px; }
-  .haven-prent { margin-left: -16px; margin-right: -16px; height: 110px; }
+  .haven-prent { margin-left: -16px; margin-right: -16px; }
   .knop { min-width: 100%; }
   .werf-rij { grid-template-columns: 1fr; }
   .werf-acties { justify-content: flex-start; }
   .figuur { width: 72px; height: 72px; }
+}
+
+/* Wie liever geen beweging ziet, krijgt de schermen zonder in- en uitglijden.
+   Het varen zelf blijft natuurlijk bewegen — dat ís het spel. */
+@media (prefers-reduced-motion: reduce) {
+  .overlay { transition: none; }
+  .paneel { animation: none; }
+  .balk-vul { transition: none; }
+  .knop:hover:not(:disabled) { transform: none; }
+  .knop { transition: filter 0.12s ease; }
 }

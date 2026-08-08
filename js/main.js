@@ -1,5 +1,5 @@
 // Opstart: titelscherm, het maken van een kapitein en de overgang naar zee.
-import { TAU, clamp, lerp, el, pick, makeRng } from './util.js';
+import { TAU, clamp, lerp, el, pick, makeRng, sierTijd } from './util.js';
 import { NATIES, NATIE_IDS, TALENTEN, MOEILIJKHEDEN } from './data.js';
 import { Wereld } from './world.js';
 import { Game, maakSpeler, heeftOpslag, laad, wisOpslag } from './game.js';
@@ -53,7 +53,10 @@ function maakTitelScene() {
     teken(c) {
       const vw = Game.breedte,
         vh = Game.hoogte;
-      R.tekenZee(c, cam, vw, vh, Game.tijd);
+      R.tekenZee(c, cam, vw, vh, Game.tijd, {
+        richting: wereld.windRichting,
+        kracht: wereld.windKracht,
+      });
       c.save();
       c.translate(vw / 2, vh / 2);
       c.scale(cam.zoom, cam.zoom);
@@ -86,38 +89,46 @@ function maakTitelScene() {
 function tekenTitel(c, vw, vh, t) {
   c.save();
   c.textAlign = 'center';
-  const y = 118;
+  // De titel schaalt mee met het venster; op een telefoon paste hij anders
+  // niet binnen het beeld.
+  const k = clamp(vw / 900, 0.42, 1);
+  const y = Math.round(46 + 72 * k);
 
-  c.font = '700 68px Georgia, "Times New Roman", serif';
-  c.lineWidth = 8;
+  c.font = `700 ${Math.round(68 * k)}px Georgia, "Times New Roman", serif`;
+  c.lineWidth = 8 * k;
   c.strokeStyle = 'rgba(6,20,32,0.85)';
   c.strokeText('ZEEROVERIJ', vw / 2, y);
-  const g = c.createLinearGradient(0, y - 50, 0, y + 12);
+  const g = c.createLinearGradient(0, y - 50 * k, 0, y + 12 * k);
   g.addColorStop(0, '#ffe9ae');
   g.addColorStop(0.5, '#d9a441');
   g.addColorStop(1, '#a9741f');
   c.fillStyle = g;
   c.fillText('ZEEROVERIJ', vw / 2, y);
 
-  const onder = 'De Caraïben, 1660 — een eerbetoon aan Sid Meier’s Pirates!';
-  c.font = 'italic 19px Georgia, serif';
-  c.lineWidth = 4;
+  const onder =
+    vw < 560
+      ? 'De Caraïben, 1660'
+      : 'De Caraïben, 1660 — een eerbetoon aan Sid Meier’s Pirates!';
+  c.font = `italic ${Math.max(12, Math.round(19 * k))}px Georgia, serif`;
+  c.lineWidth = 4 * k;
   c.strokeStyle = 'rgba(6,20,32,0.8)';
-  c.strokeText(onder, vw / 2, y + 34);
+  c.strokeText(onder, vw / 2, y + 34 * k);
   c.fillStyle = 'rgba(240,228,198,0.92)';
-  c.fillText(onder, vw / 2, y + 34);
+  c.fillText(onder, vw / 2, y + 34 * k);
 
   // Sierlijn.
+  const sy = y + 52 * k;
+  const half = Math.min(230 * k, vw / 2 - 20);
   c.strokeStyle = 'rgba(217,164,65,0.5)';
   c.lineWidth = 1.4;
   c.beginPath();
-  c.moveTo(vw / 2 - 230, y + 52);
-  c.lineTo(vw / 2 - 14, y + 52);
-  c.moveTo(vw / 2 + 14, y + 52);
-  c.lineTo(vw / 2 + 230, y + 52);
+  c.moveTo(vw / 2 - half, sy);
+  c.lineTo(vw / 2 - 14, sy);
+  c.moveTo(vw / 2 + 14, sy);
+  c.lineTo(vw / 2 + half, sy);
   c.stroke();
   c.beginPath();
-  c.arc(vw / 2, y + 52, 5 + Math.sin(t * 2) * 0.8, 0, TAU);
+  c.arc(vw / 2, sy, 5 + Math.sin(sierTijd(t) * 2) * 0.8, 0, TAU);
   c.fillStyle = 'rgba(217,164,65,0.8)';
   c.fill();
   c.restore();
@@ -163,7 +174,15 @@ function toonTitelmenu() {
           },
         });
       }
-      k.push({ label: 'Bediening en spelregels', actie: () => toonHulp() });
+      // Eerst dit menu sluiten: het hulpscherm opent het straks zelf weer, en
+      // anders blijft er bij elke rondgang een titelmenu op de stapel staan.
+      k.push({
+        label: 'Bediening en spelregels',
+        actie: () => {
+          sch.sluit();
+          toonHulp();
+        },
+      });
       return k;
     },
   });

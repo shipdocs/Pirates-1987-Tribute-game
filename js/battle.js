@@ -170,33 +170,35 @@ export function maakZeeslag(vloot, opts) {
     teken(c) {
       const vw = Game.breedte,
         vh = Game.hoogte;
-      R.tekenZee(c, cam, vw, vh, Game.tijd);
+      R.tekenZee(c, cam, vw, vh, Game.tijd, {
+        richting: wereld.windRichting,
+        kracht: wereld.windKracht,
+      });
 
       c.save();
       c.translate(vw / 2, vh / 2);
       c.scale(cam.zoom, cam.zoom);
       c.translate(-cam.x, -cam.y);
 
-      // Rand van het strijdtoneel.
-      c.strokeStyle = 'rgba(217,164,65,0.16)';
-      c.lineWidth = 3 / cam.zoom;
-      c.setLineDash([18, 14]);
-      c.strokeRect(-ARENA_X, -ARENA_Y, ARENA_X * 2, ARENA_Y * 2);
-      c.setLineDash([]);
-
       for (const p of deeltjes) R.tekenRook(c, p);
 
       for (const s of [vijand, mij]) tekenStrijder(c, s, wereld.windRichting);
 
-      // Kogels.
-      c.fillStyle = '#1a1a1a';
+      // Kogels, met hun schaduw op het water zodat de boog leesbaar wordt.
       for (const k of kogels) {
         const p = k.t / k.vlucht;
         const hoogte = Math.sin(p * Math.PI) * 10;
+        c.fillStyle = 'rgba(6,28,44,0.32)';
+        c.beginPath();
+        c.ellipse(k.x + hoogte * 0.26, k.y + hoogte * 0.36, 2.4, 1.5, 0, 0, TAU);
+        c.fill();
+        c.fillStyle = '#1a1a1a';
         c.beginPath();
         c.arc(k.x, k.y - hoogte, 2.4, 0, TAU);
         c.fill();
       }
+
+      tekenMistrand(c);
       c.restore();
 
       tekenGevechtHud(c);
@@ -674,17 +676,39 @@ export function maakZeeslag(vloot, opts) {
 
   // --- Tekenen ------------------------------------------------------------
 
+  /**
+   * De grens van het strijdtoneel als een optrekkende mistbank in plaats van
+   * een gestippelde rechthoek — even duidelijk, maar het blijft een zeekaart.
+   */
+  function tekenMistrand(c) {
+    const F = 320; // diepte waarover de mist dichttrekt
+    const O = 3000; // ruim buiten beeld doorvullen
+    const mist = (x0, y0, x1, y1, rx, ry, rw, rh) => {
+      const g = c.createLinearGradient(x0, y0, x1, y1);
+      g.addColorStop(0, 'rgba(171,199,214,0)');
+      g.addColorStop(1, 'rgba(171,199,214,0.62)');
+      c.fillStyle = g;
+      c.fillRect(rx, ry, rw, rh);
+    };
+    mist(-ARENA_X + F, 0, -ARENA_X, 0, -ARENA_X - O, -ARENA_Y - O, O + F, (ARENA_Y + O) * 2);
+    mist(ARENA_X - F, 0, ARENA_X, 0, ARENA_X - F, -ARENA_Y - O, O + F, (ARENA_Y + O) * 2);
+    mist(0, -ARENA_Y + F, 0, -ARENA_Y, -ARENA_X - O, -ARENA_Y - O, (ARENA_X + O) * 2, O + F);
+    mist(0, ARENA_Y - F, 0, ARENA_Y, -ARENA_X - O, ARENA_Y - F, (ARENA_X + O) * 2, O + F);
+  }
+
   function tekenStrijder(c, s, wind) {
     R.tekenSchip(c, s.x, s.y, s.koers, s.type, s.natie, wind, {
       vaart: s.snelheid / 90,
       tijd: Game.tijd,
       zeilen: s.zeilstand * s.tuigage,
+      kanonnen: s.kanonnen,
       schaal: 2,
     });
-    // Statusbalkje boven het schip.
+    // Statusbalkje boven het schip; het schip is op dubbele schaal getekend,
+    // dus de halve lengte is L.
     const [L] = R.scheepMaat(s.type);
     const bx = s.x - 34,
-      by = s.y - L * 1.5 * 0.5 - 26;
+      by = s.y - L - 26;
     c.save();
     c.fillStyle = 'rgba(0,0,0,0.45)';
     roundRect(c, bx, by, 68, 6, 2);

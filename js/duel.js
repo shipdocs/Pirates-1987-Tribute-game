@@ -1,5 +1,5 @@
 // Degengevecht: hoog, midden of laag — pareren en meteen terugstoten.
-import { clamp, lerp, TAU } from './util.js';
+import { clamp, lerp, TAU, sierTijd } from './util.js';
 import { NATIES } from './data.js';
 import { Game, roundRect, talentBonus } from './game.js';
 import * as UI from './ui.js';
@@ -48,8 +48,14 @@ export function maakDuel(opts) {
   const schaalNu = () => clamp(Math.min(Game.breedte / 1000, Game.hoogte / 640), 0.75, 1.9) * 2;
   const grondNu = () => Game.hoogte * 0.79;
   const middenNu = () => Game.breedte / 2 + positie * Game.breedte * 0.2;
-  /** Punt waar de klingen elkaar raken — daar spatten de vonken. */
-  const botsPunt = () => ({ x: middenNu(), y: grondNu() - 62 * schaalNu() });
+  /** Hoogte van een kling boven de grond, in figuureenheden. */
+  const hoogteY = (h) => (h === HOOG ? -104 : h === MIDDEN ? -64 : -30);
+  /**
+   * Punt waar de klingen elkaar raken — daar spatten de vonken. De hoogte
+   * volgt de gekozen pareerhoogte, zodat de vonken op het staal zitten en niet
+   * ergens los in de lucht.
+   */
+  const botsPunt = (h) => ({ x: middenNu(), y: grondNu() + hoogteY(h) * schaalNu() });
 
   function zeg(t, kleur) {
     bericht = t;
@@ -99,7 +105,7 @@ export function maakDuel(opts) {
           fase = 'riposte';
           faseT = 0;
           spelerHoogte = h;
-          const bp = botsPunt();
+          const bp = botsPunt(h);
           vonk(bp.x, bp.y, '#ffe9a8');
         } else {
           audio.sfx.raak();
@@ -195,7 +201,7 @@ export function maakDuel(opts) {
           if (faseT > 0.28) {
             if (Math.random() < pareerKans) {
               audio.sfx.pareer();
-              const bp2 = botsPunt();
+              const bp2 = botsPunt(spelerHoogte);
               vonk(bp2.x + 20, bp2.y, '#cfe4ff');
               zeg('Hij pareert en zet door!', '#e8998a');
               fase = 'vijandWindup';
@@ -293,13 +299,13 @@ export function maakDuel(opts) {
     Game.speler.moraal = clamp(Game.speler.moraal - 0.4, 0, 100);
     fase = 'herstelSpeler';
     faseT = 0;
-    const bp = botsPunt();
+    const bp = botsPunt(vijandHoogte);
     vonk(bp.x - 30, bp.y + 10, '#d05a4a');
   }
 
   function raakVijand(kracht) {
     duw(kracht, 'vijand');
-    const bp = botsPunt();
+    const bp = botsPunt(spelerHoogte);
     vonk(bp.x + 30, bp.y + 10, '#ffd27a');
   }
 
@@ -321,7 +327,97 @@ export function maakDuel(opts) {
 
   // --- Tekenwerk ----------------------------------------------------------
 
+  // --- Achtergronden ------------------------------------------------------
+
+  /** Deterministische ruis, zodat rekwisieten niet elk frame verspringen. */
+  function ruis(i) {
+    const x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
   function tekenAchtergrond(c, vw, vh, t) {
+    if (opts.achtergrond === 'fort') tekenFortplein(c, vw, vh, sierTijd(t));
+    else tekenScheepsdek(c, vw, vh, sierTijd(t));
+  }
+
+  /** Een vat met gebogen duigen, hoepels en een deksel. */
+  function tekenVat(c, x, y, w, h, donker) {
+    c.save();
+    c.translate(x, y);
+    const g = c.createLinearGradient(-w / 2, 0, w / 2, 0);
+    g.addColorStop(0, donker ? '#33240f' : '#4a3520');
+    g.addColorStop(0.42, donker ? '#5a4222' : '#7d5c30');
+    g.addColorStop(1, donker ? '#2c1f0d' : '#43301c');
+    c.fillStyle = g;
+    c.beginPath();
+    c.moveTo(-w * 0.43, -h / 2);
+    c.quadraticCurveTo(-w * 0.54, 0, -w * 0.43, h / 2);
+    c.lineTo(w * 0.43, h / 2);
+    c.quadraticCurveTo(w * 0.54, 0, w * 0.43, -h / 2);
+    c.closePath();
+    c.fill();
+    // Duignaden.
+    c.strokeStyle = 'rgba(28,18,8,0.28)';
+    c.lineWidth = 1;
+    for (const f of [-0.22, 0, 0.22]) {
+      c.beginPath();
+      c.moveTo(w * f, -h / 2 + 2);
+      c.lineTo(w * f * 1.16, h / 2 - 2);
+      c.stroke();
+    }
+    // Hoepels.
+    c.strokeStyle = 'rgba(24,16,7,0.6)';
+    c.lineWidth = Math.max(1.6, h * 0.06);
+    for (const f of [-0.3, 0.3]) {
+      c.beginPath();
+      c.moveTo(-w * 0.5, h * f);
+      c.lineTo(w * 0.5, h * f);
+      c.stroke();
+    }
+    // Deksel.
+    c.fillStyle = donker ? '#6b4f28' : '#8a6a3a';
+    c.beginPath();
+    c.ellipse(0, -h / 2, w * 0.43, h * 0.1, 0, 0, TAU);
+    c.fill();
+    c.strokeStyle = 'rgba(28,18,8,0.5)';
+    c.lineWidth = 1;
+    c.stroke();
+    c.restore();
+  }
+
+  /** Silhouetten van vechtend volk, achter de hoofdrolspelers. */
+  function tekenVechters(c, vw, lijn, t, kleur) {
+    c.fillStyle = kleur;
+    for (let i = 0; i < 8; i++) {
+      const x = ((i * 191 + 60) % (vw + 120)) - 60 + Math.sin(t * 1.4 + i) * 7;
+      const y = lijn + 46 + (i % 3) * 16;
+      c.save();
+      c.translate(x, y);
+      c.scale(0.85, 0.85);
+      c.fillRect(-7, -50, 14, 32);
+      c.beginPath();
+      c.arc(0, -57, 8, 0, TAU);
+      c.fill();
+      c.fillRect(-7, -19, 6, 19);
+      c.fillRect(2, -19, 6, 19);
+      c.save();
+      c.rotate(Math.sin(t * 4 + i) * 0.7);
+      c.fillRect(5, -50, 30, 3);
+      c.restore();
+      c.restore();
+    }
+  }
+
+  function tekenVignet(c, vw, vh) {
+    const vig = c.createRadialGradient(vw / 2, vh * 0.6, vh * 0.24, vw / 2, vh * 0.6, vh * 0.9);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.6)');
+    c.fillStyle = vig;
+    c.fillRect(0, 0, vw, vh);
+  }
+
+  /** Het dek van een geënterd schip. */
+  function tekenScheepsdek(c, vw, vh, t) {
     const horizon = vh * 0.34;
     const dekLijn = vh * 0.46;
 
@@ -354,14 +450,16 @@ export function maakDuel(opts) {
       c.stroke();
     }
 
-    // Touwwerk tegen de lucht.
-    c.strokeStyle = 'rgba(30,22,12,0.4)';
-    c.lineWidth = 2;
-    for (let i = 0; i < 7; i++) {
-      const x = vw * (0.06 + i * 0.15);
+    // Touwwerk tegen de lucht — hoofdtouwen en dunnere weeflijnen, elk met een
+    // eigen helling zodat het niet als een liniaalpatroon leest.
+    for (let i = 0; i < 9; i++) {
+      const x = vw * (0.03 + i * 0.118) + ruis(i) * 26;
+      const val = 54 + ruis(i + 40) * 90;
+      c.strokeStyle = i % 3 === 1 ? 'rgba(30,22,12,0.22)' : 'rgba(30,22,12,0.42)';
+      c.lineWidth = i % 3 === 1 ? 1.1 : 2.2;
       c.beginPath();
-      c.moveTo(x, 0);
-      c.lineTo(x + 80, dekLijn);
+      c.moveTo(x, -10);
+      c.quadraticCurveTo(x + val * 0.4, dekLijn * 0.45, x + val, dekLijn);
       c.stroke();
     }
 
@@ -413,40 +511,240 @@ export function maakDuel(opts) {
       c.stroke();
     }
 
-    // Vechtende bemanning achter de hoofdrolspelers.
-    c.fillStyle = 'rgba(26,20,14,0.42)';
-    for (let i = 0; i < 8; i++) {
-      const x = ((i * 191 + 60) % (vw + 120)) - 60 + Math.sin(t * 1.4 + i) * 7;
-      const y = dekLijn + 46 + (i % 3) * 16;
-      c.save();
-      c.translate(x, y);
-      c.scale(0.85, 0.85);
-      c.fillRect(-7, -50, 14, 32);
-      c.beginPath();
-      c.arc(0, -57, 8, 0, TAU);
-      c.fill();
-      c.fillRect(-7, -19, 6, 19);
-      c.fillRect(2, -19, 6, 19);
-      c.save();
-      c.rotate(Math.sin(t * 4 + i) * 0.7);
-      c.fillRect(5, -50, 30, 3);
-      c.restore();
-      c.restore();
-    }
+    tekenVechters(c, vw, dekLijn, t, 'rgba(26,20,14,0.42)');
 
     // Vaten en een luik als rekwisieten.
-    c.fillStyle = 'rgba(70,48,24,0.75)';
-    c.fillRect(vw * 0.06, vh * 0.62, 44, 52);
-    c.fillRect(vw * 0.11, vh * 0.64, 40, 46);
-    c.fillStyle = 'rgba(50,34,16,0.7)';
+    tekenVat(c, vw * 0.08, vh * 0.68, 46, 56, false);
+    tekenVat(c, vw * 0.13, vh * 0.71, 40, 48, true);
+    c.fillStyle = 'rgba(50,34,16,0.75)';
     c.fillRect(vw * 0.84, vh * 0.66, 96, 40);
+    c.strokeStyle = 'rgba(24,16,7,0.5)';
+    c.lineWidth = 2;
+    c.strokeRect(vw * 0.84, vh * 0.66, 96, 40);
+    c.beginPath();
+    c.moveTo(vw * 0.84, vh * 0.66 + 20);
+    c.lineTo(vw * 0.84 + 96, vh * 0.66 + 20);
+    c.stroke();
 
-    // Vignette.
-    const vig = c.createRadialGradient(vw / 2, vh * 0.6, vh * 0.24, vw / 2, vh * 0.6, vh * 0.9);
-    vig.addColorStop(0, 'rgba(0,0,0,0)');
-    vig.addColorStop(1, 'rgba(0,0,0,0.6)');
-    c.fillStyle = vig;
-    c.fillRect(0, 0, vw, vh);
+    tekenVignet(c, vw, vh);
+  }
+
+  /** Het binnenplein van een genomen fort: hier vecht je met de bevelhebber. */
+  function tekenFortplein(c, vw, vh, t) {
+    const horizon = vh * 0.3;
+    const grondLijn = vh * 0.46;
+    const muurTop = horizon + 16;
+
+    // Avondlucht boven de stad.
+    const lucht = c.createLinearGradient(0, 0, 0, grondLijn);
+    lucht.addColorStop(0, '#22375c');
+    lucht.addColorStop(0.5, '#7d8090');
+    lucht.addColorStop(1, '#dc9a5f');
+    c.fillStyle = lucht;
+    c.fillRect(0, 0, vw, grondLijn);
+
+    // Zon die achter de wal wegzakt.
+    c.fillStyle = 'rgba(255,222,160,0.45)';
+    c.beginPath();
+    c.arc(vw * 0.24, horizon + 8, 42, 0, TAU);
+    c.fill();
+
+    // Rookpluimen boven de brandende stad.
+    for (let i = 0; i < 4; i++) {
+      const x = vw * (0.55 + i * 0.11);
+      c.fillStyle = `rgba(58,52,48,${0.16 + i * 0.03})`;
+      c.beginPath();
+      c.ellipse(x + Math.sin(t * 0.5 + i) * 8, horizon - 34 - i * 12, 46 + i * 10, 20 + i * 5, 0, 0, TAU);
+      c.fill();
+    }
+
+    // Daken van de stad achter de wal, in wisselende breedtes en hoogtes.
+    c.fillStyle = 'rgba(52,40,34,0.75)';
+    let bx = -30;
+    for (let i = 0; bx < vw + 40; i++) {
+      const bw = 38 + ruis(i) * 46;
+      const bh = 16 + ruis(i + 7) * 34;
+      c.fillRect(bx, muurTop - bh, bw, bh);
+      c.beginPath();
+      c.moveTo(bx - 5, muurTop - bh);
+      c.lineTo(bx + bw / 2, muurTop - bh - 8 - ruis(i + 3) * 16);
+      c.lineTo(bx + bw + 5, muurTop - bh);
+      c.closePath();
+      c.fill();
+      // Af en toe een kerktoren die boven de daken uitsteekt.
+      if (ruis(i + 21) > 0.82) {
+        const tw = 16;
+        const th = bh + 30 + ruis(i + 5) * 24;
+        c.fillRect(bx + bw / 2 - tw / 2, muurTop - th, tw, th);
+        c.beginPath();
+        c.moveTo(bx + bw / 2 - tw / 2 - 3, muurTop - th);
+        c.lineTo(bx + bw / 2, muurTop - th - 22);
+        c.lineTo(bx + bw / 2 + tw / 2 + 3, muurTop - th);
+        c.closePath();
+        c.fill();
+      }
+      bx += bw + 6 + ruis(i + 11) * 16;
+    }
+
+    // Vestingmuur met kantelen.
+    const steen = c.createLinearGradient(0, muurTop, 0, grondLijn);
+    steen.addColorStop(0, '#a49a8b');
+    steen.addColorStop(0.55, '#8b8173');
+    steen.addColorStop(1, '#6a6155');
+    c.fillStyle = steen;
+    c.fillRect(0, muurTop, vw, grondLijn - muurTop);
+    // Kantelen, met een donkere schaduwrand zodat ze niet in de wal wegvallen.
+    for (let i = 0; i * 58 < vw + 58; i++) {
+      c.fillStyle = '#b0a596';
+      c.fillRect(i * 58, muurTop - 18, 34, 20);
+      c.fillStyle = 'rgba(58,50,40,0.45)';
+      c.fillRect(i * 58, muurTop - 3, 34, 3);
+    }
+    c.fillStyle = 'rgba(58,50,40,0.3)';
+    c.fillRect(0, muurTop, vw, 3);
+    // Voegen.
+    c.strokeStyle = 'rgba(60,54,44,0.28)';
+    c.lineWidth = 1;
+    for (let r = 1; r * 22 < grondLijn - muurTop; r++) {
+      const y = muurTop + r * 22;
+      c.beginPath();
+      c.moveTo(0, y);
+      c.lineTo(vw, y);
+      c.stroke();
+      for (let i = 0; i * 46 < vw; i++) {
+        const x = i * 46 + (r % 2 ? 23 : 0);
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(x, y - 22);
+        c.stroke();
+      }
+    }
+
+    // Arcade van het gouvernementshuis: donkere bogen geven diepte.
+    const bogen = Math.max(3, Math.round(vw / 300));
+    for (let i = 0; i < bogen; i++) {
+      const cx = ((i + 0.5) * vw) / bogen;
+      const bw = 78;
+      const bh = 104;
+      c.fillStyle = '#262730';
+      c.beginPath();
+      c.moveTo(cx - bw / 2, grondLijn);
+      c.lineTo(cx - bw / 2, grondLijn - bh + bw / 2);
+      c.arc(cx, grondLijn - bh + bw / 2, bw / 2, Math.PI, 0);
+      c.lineTo(cx + bw / 2, grondLijn);
+      c.closePath();
+      c.fill();
+      // Sluitsteen.
+      c.fillStyle = '#b6ab9a';
+      c.fillRect(cx - 7, grondLijn - bh - 4, 14, 14);
+
+      // Fakkel naast elke boog.
+      const fx = cx + bw / 2 + 22;
+      c.fillStyle = '#4a3520';
+      c.fillRect(fx - 2, grondLijn - 78, 4, 26);
+      const flikker = 1 + Math.sin(t * 9 + i * 2.1) * 0.16;
+      c.fillStyle = 'rgba(255,180,80,0.85)';
+      c.beginPath();
+      c.ellipse(fx, grondLijn - 84, 6 * flikker, 11 * flikker, 0, 0, TAU);
+      c.fill();
+      c.fillStyle = 'rgba(255,236,180,0.9)';
+      c.beginPath();
+      c.ellipse(fx, grondLijn - 82, 2.6 * flikker, 5 * flikker, 0, 0, TAU);
+      c.fill();
+    }
+
+    // Plaveisel van het binnenplein.
+    const plein = c.createLinearGradient(0, grondLijn, 0, vh);
+    plein.addColorStop(0, '#8e8577');
+    plein.addColorStop(0.5, '#78705f');
+    plein.addColorStop(1, '#4e4739');
+    c.fillStyle = plein;
+    c.fillRect(0, grondLijn, vw, vh - grondLijn);
+    c.strokeStyle = 'rgba(44,38,28,0.35)';
+    c.lineWidth = 1.6;
+    for (let i = 1; i < 14; i++) {
+      const p = i / 14;
+      const y = grondLijn + Math.pow(p, 1.6) * (vh - grondLijn);
+      c.beginPath();
+      c.moveTo(0, y);
+      c.lineTo(vw, y);
+      c.stroke();
+      // Verticale voegen worden breder naar de kijker toe.
+      const stap = 26 + p * 70;
+      for (let x = ((i % 2) * stap) / 2; x < vw; x += stap) {
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(x - (x - vw / 2) * 0.03, y - Math.pow(p, 1.6) * 26);
+        c.stroke();
+      }
+    }
+
+    // Palmen aan weerszijden van het plein. Ze mogen niet boven de wal
+    // uittorenen, anders verliest het binnenplein zijn maat.
+    tekenPalm(c, vw * 0.06, grondLijn + 30, 0.62, t);
+    tekenPalm(c, vw * 0.95, grondLijn + 18, 0.5, t + 1.7);
+
+    tekenVechters(c, vw, grondLijn, t, 'rgba(24,20,16,0.4)');
+
+    // Kisten en vaten van de plundering.
+    tekenVat(c, vw * 0.17, vh * 0.7, 44, 54, false);
+    c.fillStyle = 'rgba(58,42,22,0.85)';
+    c.fillRect(vw * 0.8, vh * 0.68, 92, 44);
+    c.strokeStyle = 'rgba(24,16,7,0.55)';
+    c.lineWidth = 2.4;
+    c.strokeRect(vw * 0.8, vh * 0.68, 92, 44);
+    c.fillStyle = '#d9a441';
+    c.fillRect(vw * 0.8 + 40, vh * 0.68 + 16, 12, 12);
+
+    tekenVignet(c, vw, vh);
+  }
+
+  /** Palm met een gebogen stam en waaierende bladeren. */
+  function tekenPalm(c, x, grondY, schaal, t) {
+    c.save();
+    c.translate(x, grondY);
+    c.scale(schaal, schaal);
+    const buig = Math.sin(t * 0.6) * 4;
+    // Stam.
+    c.strokeStyle = '#5b4527';
+    c.lineWidth = 11;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(0, 0);
+    c.quadraticCurveTo(14 + buig, -110, 26 + buig * 2, -212);
+    c.stroke();
+    c.strokeStyle = 'rgba(30,20,10,0.3)';
+    c.lineWidth = 1.4;
+    for (let i = 1; i < 9; i++) {
+      const p = i / 9;
+      const px = lerp(0, 26 + buig * 2, p) + Math.sin(p * 3) * 2;
+      const py = lerp(0, -212, p);
+      c.beginPath();
+      c.moveTo(px - 5, py);
+      c.lineTo(px + 5, py - 2);
+      c.stroke();
+    }
+    // Bladeren.
+    const kx = 26 + buig * 2,
+      ky = -212;
+    for (let i = 0; i < 7; i++) {
+      const a = -Math.PI + (i / 6) * Math.PI + Math.sin(t * 0.8 + i) * 0.05;
+      c.fillStyle = i % 2 ? '#2f5a30' : '#3c6d38';
+      c.beginPath();
+      c.moveTo(kx, ky);
+      c.quadraticCurveTo(kx + Math.cos(a) * 46, ky + Math.sin(a) * 46 - 10, kx + Math.cos(a) * 86, ky + Math.sin(a) * 40 + 22);
+      c.quadraticCurveTo(kx + Math.cos(a) * 44, ky + Math.sin(a) * 34 + 6, kx, ky + 5);
+      c.closePath();
+      c.fill();
+    }
+    // Kokosnoten.
+    c.fillStyle = '#4a3a22';
+    for (const [dx, dy] of [[-6, 4], [4, 7], [-1, 11]]) {
+      c.beginPath();
+      c.arc(kx + dx, ky + dy, 5, 0, TAU);
+      c.fill();
+    }
+    c.restore();
   }
 
   function tekenSchermer(c, x, grond, richting, S, o) {

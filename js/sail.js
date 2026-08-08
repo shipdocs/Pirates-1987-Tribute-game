@@ -181,7 +181,7 @@ export function maakZeilScene() {
       const vw = Game.breedte,
         vh = Game.hoogte;
 
-      R.tekenZee(c, cam, vw, vh, Game.tijd);
+      R.tekenZee(c, cam, vw, vh, Game.tijd, { richting: w.windRichting, kracht: w.windKracht });
 
       c.save();
       c.translate(vw / 2, vh / 2);
@@ -199,12 +199,18 @@ export function maakZeilScene() {
         R.tekenStad(c, stad, cam, Game.tijd, dist(stad.ankerX, stad.ankerY, s.x, s.y) < 140);
       }
 
+      // Bij uitzoomen groeien de schepen mee, net als de steden: anders is een
+      // sloep op de hele kaart nog maar een paar pixels groot.
+      const scheepSchaal = clamp(0.7 / cam.zoom, 1, 2.2);
+
       for (const v of w.vloten) {
         if (Math.abs(v.x - cam.x) * cam.zoom > vw / 2 + 120) continue;
         if (Math.abs(v.y - cam.y) * cam.zoom > vh / 2 + 120) continue;
         R.tekenSchip(c, v.x, v.y, v.koers, v.type, v.natie, w.windRichting, {
           vaart: v.snelheid / 90,
           tijd: Game.tijd,
+          kanonnen: v.kanonnen,
+          schaal: scheepSchaal,
         });
       }
 
@@ -218,12 +224,16 @@ export function maakZeilScene() {
           vaart: s.snelheid / 90,
           tijd: Game.tijd,
           zeilen: schip.zeilen,
+          kanonnen: s.schepen[i].kanonnen,
+          schaal: scheepSchaal,
         });
       }
       R.tekenSchip(c, s.x, s.y, s.koers, schip.type, 'piraat', w.windRichting, {
         vaart: s.snelheid / 90,
         tijd: Game.tijd,
         zeilen: schip.zeilen,
+        kanonnen: schip.kanonnen,
+        schaal: scheepSchaal,
       });
 
       c.restore();
@@ -367,7 +377,13 @@ export function maakZeilScene() {
       klasse: 'overlay-kaart',
       bouw(body) {
         const cv = document.createElement('canvas');
-        const bw = Math.min(960, Game.breedte - 140);
+        // Ook op hoogte begrenzen, anders steekt de kaart onder het paneel uit
+        // en moet je scrollen om de Spaanse Main te zien.
+        const bw = Math.min(
+          960,
+          Game.breedte - 140,
+          Math.round(((Game.hoogte * 0.56) * WORLD_W) / WORLD_H)
+        );
         cv.width = bw;
         cv.height = Math.round((bw * WORLD_H) / WORLD_W);
         cv.className = 'kaart-canvas';
@@ -577,22 +593,22 @@ function tekenHud(c, s, w, cam, miniKaart) {
   c.textBaseline = 'middle';
   c.textAlign = 'left';
   const items = [
-    ['📅', fmtDate(s.dag)],
-    ['⚓', type.naam],
-    ['💰', fmtGold(s.goud)],
-    ['🧭', compassName(s.koers)],
-    ['🌬', `${compassName(normAngle(w.windRichting + Math.PI))}  ${(w.windKracht * 5).toFixed(1)}`],
-    ['👥', `${s.bemanning}`],
-    ['🍖', `${schip.lading[WAAR_INDEX.voedsel]}`],
+    ['datum', fmtDate(s.dag)],
+    ['anker', type.naam],
+    ['goud', fmtGold(s.goud)],
+    ['kompas', compassName(s.koers)],
+    ['wind', `${compassName(normAngle(w.windRichting + Math.PI))}  ${(w.windKracht * 5).toFixed(1)}`],
+    ['volk', `${s.bemanning}`],
+    ['proviand', `${schip.lading[WAAR_INDEX.voedsel]}`],
   ];
-  let x = 16;
+  let x = 24;
   for (const [icoon, tekst] of items) {
     c.fillStyle = '#d9a441';
-    c.fillText(icoon, x, 22);
-    x += 22;
+    R.tekenIcoon(c, icoon, x, 22, 8);
+    x += 15;
     c.fillStyle = '#f0e3c4';
     c.fillText(tekst, x, 22);
-    x += c.measureText(tekst).width + 26;
+    x += c.measureText(tekst).width + 24;
   }
 
   // Rompbalk rechtsboven.

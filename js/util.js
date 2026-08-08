@@ -1,6 +1,23 @@
 // Kleine hulpfuncties die overal gebruikt worden.
 export const TAU = Math.PI * 2;
 
+/**
+ * Wil de bezoeker zo min mogelijk beweging? Het spel zelf blijft bewegen —
+ * varen ís het spel — maar sierlijke animaties (golfdrift, wapperende vlaggen,
+ * pulserende markeringen) zetten we dan stil.
+ */
+let _rustig = false;
+try {
+  const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+  _rustig = mq.matches;
+  mq.addEventListener?.('change', (e) => (_rustig = e.matches));
+} catch (e) {
+  /* oude browser: gewoon alles laten bewegen */
+}
+
+/** Tijd voor sieranimaties: bevroren wanneer de bezoeker rust wil. */
+export const sierTijd = (t) => (_rustig ? 0 : t);
+
 export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const smooth = (t) => t * t * (3 - 2 * t);

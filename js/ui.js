@@ -105,6 +105,42 @@ export function vraag(titel, tekst, keuzes, opts = {}) {
   });
 }
 
+/**
+ * Gegraveerd icoontje voor op een knop. Het neemt de tekstkleur over, zodat het
+ * bij de rest van het perkament past — in tegenstelling tot emoji, die hun eigen
+ * kleuren meebrengen en er op elk besturingssysteem anders uitzien.
+ */
+export function ikoon(naam) {
+  const p = IKONEN[naam];
+  if (!p) return '';
+  return `<svg class="ikoon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">${p}</svg>`;
+}
+
+const IKONEN = {
+  kroeg:
+    '<path d="M3.2 3h6.6v10H3.2z" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+    '<path d="M9.8 5.2h2.4a1.6 1.6 0 0 1 0 3.2H9.8" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+    '<path d="M3.2 3h6.6v2.1H3.2z" fill="currentColor"/>',
+  koopman:
+    '<path d="M8 2.2v10.6M4 12.8h8M2.6 5h10.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>' +
+    '<path d="M2.6 5 .8 9h3.6zM13.4 5l-1.8 4h3.6z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>',
+  werf:
+    '<path d="M2.4 13.2 8 7.6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>' +
+    '<path d="M7.2 4.4 10 1.6l4.6 4.6-2.8 2.8z" fill="currentColor"/>',
+  gouverneur:
+    '<path d="M1.2 6.2 8 2.2l6.8 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>' +
+    '<path d="M3.4 7.4v5.4M6.5 7.4v5.4M9.5 7.4v5.4M12.6 7.4v5.4" stroke="currentColor" stroke-width="1.3"/>' +
+    '<path d="M1.6 14h12.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  sabels:
+    '<path d="M3 13.2 12.4 3M3.6 3 13 13.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+    '<circle cx="3" cy="13.2" r="1.4" fill="currentColor"/><circle cx="13" cy="13.2" r="1.4" fill="currentColor"/>',
+  zeil:
+    '<path d="M8 1.4v9.4" stroke="currentColor" stroke-width="1.2"/>' +
+    '<path d="M8.7 2.6 13 10.8H8.7z" fill="currentColor"/>' +
+    '<path d="M7.3 3.6 3.6 10.8h3.7z" fill="currentColor" opacity="0.72"/>' +
+    '<path d="M1.4 12h13.2l-1.9 2.8H3.3z" fill="currentColor"/>',
+};
+
 /** Klein gestileerd portret voor kroegbazen, gouverneurs en gasten. */
 export function maakFiguur(soort) {
   const d = el('div', 'figuur figuur-' + soort);

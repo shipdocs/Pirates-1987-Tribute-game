@@ -11,8 +11,8 @@ Het spel gebruikt ES-modules, dus het moet via een webserver geopend worden
 (rechtstreeks `index.html` openen werkt niet vanwege CORS).
 
 ```bash
-git clone https://github.com/shipdocs/pirates.git
-cd pirates
+git clone https://github.com/shipdocs/Pirates-1987-Tribute-game.git
+cd Pirates-1987-Tribute-game
 python3 -m http.server 8000
 # open daarna http://localhost:8000/
 ```

@@ -64,6 +64,13 @@ wat jij koopt en verkoopt), scheepswerf (herstellen, kanonnen, schepen kopen en
 verkopen, vlaggenschip wisselen) en de gouverneur (bevorderingen, landgoed,
 kaperbrieven, gratie, de dochter van de gouverneur en uiteindelijk je aftreden).
 
+**Muziek.** Een eigen zeemansdeun in 6/8 — het wiegende ritme van de hoornpijp —
+met melodie, tegenstem, baslijn, akkoorden en een trommeltje, allemaal ter
+plekke opgewekt uit oscillatoren en geruis; er is geen enkel geluidsbestand.
+De deun loopt in zestien maten rond en wordt bij elke ronde iets voller. In de
+zeeslag en het duel zwijgt hij, zodat je de kanonnen hoort. Muziek en geluid
+staan los van elkaar in de scheepsraad.
+
 **De lange lijn.** Roem, rang bij vier naties, grondbezit, huwelijk, veroverde
 steden — en je wordt ouder. Wie aftreedt krijgt een eindscore over zijn hele
 loopbaan, en komt op de erelijst van de tien grootste kapiteins.
@@ -117,7 +124,7 @@ js/
   town.js             havenschermen
   ui.js               perkamentpanelen en dialogen
   util.js             wiskunde- en opmaakhulpjes
-  audio.js            geluid en muziek uit de Web Audio API
+  audio.js            geluid en muziek uit de Web Audio API (zelf gespeeld)
 ```
 
 `gevechtsmodel.js` raakt bewust geen canvas, geluid of DOM aan. Daardoor is het

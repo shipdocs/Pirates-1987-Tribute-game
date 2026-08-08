@@ -787,6 +787,15 @@ export function maakZeilScene() {
           },
         },
         {
+          // Apart van het geluid: wie de kanonnen wil horen maar niet de deun,
+          // hoeft niet alles het zwijgen op te leggen.
+          label: audio.muziekAan() ? 'Muziek uit' : 'Muziek aan',
+          actie: () => {
+            audio.zetMuziek(!audio.muziekAan());
+            sch.ververs();
+          },
+        },
+        {
           label: 'Stoppen zonder bewaren',
           soort: 'gevaar',
           actie: async () => {

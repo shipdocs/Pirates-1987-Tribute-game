@@ -9,6 +9,30 @@ import * as audio from './audio.js';
 import * as UI from './ui.js';
 
 export const OPSLAG_SLEUTEL = 'zeeroverij.opslag.v1';
+export const MINIATUUR_SLEUTEL = 'zeeroverij.miniatuur.v1';
+
+// Miniatuureffect (tilt-shift). De blur staat in beeldpixels; kern en uitloop
+// zijn stralen, als fractie van de kórtste schermzijde — zo houdt de scherpe
+// plek dezelfde maat op een breed en op een smal scherm. `KERN` is de cirkel
+// van volle scherpte rond het schip, `UITLOOP` de ring daaromheen waarin het
+// naar vervaagd overgaat. Rond, niet als balk: scherpstellen doe je op een
+// plek, en dan hoort ook links en rechts van je schip af te vallen.
+const MINI_BLUR = 3.2;
+const MINI_KERN = 0.24;
+const MINI_UITLOOP = 0.22;
+
+/**
+ * Leest de voorkeur voor het miniatuureffect uit de browser. Los van de save:
+ * het is een presentatiekeuze, geen spelvoortgang. Standaard aan.
+ */
+export function leesMiniatuur() {
+  try {
+    return localStorage.getItem(MINIATUUR_SLEUTEL) !== '0';
+  } catch (fout) {
+    // Privémodus of oudere browser: dan maar de standaard.
+    return true;
+  }
+}
 
 export const Game = {
   canvas: null,
@@ -19,6 +43,15 @@ export const Game = {
   scene: null,
   wereld: null,
   speler: null,
+  // Miniatuureffect (tilt-shift): de wereld krijgt een smalle scherpe band
+  // rond het schip, daarboven en -onder vervaagt ze — maar de HUD blijft
+  // altijd scherp. Presentatievoorkeur, geen saveveld; zie `leesMiniatuur`.
+  miniatuur: leesMiniatuur(),
+  // Offscreen-lagen voor dat effect, hergebruikt per frame; zie `zorgMiniatuurLagen`.
+  miniatuurLagen: null,
+  // Canvasfilters ontbreken op oudere Safari's. Eén keer vaststellen, want een
+  // mislukte `filter`-toewijzing is stil: hij valt gewoon terug op 'none'.
+  filterSteun: null,
   tijd: 0,
   gepauzeerd: false,
   toetsen: new Set(),
@@ -42,6 +75,8 @@ export const Game = {
     this.hoogte = h;
     this.canvas.width = Math.round(w * dpr);
     this.canvas.height = Math.round(h * dpr);
+    // De miniatuurlagen volgen de canvasgrootte vanzelf: `zorgMiniatuurLagen()`
+    // vergelijkt op apparaatpixels en maakt ze opnieuw zodra die veranderen.
     if (this.scene && this.scene.maatVeranderd) this.scene.maatVeranderd();
   },
 
@@ -49,6 +84,10 @@ export const Game = {
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
       this.toetsen.add(e.code);
+      // Het miniatuureffect is overal om te zetten, ook midden in een zeeslag:
+      // daar staat Esc voor vluchten, dus er is geen scheepsraad om het in te
+      // doen — en juist daar wil je er misschien vanaf.
+      if (e.code === 'KeyF' && !UI.ietsOpen()) this.zetMiniatuur(!this.miniatuur);
       if (this.scene && this.scene.toets) this.scene.toets(e.code, e);
       // Tab wisselt de munitie in het gevecht; laten we hem door, dan verspringt
       // de browserfocus ondertussen van het canvas af. Zodra er een scherm open
@@ -115,8 +154,27 @@ export const Game = {
         if (!this.gepauzeerd && this.scene.werkBij) this.scene.werkBij(dt);
         if (this.scene.teken) {
           const c = this.ctx;
-          c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-          this.scene.teken(c);
+          // Miniatuureffect: teken de wereld op een offscreen laag, vervaag die
+          // en zet er een scherpe cirkel rond het schip in terug. De HUD komt
+          // daarna scherp bovenop. Een scène doet mee door een brandpunt aan te
+          // wijzen (`miniatuurFocus`) én haar HUD apart te tekenen; zonder dat
+          // eerste is het effect niet gewenst — in een gevecht kijk je naar het
+          // hele strijdtoneel, niet naar één maquette-plek — en zonder dat
+          // tweede zou het opschrift mee vervagen.
+          if (this.miniatuur && this.scene.tekenHud && this.scene.miniatuurFocus) {
+            const lagen = this.zorgMiniatuurLagen();
+            lagen.wereldC.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+            lagen.wereldC.clearRect(0, 0, this.breedte, this.hoogte);
+            this.scene.teken(lagen.wereldC);
+            this.tekenMiniatuur(c, lagen, this.scene);
+          } else {
+            c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+            this.scene.teken(c);
+            // Elke scène kan een aparte HUD-laag hebben (wereld en HUD
+            // gescheiden voor het miniatuureffect). Zonder effect wordt die
+            // gewoon na de wereld getekend, zodat de HUD altijd aanwezig is.
+            if (this.scene.tekenHud) this.scene.tekenHud(c);
+          }
         }
       }
       this.tekenMeldingen(this.ctx);
@@ -151,6 +209,138 @@ export const Game = {
       y -= 34;
     }
     c.restore();
+  },
+
+  /**
+   * De twee offscreen-lagen voor het miniatuureffect, op apparaatresolutie:
+   * `wereld` krijgt het scherpe beeld, `focus` datzelfde beeld met een
+   * verticale gradient als alfamasker. Ze worden hergebruikt en alleen
+   * opnieuw gemaakt als de canvasmaat of de pixelverhouding verandert.
+   */
+  zorgMiniatuurLagen() {
+    const w = Math.round(this.breedte * this.dpr);
+    const h = Math.round(this.hoogte * this.dpr);
+    const oud = this.miniatuurLagen;
+    if (oud && oud.wereld.width === w && oud.wereld.height === h) return oud;
+    const maak = () => {
+      const cv = document.createElement('canvas');
+      cv.width = w;
+      cv.height = h;
+      return cv;
+    };
+    const wereld = maak();
+    const focus = maak();
+    this.miniatuurLagen = {
+      wereld,
+      wereldC: wereld.getContext('2d'),
+      focus,
+      focusC: focus.getContext('2d'),
+    };
+    return this.miniatuurLagen;
+  },
+
+  /**
+   * Tekent de miniatuur-weergave op het hoofdcanvas: de vervaagde wereld, met
+   * daarin een scherpe band op de hoogte van het schip, en daarboven de HUD.
+   * Werkt op apparaatpixels; `c` krijgt aan het eind de DPR-transform terug.
+   *
+   * Die scherpe band is de "scherptediepte" van de maquette: alles erboven
+   * (verre kust) en eronder (voorgrondzee) vervaagt, het schip blijft scherp.
+   * Subtiel gehouden zodat het als speelgoed leest, niet als onscherpte-bug.
+   */
+  tekenMiniatuur(c, lagen, scene) {
+    const W = lagen.wereld.width;
+    const H = lagen.wereld.height;
+    const straal = MINI_BLUR * this.dpr;
+    if (this.filterSteun === null) this.filterSteun = typeof c.filter === 'string';
+
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.globalCompositeOperation = 'source-over';
+    c.globalAlpha = 1;
+
+    // 1. Eerst de scherpe wereld één op één: schermvullend en dekkend, dus het
+    //    vorige frame is meteen weg. Zonder die basis schemert het door overal
+    //    waar de vervaging hieronder niet volledig dekt.
+    c.drawImage(lagen.wereld, 0, 0);
+
+    // 2. Daaroverheen dezelfde wereld, vervaagd. Het beeld wordt een paar
+    //    stralen ruimer getekend: een blur reikt verder dan zijn straal, en
+    //    anders zuigt hij de doorzichtige rand erbuiten naar binnen en krijgt
+    //    het scherm een lichte lijst. Die overmaat verschuift het vervaagde
+    //    beeld hooguit een paar pixels ten opzichte van de scherpe basis —
+    //    onzichtbaar, want juist daar is alles toch al uitgesmeerd.
+    if (this.filterSteun) {
+      const over = straal * 3;
+      c.filter = `blur(${straal.toFixed(1)}px)`;
+      c.drawImage(lagen.wereld, -over, -over, W + over * 2, H + over * 2);
+      c.filter = 'none';
+    } else {
+      // Terugval voor browsers zonder canvasfilter: vijf verschoven kopieën.
+      // De alfa's zijn 1, 1/2, 1/3 … zodat elke kopie na het stapelen even
+      // zwaar weegt én de eerste het beeld volledig dekt (geen nabeeld).
+      const stap = Math.max(1, Math.round(straal));
+      const verschuiving = [0, stap, -stap, stap * 2, -stap * 2];
+      for (let i = 0; i < verschuiving.length; i++) {
+        c.globalAlpha = 1 / (i + 1);
+        c.drawImage(lagen.wereld, 0, verschuiving[i], W, H);
+      }
+      c.globalAlpha = 1;
+    }
+
+    // 3. De scherpe plek. De scène wijst aan waar hij ligt: de camera loopt
+    //    vóór het schip uit en klemt tegen de wereldrand, dus het beeldmidden
+    //    is lang niet altijd het schip. Een scène die zich verslikt mag het
+    //    beeld niet laten vallen: een niet-eindig getal maakt de gradient stuk
+    //    en daarmee de hele tekenlus.
+    const kern = Math.min(W, H) * MINI_KERN;
+    const uitloop = Math.min(W, H) * MINI_UITLOOP;
+    const gevraagd = scene.miniatuurFocus() || {};
+    const punt = (waarde, maat) => (Number.isFinite(waarde) ? waarde * this.dpr : maat / 2);
+    // De cirkel gaat pal op het schip staan, waar het ook in beeld hangt — dan
+    // is het altijd volledig scherp, ook in een hoek. Alleen tot het scherm
+    // klemmen, voor het geval een scène een punt buiten beeld aanwijst (in een
+    // gevecht ligt de camera tussen beide schepen); anders zou de scherpe plek
+    // helemaal wegvallen.
+    const x = clamp(punt(gevraagd.x, W), 0, W);
+    const y = clamp(punt(gevraagd.y, H), 0, H);
+
+    const f = lagen.focusC;
+    f.setTransform(1, 0, 0, 1, 0, 0);
+    f.globalCompositeOperation = 'source-over';
+    f.globalAlpha = 1;
+    f.clearRect(0, 0, W, H);
+    f.drawImage(lagen.wereld, 0, 0);
+    // Hetzelfde beeld, maar weggesneden buiten die cirkel: een ronde gradient
+    // met een smoothstep-verloop, zodat de overgang naar vervaagd nergens een
+    // rand trekt. `destination-in` houdt alleen over wat de gradient dekt.
+    const g = f.createRadialGradient(x, y, kern, x, y, kern + uitloop);
+    for (let i = 0; i <= 6; i++) {
+      const u = i / 6;
+      const a = (1 - u * u * (3 - 2 * u)).toFixed(3);
+      g.addColorStop(u, `rgba(0,0,0,${a})`);
+    }
+    f.globalCompositeOperation = 'destination-in';
+    f.fillStyle = g;
+    f.fillRect(0, 0, W, H);
+    c.drawImage(lagen.focus, 0, 0);
+
+    // 4. De HUD bovenop, altijd scherp en in schermcoördinaten.
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    if (scene.tekenHud) scene.tekenHud(c);
+  },
+
+  /**
+   * Zet het miniatuureffect aan of uit en onthoudt de keuze in de browser.
+   * Bewust niet in de save: het zegt iets over dit scherm, niet over de reis.
+   */
+  zetMiniatuur(aan) {
+    this.miniatuur = !!aan;
+    try {
+      localStorage.setItem(MINIATUUR_SLEUTEL, this.miniatuur ? '1' : '0');
+    } catch (fout) {
+      /* Geen opslag: de keuze geldt dan alleen deze zitting. */
+    }
+    this.melding(this.miniatuur ? 'Miniatuureffect aan.' : 'Miniatuureffect uit.');
   },
 };
 

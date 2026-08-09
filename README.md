@@ -31,11 +31,35 @@ breedtegraden: Cuba, Hispaniola, Jamaica, Puerto Rico, de Kleine Antillen,
 Yucatán, Midden-Amerika en de Spanish Main. Daarop liggen 35 historische
 havensteden, verdeeld over Spanje, Engeland, Frankrijk en Nederland.
 
-**Zeilen.** De wind is het hart van het spel. Voor de wind vaar je snel, pal
-tegen de wind kom je nauwelijks vooruit, en een sloep kan veel hoger aan de wind
-liggen dan een zwaar galjoen. De wind draait en wakkert aan, dus je route is
-nooit twee keer hetzelfde. Onderweg eten je mannen proviand op en zakt de
-moraal — te lang wachten met de buit verdelen levert deserteurs of muiterij op.
+**Zeilen.** De wind is het hart van het spel. Het snelst loop je met de wind
+schuin van achteren — **ruime wind**, een streek of vier van pal achter. Pal
+voor de wind nemen de voorste zeilen de achterste de wind af, en te hoog aan de
+wind beginnen ze te killen: dan loopt het schip dood en moet je kruisen. Een
+sloep ligt veel hoger aan de wind dan een zwaar galjoen. Onderaan links staat in
+één woord en één kleur hoe je vaart; de windroos rechts wijst waarheen het waait.
+
+De passaat komt uit het oosten, maar dat is het gemiddelde en niet de grens: de
+wind dwaalt er omheen, ademt in vlagen en draait een enkele keer werkelijk om.
+De uitkijk meldt het als het weer omslaat. Je schip merkt het ook — kop op zee
+gaat het stampen en slaat de boeg water op, dwars in de golven rolt het, en een
+sloep werkt in dezelfde zee veel harder dan een linieschip.
+
+**Buien.** Een stormcel is geen pech maar een keuze. Hij draait om zijn kern, en
+in de band eromheen — die lichte, meedraaiende ring op de kaart — vind je de
+hardste wind die je ergens brengt: daar loop je tot **anderhalf keer** je vaart
+op open zee. Welke kant je erlangs moet, zie je aan de pijlen: met de draaiing
+mee jaag je mee, ertegenin val je stil.
+
+Binnen de gerafelde rode rand keert het. Daar bouwt zich spanning op in romp en
+want, zichtbaar als een balk onderaan het scherm. Die loopt sneller op naarmate
+je dieper zit en meer zeil voert, en hij **zakt zodra je reeft of eruit loopt** —
+volledig gereefd houdt zelfs het hart van een bui het uit. Pas als je de balk vol
+laat lopen breekt er een ra, en dan heb je twee waarschuwingen gehad. Een
+weerglas op de werf vertraagt de opbouw en verklapt bovendien welke kant van een
+naderende bui de goede is.
+
+Onderweg eten je mannen proviand op en zakt de moraal — te lang wachten met de
+buit verdelen levert deserteurs of muiterij op.
 
 **Zeegevechten.** Het geschut staat in rijen langs de zijkant en vuurt dus
 alleen dwarsuit, nooit over de boeg of de spiegel — je richt met het roer.
@@ -141,7 +165,15 @@ vlootscherm, dus daar mindert alleen ↓ het zeil.
 | | `spatie` vuren · `1` `2` `3` rondkogel, kettingkogel, schroot · `Tab` volgende soort |
 | | `B` enteren (binnen 95 m) · `Esc` proberen te vluchten |
 | **Duel** | ↑ hoog · → midden · ↓ laag — pareer op de hoogte waarop hij uithaalt |
+| **Overal** | `F` miniatuureffect aan of uit |
 | **In een scherm** | `Esc` sluiten · `Tab` langs de knoppen · `Enter` indrukken |
+
+Dat **miniatuureffect** staat aan: op zee en in een zeegevecht is alleen een
+ronde plek rond je schip haarscherp, en daarbuiten vervaagt de wereld zacht in
+alle richtingen — het kijkt als een maquette. De HUD blijft altijd scherp en de
+cirkel loopt met je schip mee. Met `F` zet je het om,
+ook midden in een gevecht; in de scheepsraad (`Esc` op zee) staat dezelfde
+schakelaar. De keuze wordt per browser onthouden, los van je opgeslagen spel.
 
 ## Bewaren en stoppen
 

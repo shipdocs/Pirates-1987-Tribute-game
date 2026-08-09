@@ -18,6 +18,12 @@ try {
 /** Tijd voor sieranimaties: bevroren wanneer de bezoeker rust wil. */
 export const sierTijd = (t) => (_rustig ? 0 : t);
 
+/**
+ * Staat de sierbeweging stil? Voor animaties die niet uit een tijdstip volgen
+ * maar per beeld optellen — die kunnen `sierTijd` niet gebruiken.
+ */
+export const sierRustig = () => _rustig;
+
 export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const smooth = (t) => t * t * (3 - 2 * t);

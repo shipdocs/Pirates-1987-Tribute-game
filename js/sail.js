@@ -22,6 +22,14 @@ const VOEDSEL = WAAR_INDEX.voedsel;
 // niet evenredig mee. Een lange reis kost circa 28% meer dagen dan voorheen,
 // niet ruim tweemaal zoveel proviand, moraal en jaren van de kapitein.
 const DAGEN_PER_SECONDE = 0.12;
+
+// Stormbelasting per seconde: hoe snel de spanning in romp en want oploopt bij
+// volle last, en hoeveel het schip er vanzelf van herstelt. Met deze twee is de
+// kern op volle zeilen ruim tien seconden te dragen en laat gereefd varen de
+// spanning juist zakken — de gevarenzone is daarmee uitdagend én te keren.
+const STORM_OPBOUW = 0.14;
+const STORM_HERSTEL = 0.045;
+const LEEG_STORMVELD = { nabij: 0, rug: 0, gevaar: 0, cel: null, richting: 0, kracht: 1 };
 const STANDAARD_ZOOM = 1.28;
 const MIN_ZOOM = 0.24;
 const MAX_ZOOM = 2.4;
@@ -82,8 +90,19 @@ export function maakZeilScene() {
   let doelKoers = null;
   let sporen = [];
   let gebeurtenisKoeling = 40; // zeegebeurtenissen (wrak, handelspost, …)
-  let stormKoeling = 0; // voorkomt dat stormschade elke seconde opnieuw tikt
-  let inStormMelding = false;
+  // Stormtoestand. `stormBelasting` is de spanning die zich in romp en want
+  // opbouwt zolang je in de kern vaart: hij loopt zichtbaar op, is met minder
+  // zeil of een andere koers te keren, en pas als hij vol is bezwijkt er iets.
+  // Nooit een dobbelsteen achter de rug van de speler om.
+  let stormVeld = LEEG_STORMVELD;
+  let stormBelasting = 0;
+  let stormFase = 'buiten'; // buiten · band · kern — voor de overgangsmelding
+  let stormWaarschuwing = 0; // welke drempel al gemeld is (0, 1 of 2)
+  // Laatst gemelde weerbeeld. Zonder deze twee draait de wind ongemerkt: hij
+  // kruipt te traag om te zien en het enige spoor is een cijfer in de balk.
+  let gemeldeWindhoek = null;
+  let gemeldeWindkracht = null;
+  let windMeldKoeling = 0;
   // Vertrek-animatie: het schip schuift bij het uitvaren van de kade het water
   // in (vanuit) -> (naar), in plaats van plotseling op open zee te staan.
   let vertrek = null;
@@ -113,6 +132,12 @@ export function maakZeilScene() {
       houdCameraInKaart();
       if (!miniKaart) miniKaart = maakMiniKaart(Game.wereld);
       audio.startMuziek();
+    },
+
+    verlaat() {
+      // Het stormbed loopt door zolang niemand het bijstelt; bij een zeeslag of
+      // een haven hoort de bui niet mee naar binnen.
+      audio.zetStorm(0, 0);
     },
 
     scroll(dy) {
@@ -172,38 +197,10 @@ export function maakZeilScene() {
 
       w.windTik(dt);
       w.stormTik && w.stormTik(dt);
+      meldWeer(w, dt);
 
-      // Storm kán vlagen, romp lekken en volk overboord slaan. Hoe zwaarder
-      // de storm en hoe hoger de moeilijkheidsgraad, hoe meer schade; een
-      // weerglas (uitrusting `weer`) dempt dat.
-      const stormKracht = w.stormOp ? w.stormOp(s.x, s.y) : 0;
-      stormKoeling -= dt;
-      if (stormKracht > 0.25 && stormKoeling <= 0) {
-        stormKoeling = 3 + (1 - stormKracht) * 4;
-        const moe = MOEILIJKHEDEN.find((m) => m.id === s.moeilijkheid) || MOEILIJKHEDEN[1];
-        const stormMult = moe.storm || 1;
-        const weer = (vlaggenschip(s).upgrades && vlaggenschip(s).upgrades.weer) || 0;
-        // Verminderde schade: weerglas (1) = 40%, precisiebarometer (2) = 65%.
-        const demping = [0, 0.4, 0.65][Math.min(weer, 2)] || 0;
-        const risk = Math.round((16 + stormKracht * 34) * stormMult * (1 - demping));
-        const schadeKans = 0.3 + stormKracht * 0.2;
-        if (Math.random() < schadeKans) {
-          const schip = vlaggenschip(s);
-          const verloren = Math.max(0, Math.round(s.bemanning * (risk / 100)));
-          s.bemanning = Math.max(6, s.bemanning - verloren);
-          schip.romp = Math.max(10, schip.romp - Math.round(risk * 0.4));
-          Game.melding(
-            `De storm bijt in het want: ${verloren} man overboord, de romp lekt.`,
-            'rood'
-          );
-          audio.sfx.ramp();
-        } else if (!inStormMelding) {
-          Game.melding('De storm giert door het want. Hou de zeilen strak!', 'goud');
-        }
-        inStormMelding = true;
-      } else if (stormKracht <= 0.25) {
-        inStormMelding = false;
-      }
+      stormVeld = w.stormVeld ? w.stormVeld(s.x, s.y) : LEEG_STORMVELD;
+      werkStormBij(s, stormVeld, dt);
 
       // --- Sturen ---------------------------------------------------------
       const bonus = w.scheepsBonus ? w.scheepsBonus(s) : { zeil: 0, roer: 0, hoogte: 0 };
@@ -399,6 +396,7 @@ export function maakZeilScene() {
           kanonnen: v.kanonnen,
           schaal: scheepSchaal,
           isLand: doeLandCheck,
+          zeegang: zeeWind,
         });
       }
 
@@ -422,6 +420,7 @@ export function maakZeilScene() {
           kanonnen: s.schepen[i].kanonnen,
           schaal: scheepSchaal,
           isLand: doeLandCheck,
+          zeegang: zeeWind,
         });
       }
       R.tekenSchip(c, s.x, s.y, s.koers, schip.type, 'piraat', w.windRichting, {
@@ -432,6 +431,7 @@ export function maakZeilScene() {
         schaal: spelerSchaal,
         isLand: doeLandCheck,
         rompFractie: schip.romp / schip.maxRomp,
+        zeegang: zeeWind,
       });
 
       c.restore();
@@ -442,10 +442,148 @@ export function maakZeilScene() {
       R.tekenMeeuwen(c, vw, vh, Game.tijd);
       const stormLokaal = w.stormWind ? w.stormWind(s.x, s.y) : { richting: w.windRichting, kracht: w.windKracht };
       R.tekenRegen(c, vw, vh, stormLokaal.richting, stormLokaal.kracht, Game.tijd);
+    },
 
-      tekenHud(c, s, w, cam, miniKaart);
+    /**
+     * HUD in schermcoördinaten, los van de wereld. Apart gehouden zodat een
+     * eventueel miniatuureffect (tilt-shift) alleen de wereld vervaagt en de
+     * HUD altijd scherp blijft.
+     */
+    tekenHud(c) {
+      tekenHud(c, Game.speler, Game.wereld, cam, miniKaart, stormVeld, stormBelasting);
+    },
+
+    /**
+     * De plek in het beeld waar het miniatuureffect scherp moet stellen. De
+     * camera loopt vóór het schip uit en wordt tegen de wereldrand geklemd,
+     * dus het schip staat lang niet altijd midden in beeld.
+     */
+    miniatuurFocus() {
+      return {
+        x: Game.breedte / 2 + (Game.speler.x - cam.x) * cam.zoom,
+        y: Game.hoogte / 2 + (Game.speler.y - cam.y) * cam.zoom,
+      };
     },
   };
+
+  // --- Storm ---------------------------------------------------------------
+
+  /**
+   * De stormcel als spelmechanisme in plaats van als pech.
+   *
+   * Op de flank is een bui winst: de wind wakkert aan en draait met de cel mee,
+   * dus wie zijn kant goed kiest vliegt eromheen. Pas binnen de kernrand keert
+   * het — en dan niet met een worp achter je rug om, maar met een spanning die
+   * zichtbaar oploopt. Je ziet hem komen, je kunt hem keren door zeil te
+   * minderen of eruit te lopen, en pas als je hem helemaal laat vollopen breekt
+   * er iets. Wie schade oploopt heeft dat zelf zien aankomen.
+   */
+  function werkStormBij(s, veld, dt) {
+    const schip = vlaggenschip(s);
+    const moe = MOEILIJKHEDEN.find((m) => m.id === s.moeilijkheid) || MOEILIJKHEDEN[1];
+    // Weerglas (1) en precisiebarometer (2): de stuurman ziet de vlagen aankomen
+    // en laat op tijd vieren.
+    const weer = (schip.upgrades && schip.upgrades.weer) || 0;
+    const demping = [0, 0.4, 0.65][Math.min(weer, 2)] || 0;
+
+    // Wat de cel van het schip vraagt: dieper in de kern is zwaarder, en volle
+    // zeilen vangen elke vlaag. Reven is daarmee een échte uitweg en niet enkel
+    // uitstel — dat is de keuze die we de speler in handen willen geven.
+    const last = clamp(
+      veld.gevaar * (0.28 + 0.72 * schip.zeilen) * (moe.storm || 1) * (1 - demping),
+      0,
+      1.8
+    );
+    stormBelasting = clamp(stormBelasting + (last * STORM_OPBOUW - STORM_HERSTEL) * dt, 0, 1);
+    audio.zetStorm(veld.nabij, veld.gevaar);
+
+    // De overgang van voordelig naar gevaarlijk is het hele punt, dus die wordt
+    // uitgesproken — in woord én in geluid.
+    const fase = veld.gevaar > 0.02 ? 'kern' : veld.rug > 0.35 ? 'band' : 'buiten';
+    if (fase !== stormFase) {
+      if (fase === 'band' && stormFase === 'buiten') {
+        Game.melding('Je pakt de rand van de bui — de wind valt vol in je zeilen!', 'goud');
+        audio.sfx.stormRand();
+      } else if (fase === 'kern') {
+        Game.melding('Je loopt de kern in. Hier breekt het want.', 'rood');
+        audio.sfx.stormKern();
+      } else if (fase === 'buiten') {
+        Game.melding('De bui laat je los.');
+      }
+      stormFase = fase;
+    }
+
+    // Twee waarschuwingen voordat er iets breekt, allebei met een uitweg erin.
+    if (stormBelasting > 0.75 && stormWaarschuwing < 2) {
+      stormWaarschuwing = 2;
+      Game.melding('De stengen buigen door — reef, of je raakt ze kwijt!', 'rood');
+      audio.sfx.kraak(1);
+    } else if (stormBelasting > 0.42 && stormWaarschuwing < 1) {
+      stormWaarschuwing = 1;
+      Game.melding('Het want kraakt onder de vlagen. Minder zeil.', 'goud');
+      audio.sfx.kraak(0);
+    } else if (stormBelasting < 0.3) {
+      stormWaarschuwing = 0;
+    }
+
+    if (stormBelasting >= 1) {
+      // Het begeeft het. De schade volgt uit hoe lang je bent blijven staan, en
+      // daarna is de spanning half weg: ruimte om eruit te lopen in plaats van
+      // een maalstroom die je in één keer uitkleedt.
+      stormBelasting = 0.5;
+      stormWaarschuwing = 1;
+      const verloren = Math.max(1, Math.round(s.bemanning * 0.09));
+      s.bemanning = Math.max(6, s.bemanning - verloren);
+      // Naar rato van het schip: een vaste klap zou een sloep meteen halveren
+      // en een linieschip nauwelijks raken.
+      schip.romp = Math.max(10, schip.romp - Math.round(schip.maxRomp * (0.09 + veld.gevaar * 0.06)));
+      // Het schip reeft zichzelf: de zeilen zíjn eraf gescheurd.
+      schip.zeilen = Math.min(schip.zeilen, 0.45);
+      Game.melding(`Een ra breekt: ${verloren} man overboord en de romp lekt.`, 'rood');
+      audio.sfx.ramp();
+    }
+  }
+
+  // --- Weer ----------------------------------------------------------------
+
+  /**
+   * Zegt het wanneer het weer omslaat. De wind draait met hooguit 0,11 radiaal
+   * per seconde: te traag om te zien, en het enige spoor was een cijfer in de
+   * balk dat niemand met zijn vaart in verband brengt. Nu meldt de uitkijk het,
+   * en dan kijk je naar de windroos.
+   *
+   * Alleen bij een echte omslag — een ander kompaspunt, een andere windkracht —
+   * en met een koeling ertussen, anders staat het scherm vol zodra de wind
+   * precies op een grens hangt. De kracht wordt aan de gestage wind (`windBasis`)
+   * afgemeten en niet aan de vlagen, want die ademen om elke grens heen.
+   */
+  function meldWeer(w, dt) {
+    windMeldKoeling -= dt;
+    const hoek = compassName(normAngle(w.windRichting + Math.PI));
+    const band = windBand(w.windBasis != null ? w.windBasis : w.windKracht);
+    if (gemeldeWindhoek === null) {
+      gemeldeWindhoek = hoek;
+      gemeldeWindkracht = band;
+      return;
+    }
+    if (windMeldKoeling > 0) return;
+    if (band !== gemeldeWindkracht) {
+      const woord = WIND_BANDEN[band][1];
+      Game.melding(
+        band > gemeldeWindkracht ? `De wind wakkert aan tot ${woord}.` : `De wind zakt naar ${woord}.`,
+        band >= 3 ? 'rood' : 'goud'
+      );
+      gemeldeWindkracht = band;
+      gemeldeWindhoek = hoek;
+      windMeldKoeling = 18;
+      return;
+    }
+    if (hoek !== gemeldeWindhoek) {
+      Game.melding(`De wind loopt naar het ${hoek}.`);
+      gemeldeWindhoek = hoek;
+      windMeldKoeling = 18;
+    }
+  }
 
   // --- Gebeurtenissen -----------------------------------------------------
 
@@ -501,42 +639,55 @@ export function maakZeilScene() {
     }
   }
 
+  /**
+   * De uitkijk ziet weer aankomen. Dit was een gok met de romp van de speler —
+   * een derde kans op zware schade waar niets aan te doen viel. Nu is het een
+   * vooruitzicht: de wind draait en wakkert aan, en er drijft een cel jouw kant
+   * op. Wat die cel je kost of oplevert bepaal je zelf, door hoe je erlangs
+   * vaart. Een weerglas aan boord vertelt er meteen bij welke kant de goede is.
+   */
   async function gebeurtenisStorm(s) {
     if (UI.ietsOpen()) return;
     const wereld = Game.wereld;
-    // Storm: wind springt omhoog én draait heftig. Risico op schade.
-    const oudKracht = wereld.windKracht;
-    wereld.windKracht = clamp(oudKracht + 0.8, 1, 2);
-    const richting = Math.random() * TAU;
-    wereld.windDoel = richting;
-    // De weerglas/barometer uitrusting dempt ook deze storm, en de
-    // moeilijkheidsgraad bepaalt hoe genadeloos hij toestaat.
+    // Dit moet op de *doelen* werken en niet op `windKracht` zelf: die wordt
+    // elke tik opnieuw uit basis en vlagen samengesteld, dus een rechtstreekse
+    // waarde was binnen één beeld weer weg — en zolang dit scherm openstaat
+    // staat de wereld stil, dus je zou die harde wind nooit hebben gevaren.
+    wereld.krachtDoel = clamp(wereld.windBasis + 0.8, 1.2, 2);
+    wereld.windDoel = Math.random() * TAU;
+    // De opsteker mag even blijven staan; pas daarna zoekt het weer zijn gang.
+    wereld.windTimer = Math.max(wereld.windTimer, 45);
+
+    // De dichtstbijzijnde cel opzoeken, zodat de uitkijk kan zeggen waar hij
+    // ligt in plaats van dat er zomaar iets gebeurt.
+    let dichtst = null,
+      dichtstD = Infinity;
+    for (const cel of wereld.stormen || []) {
+      const d = dist(cel.x, cel.y, s.x, s.y);
+      if (d < dichtstD) {
+        dichtstD = d;
+        dichtst = cel;
+      }
+    }
     const weer = (vlaggenschip(s).upgrades && vlaggenschip(s).upgrades.weer) || 0;
-    const demping = [0, 0.4, 0.65][Math.min(weer, 2)] || 0;
-    const moe = MOEILIJKHEDEN.find((m) => m.id === s.moeilijkheid) || MOEILIJKHEDEN[1];
-    const stormMult = moe.storm || 1;
-    const risk = Math.round((20 + Math.random() * 40) * stormMult * (1 - demping));
-    const schade = Math.random() < 0.35;
+    let waar = 'Ergens voor de boeg pakt zich iets samen.';
+    if (dichtst) {
+      const kant = compassName(Math.atan2(dichtst.y - s.y, dichtst.x - s.x));
+      const mijl = Math.round(dichtstD / 8);
+      waar = `Een zwarte muur in het ${kant}, een mijl of ${mijl}.`;
+      if (weer > 0) {
+        waar += (dichtst.draaiing || 1) > 0
+          ? ' Het weerglas zegt: hij draait met de klok mee — houd hem aan bakboord en hij duwt je vooruit.'
+          : ' Het weerglas zegt: hij draait tegen de klok in — houd hem aan stuurboord en hij duwt je vooruit.';
+      }
+    }
     await UI.vraag(
       'De hemel betrekt',
-      `Een zwarte muur komt uit het oosten. De wind springt om en zwelt aan tot vlagen ` +
-        `die het want laten gieren. De stuurman roept orders over het dek.`,
-      [{ label: 'Alle zeilen reven', waarde: 'ok', soort: 'gevaar' }],
+      `${waar} De wind springt om en zwelt aan. Langs de rand van zo'n bui loop je ` +
+        `harder dan je ooit op open zee komt — maar wie de kern in vaart, breekt zijn want.`,
+      [{ label: 'Begrepen', waarde: 'ok' }],
       { figuur: 'zeeman' }
     );
-    if (schade) {
-      const schip = vlaggenschip(s);
-      const verloren = Math.round(s.bemanning * (risk / 100));
-      s.bemanning = Math.max(8, s.bemanning - verloren);
-      schip.romp = Math.max(10, schip.romp - risk * 0.5);
-      Game.melding(`De storm eist ${verloren} man en slaat de romp lekken.`, 'rood');
-      audio.sfx.ramp();
-    } else {
-      Game.melding('Je komt er zonder kleerscheuren vanaf.', 'goud');
-      audio.sfx.fanfare();
-    }
-    // Wind zakt na de storm weer wat.
-    wereld.windKracht = Math.max(0.72, oudKracht);
   }
 
   async function gebeurtenisWrak(s) {
@@ -1162,6 +1313,16 @@ export function maakZeilScene() {
           },
         },
         {
+          // Miniatuureffect (tilt-shift): de wereld vervaagt buiten een scherpe
+          // band rond het schip. Presentatievoorkeur, los van de save; `F` doet
+          // hetzelfde, ook buiten dit scherm.
+          label: Game.miniatuur ? 'Miniatuureffect uit' : 'Miniatuureffect aan',
+          actie: () => {
+            Game.zetMiniatuur(!Game.miniatuur);
+            sch.ververs();
+          },
+        },
+        {
           label: 'Stoppen zonder bewaren',
           soort: 'gevaar',
           actie: async () => {
@@ -1204,9 +1365,44 @@ function relatieWoord(v) {
   return 'Bondgenoot';
 }
 
+// --- Wind in woorden ------------------------------------------------------
+
+/**
+ * De windkracht in zeemanstaal. De grenzen doen dubbel dienst: ze benoemen het
+ * weer in de HUD én ze zijn de drempels waarop de scène meldt dat het omslaat.
+ */
+const WIND_BANDEN = [
+  [0.72, 'flauwe koelte'],
+  [0.98, 'kalme bries'],
+  [1.24, 'stevige bries'],
+  [1.55, 'harde wind'],
+  [Infinity, 'stormweer'],
+];
+
+export function windBand(kracht) {
+  for (let i = 0; i < WIND_BANDEN.length; i++) if (kracht < WIND_BANDEN[i][0]) return i;
+  return WIND_BANDEN.length - 1;
+}
+
+export const windWoord = (kracht) => WIND_BANDEN[windBand(kracht)][1];
+
+/**
+ * Hoe je ten opzichte van de wind vaart, met de kleur die daarbij hoort.
+ * `a` is de hoek tussen de koers en de richting waarheen de wind waait:
+ * 0 = pal voor de wind, PI = er pal tegenin.
+ */
+export function zeilWoord(koers, windRichting) {
+  const a = Math.abs(normAngle(koers - windRichting));
+  if (a < 0.38) return { woord: 'pal voor de wind', kleur: '#cbd8c2' };
+  if (a < 1.2) return { woord: 'ruime wind', kleur: '#9ed17f' };
+  if (a < 1.95) return { woord: 'halve wind', kleur: '#e9dcb8' };
+  if (a < 2.62) return { woord: 'bij de wind', kleur: '#e0b169' };
+  return { woord: 'de zeilen killen', kleur: '#d98166' };
+}
+
 // --- HUD ------------------------------------------------------------------
 
-function tekenHud(c, s, w, cam, miniKaart) {
+function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
   const vw = Game.breedte,
     vh = Game.hoogte;
   const schip = vlaggenschip(s);
@@ -1261,6 +1457,42 @@ function tekenHud(c, s, w, cam, miniKaart) {
   // Windroos.
   R.tekenWindroos(c, vw - 62, 100, 42, w.windRichting, w.windKracht, Game.tijd);
 
+  // Stormvak: alleen zichtbaar zolang je in een cel zit, en dan meteen het
+  // belangrijkste — waar je bent en hoeveel spanning erop staat. Zonder deze
+  // balk zou de kern alsnog als willekeur voelen.
+  if (storm && storm.nabij > 0.04) {
+    const sh = storm.gevaar > 0.02;
+    const rand = sh ? 'rgba(206,86,68,0.75)' : 'rgba(126,196,214,0.6)';
+    c.save();
+    c.fillStyle = 'rgba(10,22,36,0.8)';
+    roundRect(c, 16, vh - 172, 168, 54, 8);
+    c.fill();
+    c.strokeStyle = rand;
+    c.lineWidth = 1.4;
+    c.stroke();
+    c.font = '600 11px Georgia, serif';
+    c.textBaseline = 'middle';
+    c.textAlign = 'left';
+    c.fillStyle = '#b9c7d4';
+    c.fillText('BUI', 28, vh - 154);
+    c.textAlign = 'right';
+    c.fillStyle = sh ? '#e0917c' : '#9ed7e4';
+    c.fillText(sh ? 'in de kern' : storm.rug > 0.35 ? 'rugwind' : 'buitenrand', 172, vh - 154);
+    // De belastingbalk. Hij loopt alleen op in de kern en zakt zodra je reeft
+    // of eruit loopt, dus wat je ziet is precies wat er gaat gebeuren.
+    c.textAlign = 'left';
+    c.fillStyle = 'rgba(0,0,0,0.4)';
+    roundRect(c, 28, vh - 142, 144, 10, 3);
+    c.fill();
+    const b = clamp(belasting || 0, 0, 1);
+    c.fillStyle = b > 0.75 ? '#c65b45' : b > 0.42 ? '#d9a441' : '#7bb36a';
+    roundRect(c, 28, vh - 142, 144 * b, 10, 3);
+    c.fill();
+    c.fillStyle = '#8fa3b4';
+    c.fillText(b > 0.42 ? 'want onder spanning' : 'want houdt het', 28, vh - 126);
+    c.restore();
+  }
+
   // Zeilstand.
   c.save();
   c.fillStyle = 'rgba(10,28,44,0.72)';
@@ -1273,14 +1505,23 @@ function tekenHud(c, s, w, cam, miniKaart) {
   c.fillStyle = '#b9c7d4';
   c.textAlign = 'left';
   c.fillText('ZEILEN', 28, vh - 58);
+  // Hoe je ten opzichte van de wind ligt, in woord en kleur. Eén blik leert je
+  // dat afvallen loont — daar is geen getal voor nodig.
+  const trim = zeilWoord(s.koers, lokaal.richting);
+  c.textAlign = 'right';
+  c.fillStyle = trim.kleur;
+  c.fillText(trim.woord, 172, vh - 58);
+  c.textAlign = 'left';
   c.fillStyle = 'rgba(0,0,0,0.4)';
   roundRect(c, 28, vh - 48, 144, 12, 3);
   c.fill();
-  c.fillStyle = '#e9dcb8';
+  c.fillStyle = trim.kleur;
   roundRect(c, 28, vh - 48, 144 * schip.zeilen, 12, 3);
   c.fill();
   c.fillStyle = '#b9c7d4';
   c.fillText(`${(s.snelheid / 8).toFixed(1)} knopen`, 28, vh - 27);
+  c.textAlign = 'right';
+  c.fillText(windWoord(lokaal.kracht), 172, vh - 27);
   c.restore();
 
   // Minikaart.

@@ -1,6 +1,8 @@
 // Alles wat op het canvas getekend wordt: zee, land, steden en schepen.
-import { TAU, clamp, lerp, normAngle, sierTijd } from './util.js';
+import { TAU, clamp, lerp, normAngle, sierTijd, sierRustig } from './util.js';
 import { NATIES, SCHIP_INDEX, SCHEEP_MAAT } from './data.js';
+// world.js leunt alleen op util en data, dus dit levert geen kringetje op.
+import { STORM_KERN, stormStraalBij } from './world.js';
 import { WORLD_W, WORLD_H } from './world.js';
 
 // --- Kleine hulpjes -------------------------------------------------------
@@ -376,6 +378,39 @@ function vulPatroon(ctx, patroon, vw, vh, maat, offX, offY, alfa, samenstelling)
 // --- Zee ------------------------------------------------------------------
 
 /**
+ * Afgelegde weg van de zeegang, opgeteld per beeld in plaats van berekend als
+ * tijd × snelheid.
+ *
+ * Dat verschil is wezenlijk. `t · v` is een positie die uit de *huidige*
+ * snelheid volgt, dus zodra de wind aanwakkert of draait wordt met terugwerkende
+ * kracht de hele geschiedenis herschreven: het golfveld verspringt in één beeld,
+ * en tijdens het draaien raast het weg met een schijnbare snelheid die met de
+ * speelduur meegroeit. Door de verplaatsing op te tellen verandert een winddraai
+ * alleen nog wat er vanaf nú gebeurt — precies wat je van water verwacht.
+ *
+ * Eén vector volstaat voor alle lagen: hun snelheid is een vaste factor, dus
+ * `laag.snel × drift` geeft elke laag zijn eigen tempo op dezelfde stroming.
+ */
+const zeeDrift = { x: 0, y: 0, tijd: null };
+
+function zeeDriftBij(t, richting, kracht) {
+  if (zeeDrift.tijd === null) {
+    zeeDrift.tijd = t;
+    return zeeDrift;
+  }
+  // Twee tekenbeurten binnen één beeld tellen niet dubbel (dt = 0), en een
+  // sprong in de tijd — tabblad weg geweest, andere scène — mag niet in één
+  // klap doorwerken.
+  const dt = clamp(t - zeeDrift.tijd, 0, 0.25);
+  zeeDrift.tijd = t;
+  if (!sierRustig()) {
+    zeeDrift.x += Math.cos(richting) * kracht * dt;
+    zeeDrift.y += Math.sin(richting) * kracht * dt;
+  }
+  return zeeDrift;
+}
+
+/**
  * Tekent de open zee. `cam` = {x, y, zoom}, `vw/vh` = grootte van het beeld,
  * `wind` = {richting, kracht} zodat de deining met de wind meeloopt.
  */
@@ -422,8 +457,7 @@ export function tekenZee(ctx, cam, vw, vh, t, wind) {
   // de patronen volgen de camera één-op-één; alleen de drift is van de wind.
   const camX = cam.x * zoom,
     camY = cam.y * zoom;
-  const dx = Math.cos(wr),
-    dy = Math.sin(wr);
+  const drift = zeeDriftBij(t, wr, wk);
 
   // Deining (met de wolkenschaduw erin), golfslag, en — alleen als je er dicht
   // genoeg op zit — rimpeling. Alle drie dezelfde tegel op een andere maat en
@@ -435,8 +469,7 @@ export function tekenZee(ctx, cam, vw, vh, t, wind) {
   for (let i = 0; i < golfLagen.length; i++) {
     if (i === 2 && zoom <= 0.55) break; // uitgezoomd is rimpeling toch alleen ruis
     const { patroon, maat, snel, alfa } = golfLagen[i];
-    const drift = st * snel * wk;
-    vulPatroon(ctx, patroon, vw, vh, maat, -camX + dx * drift, -camY + dy * drift, alfa);
+    vulPatroon(ctx, patroon, vw, vh, maat, -camX + drift.x * snel, -camY + drift.y * snel, alfa);
   }
 
   // Zonnevonken op de kruinen, ademend zodat het twinkelt in plaats van staat.
@@ -444,9 +477,8 @@ export function tekenZee(ctx, cam, vw, vh, t, wind) {
   const helder = clamp(1 - schemer * 1.4, 0.15, 1);
   for (let i = 0; i < sprankelLagen.length; i++) {
     const { patroon, maat } = sprankelLagen[i];
-    const drift = st * 21 * wk;
     const alfa = 0.24 * helder * (0.55 + 0.45 * Math.sin(st * 1.7));
-    vulPatroon(ctx, patroon, vw, vh, maat, -camX + dx * drift, -camY + dy * drift, alfa, 'lighter');
+    vulPatroon(ctx, patroon, vw, vh, maat, -camX + drift.x * 21, -camY + drift.y * 21, alfa, 'lighter');
   }
 
   // Schemering: een goudoranje gloed op de kim en een blauwige nevel. Deze
@@ -1152,6 +1184,54 @@ function rompSprite(typeId, poorten, dichtheid) {
  * Tekent één schip. Coördinaten in wereldruimte, camera-transform actief.
  * opts: {zeilen 0..1, vaart, kanonnen, tijd, schaal}
  */
+/**
+ * Hoe een schip in de zeegang werkt, recht van boven gezien.
+ *
+ * Rollen en stampen draaien om een horizontale as; van bovenaf zie je die
+ * kanteling niet, maar wél de verkorting die erbij hoort — een overhellend
+ * schip laat minder breedte zien, een stampend schip minder lengte. Samen met
+ * een paar graden gieren en wat op-en-neer is dat genoeg om een romp te lezen
+ * die dóór de golven gaat in plaats van eroverheen te schuiven.
+ *
+ * De golven lopen met de wind mee (zo tekent `tekenZee` ze ook), dus de hoek
+ * tussen koers en wind bepaalt wát het schip doet: kop op zee stampt het,
+ * dwars in de golven rolt het. Puur tekenwerk — de koers en de romp waarmee
+ * gerekend en gebotst wordt blijven onaangeroerd, anders zou mikken in een
+ * gevecht van geluk afhangen.
+ */
+function deining(x, y, koers, L, st, zeegang) {
+  const stil = { gier: 0, langs: 1, dwars: 1, hef: 1, spat: 0 };
+  if (!zeegang || sierRustig()) return stil;
+  const kracht = clamp(zeegang.kracht == null ? 1 : zeegang.kracht, 0, 2.4);
+  if (kracht < 0.05) return stil;
+  // Dezelfde golf pakt een sloep veel harder aan dan een linieschip. De klem
+  // erboven houdt ook het kleinste scheepje in het zwaarste weer leesbaar.
+  const amp = clamp(kracht * clamp(26 / L, 0.45, 1.5), 0, 2);
+  // Elk schip zijn eigen fase, uit zijn plek afgeleid: een vloot die synchroon
+  // deint verraadt zich onmiddellijk als tekenwerk.
+  const fase = x * 0.031 + y * 0.047;
+  const rel = normAngle(koers - zeegang.richting);
+  // Stampen volgt de golfhelling in de lengte, en kop op zee zwaarder dan met
+  // de golven mee. Rollen volgt diezelfde helling dwarsscheeps.
+  const kopOp = clamp(-Math.cos(rel), 0, 1);
+  const stampAmp = Math.abs(Math.cos(rel)) * (0.55 + 0.45 * kopOp);
+  const stamp = Math.sin(st * 1.9 + fase) * stampAmp * amp;
+  const rol = Math.sin(st * 1.25 + fase * 1.7) * Math.abs(Math.sin(rel)) * amp;
+  const hef = Math.sin(st * 1.55 + fase * 0.6) * amp;
+  return {
+    // Gieren: het schip zoekt een paar graden om zijn koers heen. Dit is het
+    // zwaarste gewicht van de vier, want een draaiing lees je op elke maat —
+    // en op de zeekaart is het eigen schip maar een pixel of dertig lang, dus
+    // van verkorting alleen zou je niets merken.
+    gier: rol * 0.08 + stamp * 0.04,
+    langs: 1 - Math.abs(stamp) * 0.07,
+    dwars: 1 - Math.abs(rol) * 0.14,
+    hef: 1 + hef * 0.03,
+    // Kop op zee slaat de boeg water op.
+    spat: clamp(kopOp * kracht * 0.55, 0, 1),
+  };
+}
+
 export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts = {}) {
   const [L, B, masten] = scheepMaat(typeId);
   const s = opts.schaal || 1;
@@ -1183,6 +1263,9 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
   const stukken = opts.kanonnen != null ? opts.kanonnen : SCHIP_INDEX[typeId]?.kanonnen ?? 0;
   const poorten = clamp(Math.round(stukken / 2), 0, Math.max(1, Math.floor(L / 4.6)));
 
+  // Werken van het schip in de zeegang.
+  const zee = deining(x, y, koers, L, st, opts.zeegang);
+
   // Kielzog: uitwaaierend schuim dat naar achteren vervaagt.
   if (vaart > 0.05) {
     ctx.save();
@@ -1205,14 +1288,16 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
     ctx.closePath();
     ctx.fill();
     // Boeggolf: op open zee een strakke krul; dichter bij de kust schuimt-ie
-    // breder uit en deint hij sterker.
-    const spat = 0.3 * w + 0.25 * w * landFactor;
+    // breder uit en deint hij sterker. Kop op zee slaat de boeg er water bij
+    // op — dat is de zichtbare prijs van tegen de golven in varen.
+    const spat = 0.3 * w + 0.25 * w * landFactor + 0.28 * w * zee.spat;
+    const breed = landFactor + 0.7 * zee.spat;
     ctx.globalAlpha = spat;
     ctx.strokeStyle = '#eafbff';
-    ctx.lineWidth = 1.6 + 1.4 * landFactor;
+    ctx.lineWidth = 1.6 + 1.4 * breed;
     ctx.beginPath();
-    ctx.moveTo(L * 0.42, -B * (0.34 + 0.5 * landFactor * Math.sin(st * 9)));
-    ctx.quadraticCurveTo(L * (0.62 + 0.1 * landFactor), -B * 0.04 * landFactor, L * 0.42, B * (0.34 + 0.5 * landFactor * Math.sin(st * 9 + 1.4)));
+    ctx.moveTo(L * 0.42, -B * (0.34 + 0.5 * breed * Math.sin(st * 9)));
+    ctx.quadraticCurveTo(L * (0.62 + 0.1 * breed), -B * 0.04 * breed, L * 0.42, B * (0.34 + 0.5 * breed * Math.sin(st * 9 + 1.4)));
     ctx.stroke();
     ctx.restore();
   }
@@ -1223,8 +1308,9 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
   const schaduwAlfa = 0.4 * (1 - 0.45 * landFactor);
   ctx.save();
   ctx.translate(x + ZON_X * s, y + ZON_Y * s);
-  ctx.rotate(koers);
-  ctx.scale(s, s);
+  // De schaduw werkt mee met de romp, anders laat hij bij elke golf los.
+  ctx.rotate(koers + zee.gier);
+  ctx.scale(s * zee.langs * zee.hef, s * zee.dwars * zee.hef);
   ctx.fillStyle = `rgba(4,22,36,${schaduwAlfa})`;
   romPad(ctx, L, B);
   ctx.fill();
@@ -1232,8 +1318,8 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
 
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(koers);
-  ctx.scale(s, s);
+  ctx.rotate(koers + zee.gier);
+  ctx.scale(s * zee.langs * zee.hef, s * zee.dwars * zee.hef);
 
   // Romp met al het vaste houtwerk, uit de sprite.
   const sp = rompSprite(typeId, poorten, dichtheid);
@@ -1731,6 +1817,67 @@ export function tekenStormen(ctx, wereld, cam, vw, vh, tijd) {
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.straal * 0.62, fase * 0.3, fase * 0.3 + Math.PI * 0.5);
     ctx.stroke();
+
+    const draai = s.draaiing || 1;
+
+    // De snelle band: waar de rugwind piekt. Een lichte, meedraaiende boog die
+    // laat zien wélke kant je erlangs moet — met de draaiing mee jaag je mee,
+    // ertegenin val je stil.
+    const rugR = stormStraalBij(s, 0.5);
+    if (rugR > 40) {
+      ctx.strokeStyle = `rgba(178,224,236,${0.3 * groei})`;
+      ctx.lineWidth = 2.4;
+      ctx.setLineDash([26, 34]);
+      ctx.lineDashOffset = -fase * 90 * draai;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, rugR, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Pijlpunten op de band, die met de draaiing meewijzen.
+      for (let i = 0; i < 3; i++) {
+        const a = fase * 0.9 * draai + (i / 3) * TAU;
+        const px = s.x + Math.cos(a) * rugR,
+          py = s.y + Math.sin(a) * rugR;
+        const t = a + (draai * Math.PI) / 2;
+        ctx.fillStyle = `rgba(196,236,246,${0.5 * groei})`;
+        ctx.beginPath();
+        ctx.moveTo(px + Math.cos(t) * 13, py + Math.sin(t) * 13);
+        ctx.lineTo(px + Math.cos(t + 2.5) * 9, py + Math.sin(t + 2.5) * 9);
+        ctx.lineTo(px + Math.cos(t - 2.5) * 9, py + Math.sin(t - 2.5) * 9);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // De kern: waar het gevaarlijk wordt. Nadrukkelijk een eigen, herkenbare
+    // vorm met een harde rand, want dit is de grens waarop de speler zijn
+    // besluit neemt. Alleen volgroeide cellen hebben er een.
+    const kernR = stormStraalBij(s, STORM_KERN);
+    if (kernR > 30) {
+      const kern = ctx.createRadialGradient(s.x, s.y, kernR * 0.2, s.x, s.y, kernR);
+      kern.addColorStop(0, 'rgba(8,14,26,0.72)');
+      kern.addColorStop(0.7, 'rgba(12,20,34,0.5)');
+      kern.addColorStop(1, 'rgba(16,26,42,0.12)');
+      ctx.fillStyle = kern;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, kernR, 0, TAU);
+      ctx.fill();
+      // Gerafelde muur eromheen, zodat de grens leesbaar is zonder als een
+      // getekende cirkel op het water te liggen.
+      ctx.strokeStyle = `rgba(226,148,120,${0.34 + 0.12 * Math.sin(fase * 4)})`;
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      for (let i = 0; i <= 40; i++) {
+        const a = (i / 40) * TAU;
+        const rafel = kernR * (1 + 0.055 * Math.sin(a * 5 + fase * 3) + 0.03 * Math.sin(a * 11 - fase * 2));
+        const px = s.x + Math.cos(a) * rafel,
+          py = s.y + Math.sin(a) * rafel;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }

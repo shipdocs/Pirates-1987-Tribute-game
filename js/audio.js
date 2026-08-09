@@ -157,7 +157,97 @@ export const sfx = {
     toon(392, 0.3, 'triangle', 0.18);
     toon(523, 0.4, 'triangle', 0.16, 0.14);
   },
-};// --- Muziek ---------------------------------------------------------------
+  /** De cel pakt je op: een aanzwellende vlaag met een opgaande toon erin. */
+  stormRand() {
+    ruis(1.4, 0.3, 900, 'bandpass');
+    toon(180, 0.9, 'sine', 0.1, 0.1, 320);
+  },
+  /** De kernrand over: dof, laag, en niets opgaands meer. */
+  stormKern() {
+    ruis(1.8, 0.42, 320);
+    toon(150, 1.4, 'sine', 0.2, 0, 52);
+  },
+  /** Het want onder spanning. Hoe hoger `nood`, hoe scherper het kraakt. */
+  kraak(nood = 0) {
+    ruis(0.5 + 0.3 * nood, 0.18 + 0.16 * nood, 380 + 260 * nood);
+    toon(140 - 40 * nood, 0.5, 'sawtooth', 0.1 + 0.1 * nood, 0, 60);
+  },
+};
+
+// --- Stormbed -------------------------------------------------------------
+//
+// Eén doorlopende ruislaag onder alles door, die met de storm mee zwelt. Losse
+// klanken kunnen wel een grens márkeren, maar niet vertellen hóe diep je erin
+// zit; daar is een aanhoudend geluid voor nodig dat met je meebeweegt. In de
+// kern komt er een lage huiltoon bij, zodat gevaarlijk niet alleen hárder
+// klinkt dan voordelig maar ook ánders.
+const storm = { bron: null, filter: null, gain: null, huil: null, huilGain: null };
+
+function bouwStormbed(c) {
+  const len = Math.floor(c.sampleRate * 2.5);
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const d = buf.getChannelData(0);
+  // Bruine ruis: veel meer laag dan witte ruis, en dat klinkt als wind in het
+  // want in plaats van als een radio tussen twee zenders.
+  let vorig = 0;
+  for (let i = 0; i < len; i++) {
+    vorig = (vorig + (Math.random() * 2 - 1) * 0.09) * 0.985;
+    d[i] = vorig * 3.2;
+  }
+  // De naad glad maken, anders tikt de lus hoorbaar rond.
+  const naad = Math.floor(c.sampleRate * 0.05);
+  for (let i = 0; i < naad; i++) {
+    const t = i / naad;
+    d[i] = d[i] * t + d[len - naad + i] * (1 - t);
+  }
+  const bron = c.createBufferSource();
+  bron.buffer = buf;
+  bron.loop = true;
+  const filter = c.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 300;
+  const gain = c.createGain();
+  gain.gain.value = 0;
+  bron.connect(filter);
+  filter.connect(gain);
+  gain.connect(state.sfxGain);
+  bron.start();
+
+  const huil = c.createOscillator();
+  huil.type = 'sawtooth';
+  huil.frequency.value = 62;
+  const huilGain = c.createGain();
+  huilGain.gain.value = 0;
+  const huilFilter = c.createBiquadFilter();
+  huilFilter.type = 'lowpass';
+  huilFilter.frequency.value = 200;
+  huil.connect(huilFilter);
+  huilFilter.connect(huilGain);
+  huilGain.connect(state.sfxGain);
+  huil.start();
+
+  Object.assign(storm, { bron, filter, gain, huil, huilGain });
+}
+
+/**
+ * Zet het stormbed op sterkte. `nabij` is hoe diep in de cel (0..1), `gevaar`
+ * hoeveel daarvan de gevarenzone is. Alles glijdt met een tijdconstante, zodat
+ * varen door een cel klinkt als aanzwellen en wegebben en niet als een schakelaar.
+ */
+export function zetStorm(nabij, gevaar) {
+  const c = state.ctx;
+  // Niet zelf de audiocontext wakker maken: die mag pas na een klik van de
+  // speler ontstaan, anders blokkeert de browser hem alsnog.
+  if (!c) return;
+  if (!storm.bron) bouwStormbed(c);
+  const n = state.aan ? Math.max(0, Math.min(1, nabij)) : 0;
+  const g = state.aan ? Math.max(0, Math.min(1, gevaar)) : 0;
+  const t = c.currentTime;
+  storm.gain.gain.setTargetAtTime(0.5 * n * n, t, 0.5);
+  storm.filter.frequency.setTargetAtTime(260 + 900 * n, t, 0.5);
+  storm.huilGain.gain.setTargetAtTime(0.16 * g, t, 0.7);
+  storm.huil.frequency.setTargetAtTime(52 + 26 * g, t, 0.7);
+}// --- Muziek ---------------------------------------------------------------
 //
 // Twee thema's, allebei op de tresillo: het 3+3+2-ritme met Afro-Caribische
 // wortels dat later de bodem werd van zowat alle eilandmuziek. De bas valt op

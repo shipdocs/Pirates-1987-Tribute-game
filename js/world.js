@@ -1,5 +1,5 @@
 // Opbouw van de Caribische wereldkaart: land, steden, economie, wind en vloten.
-import { makeRng, rnd, rndInt, pick, clamp, lerp, dist, TAU, normAngle } from './util.js';
+import { makeRng, rnd, rndInt, pick, clamp, lerp, smooth, dist, TAU, normAngle } from './util.js';
 import {
   STEDEN, WAREN, WAAR_INDEX, SOORT_ECONOMIE, NATIE_IDS, SCHEPEN, SCHIP_INDEX, KAPITEIN_NAMEN,
   SCHEEP_MAAT, LEGENDES, LEGENDE_INDEX, itemBonus, HERKENNINGSPUNTEN, SCHATREGIOS,
@@ -250,11 +250,17 @@ export class Wereld {
     this.#bouwMasker();
     this.#bouwSteden();
 
-    // Wind: passaat uit het oosten, dus waaiend richting het westen.
+    // Wind: passaat uit het oosten, dus waaiend richting het westen. Dat is het
+    // gemiddelde, niet de grens — zie `windTik`.
     this.windRichting = Math.PI;
     this.windDoel = Math.PI;
+    // `windBasis` is de gestage wind, `windKracht` diezelfde wind met de vlagen
+    // erin. Alles wat vaart of tekent leest `windKracht`.
+    this.windBasis = 1;
     this.windKracht = 1;
+    this.krachtDoel = 1;
     this.windTimer = 0;
+    this.windTijd = 0;
 
     // Stormen: beweeglijke weercellen die met de wind meedrijven. Ze zijn
     // *gezaaid* uit het wereldzaadje (dus deterministisch) maar drijven daarna
@@ -273,6 +279,8 @@ export class Wereld {
         straal: rnd(stormRng, 300, 620),
         // 0..1: jonge cellen groeien, oude krimpen; volwassen = stabiel.
         leeftijd: rnd(stormRng, 0, 1),
+        // Draairichting van de cel: bepaalt welke flank de snelle is.
+        draaiing: stormRng() < 0.5 ? -1 : 1,
         levensduur: rnd(stormRng, 250, 420), // seconden tot de cel verwaait
         kern: rnd(stormRng, 0, TAU),
       });
@@ -469,15 +477,33 @@ export class Wereld {
   }
 
   windTik(dt) {
+    this.windTijd += dt;
     this.windTimer -= dt;
     if (this.windTimer <= 0) {
-      this.windTimer = rnd(this.rng, 14, 40);
-      // Passaatwind waait overwegend naar het westen, met flinke uitschieters.
-      this.windDoel = Math.PI + rnd(this.rng, -0.75, 0.75);
-      this.windKracht = rnd(this.rng, 0.72, 1.25);
+      this.windTimer = rnd(this.rng, 24, 58);
+      // De passaat is het middelpunt waar de wind steeds naar terugkeert, niet
+      // een hek waar hij binnen blijft: elke keer wordt de bestaande afwijking
+      // voor een deel weggetrokken en komt er een nieuwe dwaling bij. Zo waait
+      // het meestal uit het oosten, staat het nooit twee dagen hetzelfde, en
+      // draait de wind een enkele keer werkelijk om — en dan is de terugreis de
+      // zware. Zonder die kans op een echte draai valt er niets te bezeilen:
+      // west varen was altijd snel en oost altijd traag.
+      const afwijking = normAngle(this.windDoel - Math.PI);
+      this.windDoel = normAngle(Math.PI + afwijking * 0.6 + rnd(this.rng, -1.3, 1.3));
+      this.krachtDoel = rnd(this.rng, 0.55, 1.5);
     }
+    // Richting én kracht kruipen naar hun doel. Vroeger sprong de kracht in één
+    // beeld naar zijn nieuwe waarde; dat is de enige verandering aan het weer
+    // die je écht zou moeten voelen, en juist die was onzichtbaar-plotseling.
     const d = normAngle(this.windDoel - this.windRichting);
-    this.windRichting = normAngle(this.windRichting + clamp(d, -0.25 * dt, 0.25 * dt));
+    this.windRichting = normAngle(this.windRichting + clamp(d, -0.11 * dt, 0.11 * dt));
+    this.windBasis = lerp(this.windBasis, this.krachtDoel, clamp(dt * 0.3, 0, 1));
+    // Vlagen en luwtes: twee trage golven over elkaar, zodat de wind ademt in
+    // plaats van stilstaat. Twee onverwante perioden geven geen hoorbaar ritme.
+    // Allebei zonder faseverschuiving, zodat de vlaag bij t = 0 precies 1 is en
+    // de wind niet in zijn eerste beeld al een sprongetje maakt.
+    const vlaag = 1 + 0.09 * Math.sin(this.windTijd * 0.53) + 0.05 * Math.sin(this.windTijd * 1.27);
+    this.windKracht = this.windBasis * vlaag;
   }
 
   /**
@@ -519,40 +545,73 @@ export class Wereld {
       leeftijd: 0,
       levensduur: rnd(rng, 250, 420),
       kern: rnd(rng, 0, TAU),
+      draaiing: rng() < 0.5 ? -1 : 1,
     };
   }
 
   /**
-   * Genormaliseerde storm-intensiteit (0..1) op een punt, of 0 als er geen
-   * storm in de buurt is. Deint met de leeftijd van de cel.
+   * Alles wat de stormcellen op één punt doen, in één doorrekening — want die
+   * dingen hóren bij elkaar. De rugwind op de flank en het gevaar in de kern
+   * zijn twee kanten van dezelfde cel, en de speler moet ze tegen elkaar
+   * kunnen afwegen op grond van waar hij vaart, niet op grond van geluk.
+   *
+   *   nabij    0..1  hoe diep in de cel: 0 erbuiten, 1 in het hart
+   *   rug      0..1  hoeveel extra vaart de cel meegeeft; piekt op de flank
+   *   gevaar   0..1  hoe hard de cel aan schip en want trekt; nul tot de kernrand
+   *   richting/kracht  de plaatselijke wind, met de draaiing van de cel erin
+   *
+   * De cel draait om zijn kern. Op de flank waar die draaiing met de heersende
+   * wind meeloopt jaag je mee; aan de overkant werken ze tegen elkaar en zak je
+   * juist terug. Dat is geen dobbelsteen maar een plek: je ziet hem liggen en
+   * je kiest je kant.
    */
-  stormOp(x, y) {
-    let sterkst = 0;
+  stormVeld(x, y) {
+    let cel = null,
+      nabij = 0;
     for (const s of this.stormen) {
       const d = dist(x, y, s.x, s.y);
-      if (d >= s.straal + 150) continue;
-      // Sterkst in de kern; aflopend naar de rand. Jonge cellen zijn nog zwak,
-      // oude krimpen weer.
-      const schemer = clamp(1 - d / (s.straal + 150), 0, 1);
-      const rijpheid =
-        s.leeftijd < 0.5
-          ? lerp(0.3, 1, s.leeftijd / 0.5) // groeien
-          : lerp(1, 0.35, (s.leeftijd - 0.5) / 0.5); // verlepteren
-      sterkst = Math.max(sterkst, schemer * rijpheid);
+      if (d >= s.straal + STORM_HALO) continue;
+      // Sterkst in de kern, aflopend naar de rand. Jonge cellen zijn nog zwak,
+      // oude krimpen weer — een halfvolgroeide cel haalt de gevarengrens dus
+      // niet eens en is louter rugwind.
+      const kracht = clamp(1 - d / (s.straal + STORM_HALO), 0, 1) * stormRijpheid(s);
+      if (kracht > nabij) {
+        nabij = kracht;
+        cel = s;
+      }
     }
-    return clamp(sterkst, 0, 1);
+    if (!cel) {
+      return {
+        nabij: 0, rug: 0, gevaar: 0, cel: null,
+        richting: this.windRichting,
+        kracht: this.windKracht,
+      };
+    }
+
+    const rug = Math.exp(-Math.pow((nabij - STORM_RUG_PIEK) / STORM_RUG_BREEDTE, 2));
+    const gevaar = smooth(clamp((nabij - STORM_KERN) / (1 - STORM_KERN), 0, 1));
+
+    // Cyclonale wind: tangentieel om de kern, steeds zuiverder naarmate je er
+    // dichter bij komt. `draaiing` ontbreekt op stormen uit een oude save.
+    const naarBuiten = Math.atan2(y - cel.y, x - cel.x);
+    const tangent = naarBuiten + (cel.draaiing || 1) * (Math.PI / 2);
+    const menging = clamp(nabij * 1.35, 0, 1);
+    const richting = normAngle(this.windRichting + normAngle(tangent - this.windRichting) * menging);
+    // De vaartwinst zit in de band, niet in het hart: daar is de wind wel hard
+    // maar staat hij dwars op elke koers die je ergens brengt.
+    const kracht = this.windKracht * (1 + 0.55 * rug + 0.3 * nabij);
+    return { nabij, rug, gevaar, cel, richting, kracht };
   }
 
-  /**
-   * Wind-effect op een punt: stuurt `windKracht` omhoog in stormen, zodat ook
-   * de zeegang en regen op die plek zwaarder worden.
-   */
+  /** Genormaliseerde storm-intensiteit (0..1) op een punt. */
+  stormOp(x, y) {
+    return this.stormVeld(x, y).nabij;
+  }
+
+  /** De plaatselijke wind, met de draaiing en de aanwakkering van een cel erin. */
   stormWind(x, y) {
-    const s = this.stormOp(x, y);
-    return {
-      richting: this.windRichting + s * 0.5,
-      kracht: this.windKracht * (1 + s * 0.85),
-    };
+    const v = this.stormVeld(x, y);
+    return { richting: v.richting, kracht: v.kracht };
   }
 
   stadOp(x, y, straal = 60) {
@@ -753,7 +812,8 @@ export class Wereld {
         doelY = v.y + (v.y - speler.y);
       }
 
-      const gewenst = Math.atan2(doelY - v.y, doelX - v.x);
+      const recht = Math.atan2(doelY - v.y, doelX - v.x);
+      const gewenst = this.#kruisKoers(v, recht, type, dt);
       const koers = this.#ontwijkLand(v, gewenst, type);
       const draai = type.wend * 0.75 * dt;
       const d = normAngle(koers - v.koers);
@@ -931,6 +991,34 @@ export class Wereld {
     return false;
   }
 
+  /**
+   * Koers naar een doel dat te hoog aan de wind ligt. Er recht op af sturen
+   * laat het schip doodlopen in de dode hoek, dus valt het af tot net buiten
+   * die hoek en kruist het op: een slag over stuurboord, dan een over bakboord.
+   * Zonder dit zouden vloten waarvan de haven in de wind ligt minutenlang
+   * stilliggen, en dat is precies wat je van een levende zee niet wilt zien.
+   */
+  #kruisKoers(v, gewenst, type, dt) {
+    // Iets ruimer dan de dode hoek uit `zeilEfficiëntie`: op de rand zelf loopt
+    // een schip nog nauwelijks.
+    const grens = Math.PI - lerp(0.95, 0.5, clamp(type.hoogte, 0, 1)) * 0.9;
+    const a = normAngle(gewenst - this.windRichting);
+    // De teller loopt alleen door terwijl er gekruist wordt, en wordt hier
+    // bewust niet teruggezet: een doel dat precies op de grens van de dode hoek
+    // ligt zou anders elk beeld een nieuwe slag afdwingen, en dan gooit het
+    // schip het roer om zonder ooit ergens te komen.
+    if (Math.abs(a) <= grens) return gewenst;
+    v.slagTimer = (v.slagTimer || 0) - dt;
+    if (v.slagTimer <= 0) {
+      v.slagTimer = rnd(this.rng, 22, 40);
+      // Overstag, of — als dit de eerste slag is — de kant kiezen waar het doel
+      // al ligt.
+      if (v.slag) v.slag = -v.slag;
+      else v.slag = a >= 0 ? 1 : -1;
+    }
+    return normAngle(this.windRichting + grens * v.slag);
+  }
+
   /** Simpele koersvoorspelling: kijk vooruit en wijk uit voor land. */
   #ontwijkLand(v, gewenst, type) {
     const vooruit = 150;
@@ -954,17 +1042,67 @@ export class Wereld {
 }
 
 /**
+ * Stormprofiel. Een cel is geen egale klodder ellende maar een ring om een
+ * kern: op de flank duwt de wind je vooruit, in de kern breekt hij je. Alles
+ * hieronder is een fractie van `nabij` — 0 aan de buitenrand van de cel, 1 in
+ * het hart ervan.
+ *
+ * `HALO` is de zachte aanloop buiten de getekende wolk, `RUG_PIEK` waar de
+ * rugwind het sterkst is en `KERN` waar het gevaar begint. Die laatste twee
+ * liggen ver uit elkaar, want daar draait het om: de speler moet de goede band
+ * kunnen kiezen zonder per ongeluk in de kern te belanden.
+ */
+const STORM_HALO = 150;
+const STORM_RUG_PIEK = 0.5;
+const STORM_RUG_BREEDTE = 0.26;
+export const STORM_KERN = 0.58;
+
+/** Hoe volgroeid een cel is (0..1): jong groeit nog, oud verlept alweer. */
+export function stormRijpheid(cel) {
+  return cel.leeftijd < 0.5
+    ? lerp(0.3, 1, cel.leeftijd / 0.5)
+    : lerp(1, 0.35, (cel.leeftijd - 0.5) / 0.5);
+}
+
+/**
+ * Straal in wereldeenheden waarop een cel een gegeven diepte bereikt, of 0 als
+ * hij daar niet aan toekomt. Hiermee tekent de kaartlaag exact de grenzen waar
+ * het spel op rekent — een gevarenzone die ergens anders ligt dan hij eruitziet
+ * is precies het soort oneerlijkheid dat we hier niet willen.
+ */
+export function stormStraalBij(cel, diepte) {
+  const rijp = stormRijpheid(cel);
+  if (rijp <= diepte) return 0;
+  return (cel.straal + STORM_HALO) * (1 - diepte / rijp);
+}
+
+/**
  * Hoe goed een schip vaart ten opzichte van de wind.
  * `hoogte` is hoe dicht het schip aan de wind kan liggen (0..1).
+ *
+ * De kromme heeft drie kenmerken, en elk daarvan is er om iets te kunnen
+ * stúren: een optimum op ruime wind (er valt een hoek te zoeken), een lichte
+ * inzinking pal voor de wind (de voorste zeilen nemen de achterste de wind af)
+ * en een dode hoek pal tegen de wind, waar de zeilen killen. Een vierkant
+ * getuigd schip kan niet hoog aan de wind liggen; wie naar loef moet, kruist.
  */
 export function zeilEfficiëntie(koers, windRichting, hoogte) {
   // Hoek tussen de vaarrichting en de richting waarheen de wind waait.
+  // 0 = pal voor de wind, PI = pal tegen de wind in.
   const a = Math.abs(normAngle(koers - windRichting));
-  // 0 = vlak voor de wind (snelst), PI = pal tegen de wind (traagst).
   const t = 0.5 + 0.5 * Math.cos(a);
-  // Ruime wind is in de praktijk het snelst; een klein bultje halverwege.
-  const bult = 1 + 0.12 * Math.sin(a) * Math.sin(a);
-  return clamp((hoogte + (1 - hoogte) * t) * bult, 0.06, 1.15);
+  const basis = hoogte + (1 - hoogte) * t;
+  // Ruime wind (ruim een halve radiaal van pal achter): de zeilen staan
+  // gunstig schuin op de wind en het schip loopt op zijn best.
+  const ruim = 1 + 0.18 * Math.exp(-Math.pow((a - 0.95) / 0.75, 2));
+  // Pal voor de wind vallen de achterste zeilen in de luwte van de voorste.
+  const luwte = 1 - 0.1 * Math.exp(-Math.pow(a / 0.5, 2));
+  // Dode hoek: hoe beter het schip aan de wind ligt, hoe smaller die is. Nooit
+  // helemaal nul — anders kan een schip dat pal tegen de wind wordt gestuurd
+  // nergens meer heen, en dat is een val en geen keuze.
+  const dodeHoek = lerp(0.95, 0.5, clamp(hoogte, 0, 1));
+  const kil = smooth(clamp((Math.PI - a) / dodeHoek, 0, 1));
+  return clamp(basis * ruim * luwte * lerp(0.11, 1, kil), 0.06, 1.2);
 }
 
 export { SCHEPEN, SCHIP_INDEX };

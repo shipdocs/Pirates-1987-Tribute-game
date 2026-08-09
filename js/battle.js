@@ -394,7 +394,7 @@ export function maakZeeslag(vloot, opts) {
       for (const s of [vijand, mij]) tekenKielzog(c, s);
       for (const p of deeltjes) R.tekenRook(c, p);
 
-      for (const s of [vijand, mij]) tekenStrijder(c, s, wereld.windRichting);
+      for (const s of [vijand, mij]) tekenStrijder(c, s, wereld.windRichting, storm);
 
       // Kogels, met hun schaduw op het water zodat de boog leesbaar wordt.
       for (const k of kogels) {
@@ -418,9 +418,21 @@ export function maakZeeslag(vloot, opts) {
       // harder.
       R.tekenMeeuwen(c, vw, vh, Game.tijd);
       R.tekenRegen(c, Game.breedte, Game.hoogte, storm.richting, storm.kracht, Game.tijd);
+    },
 
+    /**
+     * Gevechts-HUD in schermcoördinaten, los van de wereld. Apart gehouden
+     * zodat een eventueel miniatuureffect (tilt-shift) alleen de wereld
+     * vervaagt en de HUD altijd scherp blijft.
+     */
+    tekenHud(c) {
       tekenGevechtHud(c);
     },
+
+    // Bewust géén `miniatuurFocus`: hier doet de scène niet mee aan het
+    // miniatuureffect. In een gevecht lees je het hele strijdtoneel — waar de
+    // ander vaart, waar zijn kogels vallen, waar de rotsen liggen — en dan
+    // werkt een scherpe plek rond je eigen romp tegen je in plaats van mee.
   };
 
   // --- Besturing ----------------------------------------------------------
@@ -1102,7 +1114,7 @@ export function maakZeeslag(vloot, opts) {
     mist(0, ARENA_Y - F, 0, ARENA_Y, -ARENA_X - O, ARENA_Y - F, (ARENA_X + O) * 2, O + F);
   }
 
-  function tekenStrijder(c, s, wind) {
+  function tekenStrijder(c, s, wind, zeegang) {
     // Heldere V aan de boeg: de zee kan van richting veranderen, deze golf
     // hoort altijd zichtbaar bij de vaarrichting van het schip zelf.
     const [schipL, schipB] = R.scheepMaat(s.type);
@@ -1132,6 +1144,7 @@ export function maakZeeslag(vloot, opts) {
       // Zichtbare schade: gescheurde zeilen + diepe waterlijn bij beschadiging.
       tuigage: s.tuigage,
       rompFractie: s.romp / s.maxRomp,
+      zeegang,
     });
     // Statusbalkje boven het schip; het schip is op dubbele schaal getekend,
     // dus de halve lengte is L.

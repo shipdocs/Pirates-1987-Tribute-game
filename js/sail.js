@@ -392,7 +392,9 @@ export function maakZeilScene() {
             schip.type
           );
           vertrek = { vx: s.x, vy: s.y, tx: wx, ty: wy, t: 0, duur: 1.1 };
-          s.koers = hoek;
+          // De boeg wijst bij vertrek uit de haven altijd richting open zee,
+          // ook als de dichtstbijzijnde vaarplek in een smalle geul ligt.
+          s.koers = Game.wereld.koersOpenZee(wx, wy, schip.type, hoek);
           // Na het losgooien ligt het roer recht: de boeg vaart de haven uit
           // zonder een overgebleven draaiing mee te nemen.
           s.hoekSnelheid = 0;

@@ -408,6 +408,36 @@ export class Wereld {
     return [x, y];
   }
 
+  /**
+   * Kiest een koers vanaf (x, y) waarlangs het schip van `typeId` het verst
+   * onbelemmerd vooruit kan — de richting van de open zee. De meegegeven
+   * vertrekkoers `valkoers` krijgt de voorkeur zolang hij vrij uitloopt;
+   * anders wijst de boeg de vrijste doorgang.
+   */
+  koersOpenZee(x, y, typeId, valkoers = null) {
+    const blik = 800;
+    const stap = 25;
+    const stappen = Math.ceil(blik / stap);
+    const vrijeLengte = (a) => {
+      for (let s = 1; s <= stappen; s++) {
+        const r = s * stap;
+        if (!this.isVaren(x + Math.cos(a) * r, y + Math.sin(a) * r, typeId)) return r;
+      }
+      return blik;
+    };
+    let beste = valkoers;
+    let besteLengte = valkoers == null ? -1 : vrijeLengte(valkoers);
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * TAU;
+      const lengte = vrijeLengte(a);
+      if (lengte > besteLengte) {
+        besteLengte = lengte;
+        beste = a;
+      }
+    }
+    return beste;
+  }
+
   #bouwSteden() {
     const rng = this.rng;
     this.steden = STEDEN.map((s, i) => {

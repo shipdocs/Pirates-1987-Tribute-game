@@ -1,7 +1,7 @@
 // Opstart: titelscherm, het maken van een kapitein en de overgang naar zee.
 import { TAU, clamp, lerp, el, pick, makeRng, sierTijd, fmtGold } from './util.js';
 import { NATIES, NATIE_IDS, TALENTEN, MOEILIJKHEDEN } from './data.js';
-import { PPD, Wereld } from './world.js';
+import { PPD, WORLD_W, WORLD_H, Wereld } from './world.js';
 import { ENTERAFSTAND } from './gevechtsmodel.js';
 import { Game, maakSpeler, heeftOpslag, laad, wisOpslag, leesErelijst } from './game.js';
 import { maakZeilScene } from './sail.js';
@@ -466,19 +466,46 @@ function begin(keuze) {
   // Beginnen op de rede van een haven van je eigen natie, net buiten de aanloop.
   const eigen = wereld.stedenVanNatie(keuze.natie);
   const start = eigen.length ? eigen[Math.floor(Math.random() * eigen.length)] : wereld.steden[0];
-  let beste = [start.ankerX, start.ankerY];
+  const type = speler.schepen[0].type;
+  let beste = null;
+  let valkoers = null;
   // Zoek een plek op de rede waar de hele romp van de sloep in het water past.
   for (let i = 0; i < 24; i++) {
     const a = (i / 24) * TAU;
     const px = start.ankerX + Math.cos(a) * 230;
     const py = start.ankerY + Math.sin(a) * 230;
-    if (wereld.isVaren(px, py, speler.schepen[0].type)) {
+    if (wereld.isVaren(px, py, type)) {
       beste = [px, py];
-      speler.koers = a;
+      valkoers = a;
       break;
     }
   }
+  // Geen vaarplek op de ring (dichte archipel, smalle geul): de ankerlocatie
+  // zelf kan op land liggen en is dus nooit een veilige start. Val dan terug
+  // op het dichtstbijzijnde water waar de hele romp past, met een ruime radius.
+  if (!beste) {
+    const [wx, wy] = wereld.dichtstbijVaren(start.ankerX, start.ankerY, type, 1200);
+    if (wereld.isVaren(wx, wy, type)) beste = [wx, wy];
+  }
+  // Laatste redmiddel: een willekeurige waterplek, zodat de kapitein nooit
+  // op land of in een omsloten plas begint.
+  if (!beste) {
+    for (let poging = 0; poging < 240; poging++) {
+      const px = Math.random() * WORLD_W;
+      const py = Math.random() * WORLD_H;
+      if (wereld.isVaren(px, py, type)) {
+        beste = [px, py];
+        break;
+      }
+    }
+  }
+  // Noodrem: geen enkele volwaardige ligplaats gevonden — neem dan in elk
+  // geval gegarandeerd water, zodat de kapitein nooit op het strand start.
+  if (!beste) beste = wereld.dichtstbijWater(start.ankerX, start.ankerY);
   [speler.x, speler.y] = beste;
+  // Bij vertrek wijst de boeg altijd richting open zee, ook als de startplek
+  // uit de fallback komt in plaats van van de rede.
+  speler.koers = wereld.koersOpenZee(speler.x, speler.y, type, valkoers);
 
   Game.wereld = wereld;
   Game.speler = speler;

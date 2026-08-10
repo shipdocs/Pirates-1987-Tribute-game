@@ -31,9 +31,20 @@ const STORM_OPBOUW = 0.14;
 const STORM_HERSTEL = 0.045;
 
 const LEEG_STORMVELD = { nabij: 0, rug: 0, gevaar: 0, cel: null, richting: 0, kracht: 1 };
-const STANDAARD_ZOOM = 1.28;
+// Zoomstanden. De standaardstand is de maat waarop de schepen op ware grootte
+// worden getekend (zie `scheepSchaal` hieronder); hij is bewust niet hoger
+// gezet, want een stormcel meet zeshonderd tot twaalfhonderd wereldeenheden en
+// bij een nauwere stand valt de kernrand buiten beeld — precies de grens waarop
+// je in een bui je besluit neemt.
+// De standaardstand is de zoom waarop de wereld op ware grootte staat, dus die
+// halen we uit render.js in plaats van hem hier nog eens op te schrijven —
+// anders zouden schepen en steden op de gewone speelstand niet meer kloppen.
+// Hoger zetten kan niet zomaar: een stormcel meet zeshonderd tot twaalfhonderd
+// wereldeenheden, en bij een nauwere stand valt de kernrand buiten beeld —
+// precies de grens waarop je in een bui je besluit neemt.
+const STANDAARD_ZOOM = R.WARE_ZOOM;
 const MIN_ZOOM = 0.24;
-const MAX_ZOOM = 2.4;
+const MAX_ZOOM = 4;
 
 // Hoeveel de boeg nog doordraait nadat je het roer loslaat, in radialen. Voor
 // elk schip gelijk: een roer moet aanvoelen als een roer en niet als de remweg
@@ -312,9 +323,11 @@ export function maakZeilScene() {
       // Zoomen glijdt rustig naar de gekozen stand. De kleinste stand toont
       // nagenoeg de hele Caraïben en is daarmee nadrukkelijk kaartoverzicht.
       cam.zoom = lerp(cam.zoom, doelZoom, clamp(dt * 7, 0, 1));
-      // Minder loefruimte dan voorheen houdt het eigen schip dichter bij het
-      // visuele middelpunt, zonder het zicht vóór de boeg helemaal te verliezen.
-      const vooruit = 28 / cam.zoom;
+      // Vaste loefruimte in schermpixels (de deling door de zoom rekent hem naar
+      // wereldeenheden). Achtentwintig pixels was minder dan een halve
+      // scheepslengte en dus niet te zien; honderdtien geeft zicht vóór de boeg
+      // zonder het schip uit het midden te duwen.
+      const vooruit = 110 / cam.zoom;
       cam.x = lerp(cam.x, s.x + Math.cos(s.koers) * vooruit, clamp(dt * 3, 0, 1));
       cam.y = lerp(cam.y, s.y + Math.sin(s.koers) * vooruit, clamp(dt * 3, 0, 1));
       houdCameraInKaart();
@@ -423,15 +436,22 @@ export function maakZeilScene() {
         R.tekenStad(c, stad, cam, Game.tijd, dist(stad.ankerX, stad.ankerY, s.x, s.y) < 140);
       }
 
-      // Verre schepen blijven herkenbaar, maar groeien minder sterk mee bij
-      // uitzoomen. De eigen kapitein krijgt hieronder bewust meer gewicht.
-      const scheepSchaal = clamp(0.64 / cam.zoom, 0.82, 1.8);
-      const spelerSchaal = clamp(1.55 / cam.zoom, 1.08, 2.6);
+      // Eén schaal voor élk schip, het eigene incluis, en dezelfde die de steden
+      // gebruiken. Omdat `tekenSchip` L × schaal × zoom aan schermpixels
+      // oplevert, was de oude factor 0,64 precies "schermpixels per rompeenheid":
+      // een vreemde sloep werd vijftien pixels lang en het eigen schip
+      // zevenendertig — stipjes, met al het houtwerk in de romp onzichtbaar, en
+      // de kapitein twee en een half keer zo groot als de rest zonder dat daar
+      // iets voor te zeggen viel.
+      const scheepSchaal = R.wereldSchaal(cam.zoom);
+      const spelerSchaal = scheepSchaal;
 
       const doeLandCheck = (wx, wy) => w.isLand(wx, wy);
       for (const v of w.vloten) {
-        if (Math.abs(v.x - cam.x) * cam.zoom > vw / 2 + 120) continue;
-        if (Math.abs(v.y - cam.y) * cam.zoom > vh / 2 + 120) continue;
+        // Ruimer dan voorheen: een linieschip meet nu ruim honderd schermpixels
+        // met zeilen en al, dus op 120 marge zou hij aan de rand wegknippen.
+        if (Math.abs(v.x - cam.x) * cam.zoom > vw / 2 + 180) continue;
+        if (Math.abs(v.y - cam.y) * cam.zoom > vh / 2 + 180) continue;
         R.tekenSchip(c, v.x, v.y, v.koers, v.type, v.natie, w.windRichting, {
           vaart: v.snelheid / 90,
           tijd: Game.tijd,
@@ -1077,20 +1097,27 @@ export function maakZeilScene() {
         cv.height = Math.round((bw * WORLD_H) / WORLD_W);
         cv.className = 'kaart-canvas';
         const g = cv.getContext('2d');
-        const sc = cv.width / WORLD_W;
-        g.fillStyle = '#0e3552';
-        g.fillRect(0, 0, cv.width, cv.height);
-        g.drawImage(miniKaart, 0, 0, cv.width, cv.height);
-        // Steden en speler.
-        for (const stad of Game.wereld.steden) {
-          const nk = NATIES[stad.natie].kleur;
-          g.fillStyle = nk;
-          g.beginPath();
-          g.arc(stad.x * sc, stad.y * sc, 3 + stad.grootte * 0.5, 0, TAU);
-          g.fill();
-          g.font = '10px Georgia, serif';
-          g.fillStyle = 'rgba(240,230,205,0.85)';
-          g.fillText(stad.naam, stad.x * sc + 6, stad.y * sc + 3);
+        // Merktekens die vóór de plaatsnamen op de kaart moeten, zodat een naam
+        // er nooit onder verdwijnt.
+        const merken = [];
+        // Het zoekgebied van de schatkaart: hoe meer stukken, hoe krapper de
+        // cirkel. Het kruis zelf komt er nooit op — dat moet je aan land zoeken.
+        if (s.schat && s.schat.kwadranten.some(Boolean)) {
+          const stukken = s.schat.kwadranten.filter(Boolean).length;
+          merken.push((c, sc) => {
+            const straal = [0, 1500, 800, 460, 300][stukken] * sc;
+            c.save();
+            c.strokeStyle = 'rgba(140,47,34,0.75)';
+            c.setLineDash([6, 5]);
+            c.lineWidth = 1.6;
+            c.beginPath();
+            c.arc(s.schat.x * sc, s.schat.y * sc, straal, 0, TAU);
+            c.stroke();
+            c.setLineDash([]);
+            c.fillStyle = 'rgba(140,47,34,0.1)';
+            c.fill();
+            c.restore();
+          });
         }
         // Waar een beruchte kapitein volgens de kroeg gezien is.
         for (const l of LEGENDES) {
@@ -1098,32 +1125,13 @@ export function maakZeilScene() {
           if (!st || st.verslagen || !st.getipt || !st.bij) continue;
           const stad = Game.wereld.steden.find((x) => x.naam === st.bij);
           if (!stad) continue;
-          tekenDoodskop(g, stad.x * sc, stad.y * sc - 12);
+          merken.push((c, sc) => tekenDoodskop(c, stad.x * sc, stad.y * sc - 12));
         }
-        // Het zoekgebied van de schatkaart: hoe meer stukken, hoe krapper de
-        // cirkel. Het kruis zelf komt er nooit op — dat moet je aan land zoeken.
-        if (s.schat && s.schat.kwadranten.some(Boolean)) {
-          const stukken = s.schat.kwadranten.filter(Boolean).length;
-          const straal = [0, 1500, 800, 460, 300][stukken] * sc;
-          g.save();
-          g.strokeStyle = 'rgba(140,47,34,0.75)';
-          g.setLineDash([6, 5]);
-          g.lineWidth = 1.6;
-          g.beginPath();
-          g.arc(s.schat.x * sc, s.schat.y * sc, straal, 0, TAU);
-          g.stroke();
-          g.setLineDash([]);
-          g.fillStyle = 'rgba(140,47,34,0.1)';
-          g.fill();
-          g.restore();
-        }
-        g.fillStyle = '#ffdf8a';
-        g.strokeStyle = '#2b1d12';
-        g.lineWidth = 1.5;
-        g.beginPath();
-        g.arc(s.x * sc, s.y * sc, 5, 0, TAU);
-        g.fill();
-        g.stroke();
+        R.tekenZeekaart(g, Game.wereld, cv.width, cv.height, {
+          datum: fmtDate(s.dag),
+          speler: { x: s.x, y: s.y },
+          merken,
+        });
         body.appendChild(cv);
 
         const legenda = document.createElement('div');
@@ -1131,7 +1139,9 @@ export function maakZeilScene() {
         for (const [id, n] of Object.entries(NATIES)) {
           if (id === 'piraat') continue;
           const sp = document.createElement('span');
-          sp.innerHTML = `<i style="background:${n.kleur}"></i>${n.naam}`;
+          // De legenda toont hetzelfde symbool als de kaart: op een stip alleen
+          // zijn vier natiekleuren niet uit elkaar te houden.
+          sp.innerHTML = `<i class="merk merk-${n.merk}" style="background:${n.kleur}"></i>${n.naam}`;
           legenda.appendChild(sp);
         }
         body.appendChild(legenda);
@@ -1433,13 +1443,15 @@ export const windWoord = (kracht) => WIND_BANDEN[windBand(kracht)][1];
  * `a` is de hoek tussen de koers en de richting waarheen de wind waait:
  * 0 = pal voor de wind, PI = er pal tegenin.
  */
+// De kleuren zijn donker: ze staan op perkament, niet meer op donkerblauw.
+// Lichte tinten waren op de oude HUD leesbaar en zijn dat op de nieuwe niet.
 export function zeilWoord(koers, windRichting) {
   const a = Math.abs(normAngle(koers - windRichting));
-  if (a < 0.38) return { woord: 'pal voor de wind', kleur: '#cbd8c2' };
-  if (a < 1.2) return { woord: 'ruime wind', kleur: '#9ed17f' };
-  if (a < 1.95) return { woord: 'halve wind', kleur: '#e9dcb8' };
-  if (a < 2.62) return { woord: 'bij de wind', kleur: '#e0b169' };
-  return { woord: 'de zeilen killen', kleur: '#d98166' };
+  if (a < 0.38) return { woord: 'pal voor de wind', kleur: '#4a6b3c' };
+  if (a < 1.2) return { woord: 'ruime wind', kleur: '#3f7a35' };
+  if (a < 1.95) return { woord: 'halve wind', kleur: '#7a6a3a' };
+  if (a < 2.62) return { woord: 'bij de wind', kleur: '#a06a1c' };
+  return { woord: 'de zeilen killen', kleur: '#9c3a2c' };
 }
 
 // --- HUD ------------------------------------------------------------------
@@ -1450,12 +1462,21 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
   const schip = vlaggenschip(s);
   const type = SCHIP_INDEX[schip.type];
 
-  // Bovenbalk.
+  // Bovenbalk: een strook perkament met een messing lijst eronder. Alles in
+  // deze HUD put uit `R.HUD`, dezelfde kleuren als de perkamentpanelen — anders
+  // zie je twee verschillende spellen achter elkaar zodra er een scherm opengaat.
   c.save();
-  c.fillStyle = 'rgba(10,28,44,0.82)';
+  const strook = c.createLinearGradient(0, 0, 0, 44);
+  strook.addColorStop(0, R.HUD.perkament);
+  strook.addColorStop(1, R.HUD.perkamentDiep);
+  c.fillStyle = strook;
   c.fillRect(0, 0, vw, 44);
-  c.fillStyle = 'rgba(217,164,65,0.5)';
-  c.fillRect(0, 43, vw, 1.4);
+  c.fillStyle = 'rgba(255,252,240,0.4)';
+  c.fillRect(0, 0, vw, 1);
+  c.fillStyle = R.HUD.goud;
+  c.fillRect(0, 42.6, vw, 2);
+  c.fillStyle = 'rgba(60,44,22,0.25)';
+  c.fillRect(0, 44.6, vw, 1);
 
   c.font = '600 14px Georgia, serif';
   c.textBaseline = 'middle';
@@ -1473,78 +1494,58 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
   ];
   let x = 24;
   for (const [icoon, tekst] of items) {
-    c.fillStyle = '#d9a441';
+    c.fillStyle = R.HUD.inktZacht;
     R.tekenIcoon(c, icoon, x, 22, 8);
     x += 15;
-    c.fillStyle = '#f0e3c4';
+    c.fillStyle = R.HUD.inkt;
     c.fillText(tekst, x, 22);
     x += c.measureText(tekst).width + 24;
   }
 
   // Rompbalk rechtsboven.
   const bw = 130;
-  c.fillStyle = 'rgba(0,0,0,0.35)';
-  roundRect(c, vw - bw - 16, 13, bw, 18, 4);
-  c.fill();
   const rf = clamp(schip.romp / schip.maxRomp, 0, 1);
-  c.fillStyle = rf > 0.5 ? '#7bb36a' : rf > 0.25 ? '#d9a441' : '#c65b45';
-  roundRect(c, vw - bw - 16, 13, bw * rf, 18, 4);
-  c.fill();
-  c.fillStyle = '#0d1f30';
+  R.hudBalk(c, vw - bw - 16, 13, bw, 18, rf, R.hudStand(rf), null);
   c.font = '600 11px Georgia, serif';
   c.textAlign = 'center';
-  c.fillText('ROMP', vw - bw / 2 - 16, 22);
+  c.fillStyle = R.HUD.inkt;
+  c.fillText('ROMP', vw - bw / 2 - 16, 22.5);
   c.restore();
 
   // Windroos.
-  R.tekenWindroos(c, vw - 62, 100, 42, w.windRichting, w.windKracht, Game.tijd);
+  R.tekenWindroos(c, vw - 62, 104, 42, w.windRichting, w.windKracht, Game.tijd);
 
   // Stormvak: alleen zichtbaar zolang je in een cel zit, en dan meteen het
   // belangrijkste — waar je bent en hoeveel spanning erop staat. Zonder deze
   // balk zou de kern alsnog als willekeur voelen.
   if (storm && storm.nabij > 0.04) {
     const sh = storm.gevaar > 0.02;
-    const rand = sh ? 'rgba(206,86,68,0.75)' : 'rgba(126,196,214,0.6)';
     c.save();
-    c.fillStyle = 'rgba(10,22,36,0.8)';
-    roundRect(c, 16, vh - 172, 168, 54, 8);
-    c.fill();
-    c.strokeStyle = rand;
-    c.lineWidth = 1.4;
-    c.stroke();
+    R.hudPaneel(c, 16, vh - 172, 168, 54, 8);
     c.font = '600 11px Georgia, serif';
     c.textBaseline = 'middle';
     c.textAlign = 'left';
-    c.fillStyle = '#b9c7d4';
+    c.fillStyle = R.HUD.inktZacht;
     c.fillText('BUI', 28, vh - 154);
     c.textAlign = 'right';
-    c.fillStyle = sh ? '#e0917c' : '#9ed7e4';
+    c.fillStyle = sh ? R.HUD.rood : R.HUD.inkt;
     c.fillText(sh ? 'in de kern' : storm.rug > 0.35 ? 'rugwind' : 'buitenrand', 172, vh - 154);
     // De belastingbalk. Hij loopt alleen op in de kern en zakt zodra je reeft
     // of eruit loopt, dus wat je ziet is precies wat er gaat gebeuren.
-    c.textAlign = 'left';
-    c.fillStyle = 'rgba(0,0,0,0.4)';
-    roundRect(c, 28, vh - 142, 144, 10, 3);
-    c.fill();
     const b = clamp(belasting || 0, 0, 1);
-    c.fillStyle = b > 0.75 ? '#c65b45' : b > 0.42 ? '#d9a441' : '#7bb36a';
-    roundRect(c, 28, vh - 142, 144 * b, 10, 3);
-    c.fill();
-    c.fillStyle = '#8fa3b4';
+    R.hudBalk(c, 28, vh - 142, 144, 10, b, b > 0.75 ? R.HUD.rood : b > 0.42 ? R.HUD.goud : R.HUD.groen);
+    c.textAlign = 'left';
+    c.fillStyle = R.HUD.inktZacht;
     c.fillText(b > 0.42 ? 'want onder spanning' : 'want houdt het', 28, vh - 126);
     c.restore();
   }
 
   // Zeilstand.
   c.save();
-  c.fillStyle = 'rgba(10,28,44,0.72)';
-  roundRect(c, 16, vh - 76, 168, 58, 8);
-  c.fill();
-  c.strokeStyle = 'rgba(217,164,65,0.45)';
-  c.lineWidth = 1.2;
-  c.stroke();
+  R.hudPaneel(c, 16, vh - 76, 168, 58, 8);
   c.font = '600 11px Georgia, serif';
-  c.fillStyle = '#b9c7d4';
+  c.textBaseline = 'middle';
+  c.fillStyle = R.HUD.inktZacht;
   c.textAlign = 'left';
   c.fillText('ZEILEN', 28, vh - 58);
   // Hoe je ten opzichte van de wind ligt, in woord en kleur. Eén blik leert je
@@ -1553,33 +1554,27 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
   c.textAlign = 'right';
   c.fillStyle = trim.kleur;
   c.fillText(trim.woord, 172, vh - 58);
+  R.hudBalk(c, 28, vh - 48, 144, 12, schip.zeilen, trim.kleur);
   c.textAlign = 'left';
-  c.fillStyle = 'rgba(0,0,0,0.4)';
-  roundRect(c, 28, vh - 48, 144, 12, 3);
-  c.fill();
-  c.fillStyle = trim.kleur;
-  roundRect(c, 28, vh - 48, 144 * schip.zeilen, 12, 3);
-  c.fill();
-  c.fillStyle = '#b9c7d4';
+  c.fillStyle = R.HUD.inkt;
   c.fillText(`${(s.snelheid / 8).toFixed(1)} knopen`, 28, vh - 27);
   c.textAlign = 'right';
+  c.fillStyle = R.HUD.inktZacht;
   c.fillText(windWoord(lokaal.kracht), 172, vh - 27);
   c.restore();
 
-  // Minikaart.
+  // Minikaart in een messing lijst.
   if (miniKaart) {
     const mw = 210;
     const mh = Math.round((mw * WORLD_H) / WORLD_W);
     const mx = vw - mw - 16,
       my = vh - mh - 16;
     c.save();
-    c.fillStyle = 'rgba(8,26,40,0.85)';
-    roundRect(c, mx - 4, my - 4, mw + 8, mh + 8, 6);
-    c.fill();
-    c.strokeStyle = 'rgba(217,164,65,0.55)';
-    c.lineWidth = 1.4;
-    c.stroke();
+    R.hudPaneel(c, mx - 6, my - 6, mw + 12, mh + 12, 6);
     c.drawImage(miniKaart, mx, my, mw, mh);
+    c.strokeStyle = 'rgba(60,44,22,0.55)';
+    c.lineWidth = 1;
+    c.strokeRect(mx - 0.5, my - 0.5, mw + 1, mh + 1);
     const sc = mw / WORLD_W;
     // Stormen op de minikaart: kleine donkere vlekjes die met de wind meedrijven.
     if (w.stormen) {
@@ -1596,22 +1591,29 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
       }
     }
     for (const stad of w.steden) {
-      c.fillStyle = NATIES[stad.natie].kleur;
-      c.fillRect(mx + stad.x * sc - 1.5, my + stad.y * sc - 1.5, 3, 3);
+      R.natieStip(c, mx + stad.x * sc, my + stad.y * sc, stad.natie, 2.4);
     }
     c.fillStyle = '#ffe28a';
+    c.strokeStyle = '#3a2a18';
+    c.lineWidth = 0.8;
     c.beginPath();
-    c.arc(mx + s.x * sc, my + s.y * sc, 3.2, 0, TAU);
+    c.arc(mx + s.x * sc, my + s.y * sc, 3.4, 0, TAU);
     c.fill();
+    c.stroke();
     c.restore();
   }
 
-  // Bedieningshulp.
+  // Bedieningshulp, op een eigen strookje zodat hij op elke ondergrond leesbaar
+  // blijft; als losse lichte letters verdween hij in het schuim langs de kust.
   c.save();
   c.font = '11px Georgia, serif';
-  c.fillStyle = 'rgba(220,208,180,0.5)';
   c.textAlign = 'left';
-  c.fillText('← → sturen · ↑ ↓ zeilen · klik = koers · M kaart · S schip · C bemanning · Esc menu', 16, vh - 92);
+  c.textBaseline = 'middle';
+  const hulp = '← → sturen · ↑ ↓ zeilen · klik = koers · M kaart · S schip · C bemanning · Esc menu';
+  const hw = c.measureText(hulp).width;
+  R.hudPaneel(c, 16, vh - 104, hw + 24, 20, 4);
+  c.fillStyle = R.HUD.inktZacht;
+  c.fillText(hulp, 28, vh - 93.5);
   c.restore();
 }
 

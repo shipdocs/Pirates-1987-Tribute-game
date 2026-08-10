@@ -131,6 +131,10 @@ function tekenSlagTerrein(c, terrein) {
   c.lineWidth = 3;
   c.stroke();
 
+  // Branding met dezelfde schuimvlokken als op de zeekaart.
+  R.schuimLangs(c, () => padVanRand(c, kust.rand, 1.02), 16, 0.55, Game.tijd);
+  R.schuimLangs(c, () => padVanRand(c, kust.rand, 1.005), 7, 0.7, Game.tijd, -0.6);
+
   for (const plant of kust.groei) {
     c.fillStyle = plant.licht ? '#5f8848' : '#234d32';
     c.beginPath();
@@ -165,6 +169,8 @@ function tekenSlagTerrein(c, terrein) {
     c.strokeStyle = 'rgba(225,218,194,0.42)';
     c.lineWidth = 1.5;
     c.stroke();
+    // Ook een rots breekt water.
+    R.schuimLangs(c, () => padVanRand(c, rots.rand, 1.05), 8, 0.5, Game.tijd, 0.8);
     c.restore();
   }
 }
@@ -231,7 +237,11 @@ export function maakZeeslag(vloot, opts) {
   let afgelopen = false;
   let vijandMoraal = 100;
   let terreinBotsKoeling = 0;
-  const cam = { x: 0, y: 0, zoom: 0.85 };
+  // De schepen worden hier op dubbele schaal getekend (zie `tekenStrijder`) en
+  // het terrein rekent met diezelfde maat, dus die verhouding blijft staan;
+  // alleen de camera stond te ver weg. Een fregat mat vijfenzestig schermpixels
+  // in een gevecht waarin je op de romp van je tegenstander moet mikken.
+  const cam = { x: 0, y: 0, zoom: 1.35 };
   // Welk muziekthema er speelde toen we hier binnenkwamen.
   let vorigThema = 'zee';
 
@@ -365,7 +375,12 @@ export function maakZeeslag(vloot, opts) {
       cam.x = lerp(cam.x, mx, clamp(dt * 2.2, 0, 1));
       cam.y = lerp(cam.y, my, clamp(dt * 2.2, 0, 1));
       const spreiding = dist(mij.x, mij.y, vijand.x, vijand.y);
-      const gewenst = clamp(Math.min(Game.breedte, Game.hoogte * 1.5) / (spreiding + 420), 0.42, 1.05);
+      // Ruimer bereik dan voorheen (0,42–1,05). Op de oude bovengrens mat een
+      // fregat een pixel of vijfenzestig, terwijl je in dit gevecht juist op
+      // romp of tuig van je tegenstander moet mikken; de ondergrens gaat mee
+      // omhoog omdat de hele arena maar 2300 bij 1640 groot is en je dus nooit
+      // zó ver uit elkaar ligt dat er verder uitgezoomd hoeft te worden.
+      const gewenst = clamp(Math.min(Game.breedte, Game.hoogte * 1.5) / (spreiding + 300), 0.5, 1.7);
       cam.zoom = lerp(cam.zoom, gewenst, clamp(dt * 1.5, 0, 1));
 
       // Vijandelijke moraal: een lekke romp, gevallen kameraden en vooral
@@ -1204,68 +1219,60 @@ export function maakZeeslag(vloot, opts) {
       const gekozen = i === munitie;
       const px = x,
         py = y - (MUNITIE.length - 1 - i) * (bh + 6);
-      c.fillStyle = gekozen ? 'rgba(217,164,65,0.92)' : 'rgba(10,28,44,0.8)';
-      roundRect(c, px, py, bw, bh, 6);
-      c.fill();
-      c.strokeStyle = gekozen ? '#f5e2b0' : 'rgba(217,164,65,0.4)';
-      c.lineWidth = 1.3;
-      c.stroke();
+      R.hudPaneel(c, px, py, bw, bh, 6);
+      if (gekozen) {
+        // De gekozen soort krijgt een messing lijst in plaats van een andere
+        // ondergrond: zo blijft de tekst op elk kaartje even leesbaar.
+        c.strokeStyle = R.HUD.goudLicht;
+        c.lineWidth = 2.4;
+        roundRect(c, px + 1, py + 1, bw - 2, bh - 2, 5);
+        c.stroke();
+      }
       c.textAlign = 'left';
       c.textBaseline = 'middle';
       c.font = '600 12px Georgia, serif';
-      c.fillStyle = gekozen ? '#22160a' : '#e6d9b8';
+      c.fillStyle = R.HUD.inkt;
       c.fillText(`${i + 1}  ${m.naam}`, px + 10, py + bh / 2 - 5);
       // De dracht erbij, want die verschilt sterk per soort.
       c.font = '10px Georgia, serif';
-      c.fillStyle = gekozen ? 'rgba(34,22,10,0.75)' : 'rgba(230,217,184,0.6)';
+      c.fillStyle = R.HUD.inktZacht;
       c.fillText(`dracht ${Math.round(bereikVan(mij, m))} m`, px + 10, py + bh / 2 + 8);
     }
 
     // Herlaadbalk.
     const hw = 200;
-    c.fillStyle = 'rgba(10,28,44,0.8)';
-    roundRect(c, vw / 2 - hw / 2, vh - 52, hw, 22, 6);
-    c.fill();
     const klaar = mij.herlaad <= 0;
     const f = klaar ? 1 : 1 - mij.herlaad / Math.max(0.1, mij.herlaadVol);
-    c.fillStyle = klaar ? '#7bb36a' : '#8a6a3a';
-    roundRect(c, vw / 2 - hw / 2 + 2, vh - 50, (hw - 4) * clamp(f, 0, 1), 18, 5);
-    c.fill();
+    R.hudPaneel(c, vw / 2 - hw / 2, vh - 52, hw, 22, 6);
+    R.hudBalk(c, vw / 2 - hw / 2 + 3, vh - 49, hw - 6, 16, f, klaar ? R.HUD.groen : R.HUD.goud);
     c.font = '600 12px Georgia, serif';
-    c.fillStyle = klaar ? '#0d1f30' : '#e6d9b8';
+    c.fillStyle = R.HUD.inkt;
     c.textAlign = 'center';
     c.fillText(klaar ? 'VUUR! (spatie)' : 'herladen…', vw / 2, vh - 41);
 
     // Eigen toestand.
-    c.fillStyle = 'rgba(10,28,44,0.82)';
-    roundRect(c, 16, 16, 236, 102, 8);
-    c.fill();
-    c.strokeStyle = 'rgba(217,164,65,0.4)';
-    c.lineWidth = 1.2;
-    c.stroke();
+    R.hudPaneel(c, 16, 16, 236, 102, 8);
     c.textAlign = 'left';
+    c.textBaseline = 'middle';
     c.font = '600 13px Georgia, serif';
-    c.fillStyle = '#f0e3c4';
+    c.fillStyle = R.HUD.inkt;
     c.fillText(SCHIP_INDEX[mij.type].naam, 28, 34);
-    balkje(c, 28, 44, 212, 12, mij.romp / mij.maxRomp, '#7bb36a', 'romp');
-    balkje(c, 28, 62, 212, 12, mij.tuigage, '#cfc3a6', 'tuig');
-    balkje(c, 28, 80, 212, 12, mij.bemanning / mij.startBemanning, '#d98a41', 'volk');
-    balkje(c, 28, 98, 212, 12, mij.kanonnen / mij.startKanonnen, '#b8b2a4', 'stuk');
+    balkje(c, 28, 44, 212, 12, mij.romp / mij.maxRomp, R.hudStand(mij.romp / mij.maxRomp), 'romp');
+    balkje(c, 28, 62, 212, 12, mij.tuigage, '#7d6a44', 'tuig');
+    balkje(c, 28, 80, 212, 12, mij.bemanning / mij.startBemanning, '#a8681f', 'volk');
+    balkje(c, 28, 98, 212, 12, mij.kanonnen / mij.startKanonnen, '#6f6a5c', 'stuk');
 
     // Vijandtoestand.
-    c.fillStyle = 'rgba(10,28,44,0.82)';
-    roundRect(c, vw - 252, 16, 236, 102, 8);
-    c.fill();
-    c.strokeStyle = 'rgba(198,91,69,0.5)';
-    c.stroke();
-    c.fillStyle = '#f0e3c4';
+    R.hudPaneel(c, vw - 252, 16, 236, 102, 8);
+    c.font = '600 13px Georgia, serif';
+    c.fillStyle = R.HUD.inkt;
     c.fillText(scheepsAanduiding(vijand.natie, vijand.type), vw - 240, 34);
-    balkje(c, vw - 240, 44, 212, 12, vijand.romp / vijand.maxRomp, '#c65b45', 'romp');
-    balkje(c, vw - 240, 62, 212, 12, vijand.tuigage, '#cfc3a6', 'tuig');
-    balkje(c, vw - 240, 80, 212, 12, vijandMoraal / 100, '#d98a41', 'moed');
-    balkje(c, vw - 240, 98, 212, 12, vijand.kanonnen / vijand.startKanonnen, '#b8b2a4', 'stuk');
+    balkje(c, vw - 240, 44, 212, 12, vijand.romp / vijand.maxRomp, R.HUD.rood, 'romp');
+    balkje(c, vw - 240, 62, 212, 12, vijand.tuigage, '#7d6a44', 'tuig');
+    balkje(c, vw - 240, 80, 212, 12, vijandMoraal / 100, '#a8681f', 'moed');
+    balkje(c, vw - 240, 98, 212, 12, vijand.kanonnen / vijand.startKanonnen, '#6f6a5c', 'stuk');
 
-    R.tekenWindroos(c, vw - 62, 150, 38, wereld.windRichting, wereld.windKracht, Game.tijd);
+    R.tekenWindroos(c, vw - 62, 152, 38, wereld.windRichting, wereld.windKracht, Game.tijd);
 
     const afstand = Math.round(dist(mij.x, mij.y, vijand.x, vijand.y));
     const dracht = Math.round(bereikVan(mij, MUNITIE[munitie]));
@@ -1274,14 +1281,19 @@ export function maakZeeslag(vloot, opts) {
     c.font = '11px Georgia, serif';
     // Rood zodra je buiten dracht ligt of te schuin staat om te vuren.
     const kanVuren = afstand <= dracht && veld.binnen;
-    c.fillStyle = kanVuren ? 'rgba(220,208,180,0.6)' : 'rgba(226,140,120,0.85)';
-    c.fillText(
+    const regel =
       `afstand ${afstand} m · dracht ${dracht} m · ` +
-        (veld.binnen ? 'breedzij vrij' : 'geen schootsveld') +
-        ` · B = enteren (< ${ENTERAFSTAND} m) · 1-3 munitie · Esc = vluchten`,
-      vw / 2,
-      vh - 66
-    );
+      (veld.binnen ? 'breedzij vrij' : 'geen schootsveld') +
+      ` · B = enteren (< ${ENTERAFSTAND} m) · 1-3 munitie · Esc = vluchten`;
+    // Op een strookje perkament: als losse letters over de zee viel deze regel
+    // weg tegen het schuim, en juist hier staat wat je moet weten om te vuren.
+    c.font = '11px Georgia, serif';
+    const rw = c.measureText(regel).width + 24;
+    R.hudPaneel(c, vw / 2 - rw / 2, vh - 78, rw, 20, 4);
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillStyle = kanVuren ? R.HUD.inktZacht : R.HUD.rood;
+    c.fillText(regel, vw / 2, vh - 67.5);
     c.restore();
   }
 
@@ -1289,16 +1301,11 @@ export function maakZeeslag(vloot, opts) {
   function balkje(c, x, y, w, h, f, kleur, label) {
     const lb = 34;
     c.font = '600 10px Georgia, serif';
-    c.fillStyle = 'rgba(226,214,184,0.8)';
+    c.fillStyle = R.HUD.inktZacht;
     c.textAlign = 'left';
     c.textBaseline = 'middle';
     c.fillText(label, x, y + h / 2);
-    c.fillStyle = 'rgba(0,0,0,0.42)';
-    roundRect(c, x + lb, y, w - lb, h, 3);
-    c.fill();
-    c.fillStyle = kleur;
-    roundRect(c, x + lb, y, (w - lb) * clamp(f, 0, 1), h, 3);
-    c.fill();
+    R.hudBalk(c, x + lb, y, w - lb, h, f, kleur);
   }
 
   return scene;

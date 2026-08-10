@@ -4,6 +4,8 @@ import {
   WAREN, SCHIP_INDEX, RANGEN, NATIE_IDS, MOEILIJKHEDEN, FAMILIE_ROLLEN, LEGENDES, itemBonus,
 } from './data.js';
 import { Wereld } from './world.js';
+// render.js leunt alleen op util, data en world, dus dit levert geen kringetje op.
+import * as R from './render.js';
 import * as audio from './audio.js';
 // ui.js leunt alleen op util en audio, dus dit levert geen kringetje op.
 import * as UI from './ui.js';
@@ -196,15 +198,18 @@ export const Game = {
       const m = this.meldingen[i];
       const a = clamp(Math.min(m.t * 4, (m.duur - m.t) * 2), 0, 1);
       const w = c.measureText(m.tekst).width + 30;
-      c.globalAlpha = a * 0.85;
-      c.fillStyle = 'rgba(10,28,44,0.9)';
-      roundRect(c, this.breedte / 2 - w / 2, y - 14, w, 28, 6);
-      c.fill();
-      c.strokeStyle = m.kleur === 'rood' ? 'rgba(206,86,68,0.9)' : 'rgba(217,164,65,0.75)';
-      c.lineWidth = 1.4;
-      c.stroke();
+      // Perkament, net als de HUD en de schermen: een melding is een briefje van
+      // de stuurman, geen systeemvenster.
+      c.globalAlpha = a * 0.94;
+      R.hudPaneel(c, this.breedte / 2 - w / 2, y - 14, w, 28, 6);
+      if (m.kleur === 'rood') {
+        c.strokeStyle = 'rgba(156,58,44,0.9)';
+        c.lineWidth = 1.4;
+        roundRect(c, this.breedte / 2 - w / 2, y - 14, w, 28, 6);
+        c.stroke();
+      }
       c.globalAlpha = a;
-      c.fillStyle = m.kleur === 'rood' ? '#f0b3a5' : '#f2e4c2';
+      c.fillStyle = m.kleur === 'rood' ? '#9c3a2c' : '#37281a';
       c.fillText(m.tekst, this.breedte / 2, y);
       y -= 34;
     }

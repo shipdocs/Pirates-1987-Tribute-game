@@ -1,24 +1,38 @@
 // Statische speldata: naties, handelswaar, scheepstypen, steden en namen.
 
+/**
+ * `kleur` is de kaartkleur, `merk` de vorm van het kaartsymbool.
+ *
+ * De vlaggen zijn historisch en blijven onaangeroerd; de kaartkleuren zijn dat
+ * niet. Spanje stond op #d8a12a en Nederland op #e8862b — vierentwintig graden
+ * tint uit elkaar en nauwelijks verschil in helderheid, dus op een stip van zes
+ * pixels precies dezelfde kleur. Ze staan nu ook in helderheid uit elkaar, en
+ * omdat drie van de vier natiekleuren nu eenmaal warm zijn, krijgt elke natie
+ * er een eigen vórm bij: dat is de enige codering die ook werkt voor wie
+ * kleuren niet uit elkaar houdt.
+ */
 export const NATIES = {
   spanje: {
     naam: 'Spanje',
     bijv: 'Spaans',
-    kleur: '#d8a12a',
+    kleur: '#e8c33a',
+    merk: 'cirkel',
     kleur2: '#b33232',
     vlag: ['#c8102e', '#f1bf00', '#c8102e'],
   },
   engeland: {
     naam: 'Engeland',
     bijv: 'Engels',
-    kleur: '#d94f4f',
+    kleur: '#c62828',
+    merk: 'vierkant',
     kleur2: '#f2f2f2',
     vlag: ['#f4f4f4', '#cf142b', '#f4f4f4'],
   },
   frankrijk: {
     naam: 'Frankrijk',
     bijv: 'Frans',
-    kleur: '#4f7fd9',
+    kleur: '#3f6fd8',
+    merk: 'driehoek',
     kleur2: '#f2f2f2',
     vlag: ['#0055a4', '#f4f4f4', '#ef4135'],
     // De Franse driekleur staat verticaal; alle andere vlaggen liggen horizontaal.
@@ -27,7 +41,8 @@ export const NATIES = {
   nederland: {
     naam: 'Nederland',
     bijv: 'Nederlands',
-    kleur: '#e8862b',
+    kleur: '#d2621b',
+    merk: 'ruit',
     kleur2: '#f2f2f2',
     vlag: ['#ae1c28', '#f4f4f4', '#21468b'],
   },
@@ -35,6 +50,7 @@ export const NATIES = {
     naam: 'Piraten',
     bijv: 'Piraten',
     kleur: '#2b2b31',
+    merk: 'kruis',
     kleur2: '#e8e4d8',
     vlag: ['#16161a', '#16161a', '#16161a'],
   },

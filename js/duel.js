@@ -1,7 +1,8 @@
 // Degengevecht: hoog, midden of laag — pareren en meteen terugstoten.
 import { clamp, lerp, TAU, sierTijd } from './util.js';
 import { NATIES } from './data.js';
-import { Game, roundRect, talentBonus, leeftijdFactor } from './game.js';
+import { Game, talentBonus, leeftijdFactor } from './game.js';
+import * as R from './render.js';
 import * as UI from './ui.js';
 import * as audio from './audio.js';
 
@@ -936,26 +937,19 @@ export function maakDuel(opts) {
     const bx = vw / 2 - bw / 2,
       by = 26;
     c.save();
-    c.fillStyle = 'rgba(10,28,44,0.85)';
-    roundRect(c, bx, by, bw, 26, 8);
-    c.fill();
-    c.strokeStyle = 'rgba(217,164,65,0.5)';
-    c.lineWidth = 1.4;
-    c.stroke();
-
+    R.hudPaneel(c, bx, by, bw, 26, 8);
     const f = (positie + 1) / 2;
-    c.fillStyle = '#8a3b3b';
-    roundRect(c, bx + 3, by + 3, (bw - 6) * clamp(f, 0, 1), 20, 6);
-    c.fill();
-    c.strokeStyle = 'rgba(240,227,196,0.6)';
+    R.hudBalk(c, bx + 3, by + 3, bw - 6, 20, f, R.HUD.rood);
+    c.strokeStyle = 'rgba(60,44,22,0.6)';
+    c.lineWidth = 1.2;
     c.beginPath();
-    c.moveTo(bx + bw / 2, by);
-    c.lineTo(bx + bw / 2, by + 26);
+    c.moveTo(bx + bw / 2, by + 2);
+    c.lineTo(bx + bw / 2, by + 24);
     c.stroke();
 
     c.font = '600 12px Georgia, serif';
     c.textBaseline = 'middle';
-    c.fillStyle = '#f0e3c4';
+    c.fillStyle = R.HUD.inkt;
     c.textAlign = 'left';
     c.fillText(Game.speler.naam, bx + 10, by + 13);
     c.textAlign = 'right';
@@ -974,24 +968,25 @@ export function maakDuel(opts) {
       c.globalAlpha = 1;
     }
 
-    // Uithoudingsvermogen.
-    c.fillStyle = 'rgba(10,28,44,0.8)';
-    roundRect(c, 20, vh - 46, 180, 16, 5);
-    c.fill();
-    c.fillStyle = uithoudingSpeler > 0.3 ? '#7bb36a' : '#c65b45';
-    roundRect(c, 22, vh - 44, 176 * uithoudingSpeler, 12, 4);
-    c.fill();
+    // Uithoudingsvermogen, met het label ín het paneel in plaats van erboven te
+    // zweven.
+    R.hudPaneel(c, 20, vh - 56, 180, 34, 6);
     c.font = '10px Georgia, serif';
-    c.fillStyle = '#dcd0b4';
+    c.fillStyle = R.HUD.inktZacht;
     c.textAlign = 'left';
+    c.textBaseline = 'middle';
     // Wie op leeftijd is, moet weten waaróm de adem korter is dan vroeger.
-    c.fillText(fit < 0.95 ? `adem · ${Math.floor(Game.speler.leeftijd)} jaar` : 'adem', 26, vh - 52);
+    c.fillText(fit < 0.95 ? `adem · ${Math.floor(Game.speler.leeftijd)} jaar` : 'adem', 28, vh - 45);
+    R.hudBalk(c, 28, vh - 37, 164, 11, uithoudingSpeler, R.hudStand(uithoudingSpeler));
 
-    // Bediening.
-    c.textAlign = 'center';
+    // Bediening, op een strookje: het dek is licht en de letters vielen erin weg.
     c.font = '12px Georgia, serif';
-    c.fillStyle = 'rgba(230,217,184,0.75)';
-    c.fillText('↑ hoog · → midden · ↓ laag — pareer op de juiste hoogte, sla dan meteen toe', vw / 2, vh - 22);
+    const hulp = '↑ hoog · → midden · ↓ laag — pareer op de juiste hoogte, sla dan meteen toe';
+    const hw = c.measureText(hulp).width + 24;
+    R.hudPaneel(c, vw / 2 - hw / 2, vh - 32, hw, 21, 4);
+    c.textAlign = 'center';
+    c.fillStyle = R.HUD.inktZacht;
+    c.fillText(hulp, vw / 2, vh - 21);
     c.restore();
   }
 

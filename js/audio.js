@@ -6,11 +6,20 @@
 const ZEE_OPNAME_URL = new URL('../assets/muziek/island-gold-chase.mp3', import.meta.url);
 const ZEE_OVERGANG = 4;
 const ZEE_EINDMARGE = 1.2;
+const MUZIEK_VOLUME = 0.22;
+const DEMP_AANVAL = 0.035;
+const MUZIEK_DEMPING = {
+  kort: { niveau: 0.68, vasthouden: 0.12, herstel: 0.28 },
+  duidelijk: { niveau: 0.48, vasthouden: 0.32, herstel: 0.48 },
+  zwaar: { niveau: 0.28, vasthouden: 0.65, herstel: 0.75 },
+  lang: { niveau: 0.32, vasthouden: 1.25, herstel: 0.9 },
+};
 
 const state = {
   ctx: null,
   master: null,
   muziekGain: null,
+  muziekDemping: null,
   sfxGain: null,
   aan: true,
   // Twee dingen die uit elkaar gehouden moeten worden: wat de speler wil, en of
@@ -33,6 +42,10 @@ const state = {
   zeeBronnen: new Set(),
   zeeLoopTimer: null,
   muziekGeneratie: 0,
+  muziekDempDoel: 1,
+  muziekGedemptTot: 0,
+  muziekHerstelDuur: 0,
+  muziekHersteldOp: 0,
 };
 
 function ctx() {
@@ -47,8 +60,11 @@ function ctx() {
     state.sfxGain.gain.value = 0.55;
     state.sfxGain.connect(state.master);
     state.muziekGain = state.ctx.createGain();
-    state.muziekGain.gain.value = 0.22;
-    state.muziekGain.connect(state.master);
+    state.muziekGain.gain.value = MUZIEK_VOLUME;
+    state.muziekDemping = state.ctx.createGain();
+    state.muziekDemping.gain.value = 1;
+    state.muziekGain.connect(state.muziekDemping);
+    state.muziekDemping.connect(state.master);
     // Een korte echo geeft de melodie ruimte, alsof ze over water draagt.
     // Terugkoppeling ver onder de helft, anders loopt het vol.
     const vertraag = state.ctx.createDelay(1);
@@ -68,6 +84,45 @@ function ctx() {
     state.galm = vertraag;
   }
   return state.ctx;
+}
+
+/**
+ * Maakt tijdelijk ruimte in de mix voor een belangrijk geluidseffect. Een
+ * tweede effect verlengt de lopende demping; een lichtere klank kan een zware
+ * demping niet voortijdig opheffen.
+ */
+function dempMuziek(soort) {
+  const instelling = MUZIEK_DEMPING[soort];
+  const c = state.ctx;
+  const node = state.muziekDemping;
+  if (!instelling || !c || !node || !state.aan || !state.muziekAan) return;
+
+  const nu = c.currentTime;
+  const overlapt = nu < state.muziekGedemptTot;
+  const niveau = overlapt
+    ? Math.min(instelling.niveau, state.muziekDempDoel)
+    : instelling.niveau;
+  const gedemptTot = Math.max(nu + instelling.vasthouden, state.muziekGedemptTot);
+  const herstel = overlapt
+    ? Math.max(instelling.herstel, state.muziekHerstelDuur)
+    : instelling.herstel;
+  const gain = node.gain;
+
+  if (gain.cancelAndHoldAtTime) {
+    gain.cancelAndHoldAtTime(nu);
+  } else {
+    const huidig = gain.value;
+    gain.cancelScheduledValues(nu);
+    gain.setValueAtTime(huidig, nu);
+  }
+  gain.linearRampToValueAtTime(niveau, nu + DEMP_AANVAL);
+  gain.setValueAtTime(niveau, gedemptTot);
+  gain.linearRampToValueAtTime(1, gedemptTot + herstel);
+
+  state.muziekDempDoel = niveau;
+  state.muziekGedemptTot = gedemptTot;
+  state.muziekHerstelDuur = herstel;
+  state.muziekHersteldOp = gedemptTot + herstel;
 }
 
 /** Laadt en decodeert de Caribische zeemuziek hoogstens eenmaal per sessie. */
@@ -239,30 +294,37 @@ function ruis(duur, vol, filterFreq, type = 'lowpass', start = 0) {
 
 export const sfx = {
   kanon() {
+    dempMuziek('zwaar');
     ruis(0.5, 0.7, 900);
     toon(70, 0.4, 'sine', 0.5, 0, 32);
   },
   treffer() {
+    dempMuziek('duidelijk');
     ruis(0.3, 0.5, 500);
     toon(120, 0.2, 'square', 0.18, 0, 50);
   },
   plons() {
+    dempMuziek('kort');
     ruis(0.35, 0.3, 2600, 'bandpass');
   },
   kling() {
+    dempMuziek('kort');
     toon(1400, 0.12, 'triangle', 0.3, 0, 900);
     toon(2100, 0.09, 'square', 0.12, 0.01, 1500);
     ruis(0.09, 0.16, 4000, 'highpass');
   },
   pareer() {
+    dempMuziek('kort');
     toon(900, 0.16, 'triangle', 0.24, 0, 1600);
     ruis(0.12, 0.12, 3000, 'highpass');
   },
   raak() {
+    dempMuziek('duidelijk');
     toon(220, 0.22, 'sawtooth', 0.28, 0, 90);
     ruis(0.22, 0.3, 700);
   },
   munt() {
+    dempMuziek('kort');
     toon(1180, 0.1, 'triangle', 0.22);
     toon(1560, 0.14, 'triangle', 0.18, 0.06);
     toon(2100, 0.16, 'triangle', 0.12, 0.12);
@@ -287,6 +349,7 @@ export const sfx = {
   // Klaar met een bezigheid: een zonnige opgaande terts, als het afronden van
   // een zeekaart. Niet zo pompeus als de fanfare bij een stad.
   klaar() {
+    dempMuziek('duidelijk');
     toon(660, 0.13, 'triangle', 0.2);
     toon(830, 0.16, 'triangle', 0.18, 0.09);
     toon(990, 0.22, 'triangle', 0.14, 0.18);
@@ -296,29 +359,35 @@ export const sfx = {
     toon(180, 0.18, 'square', 0.16, 0, 110);
   },
   fanfare() {
+    dempMuziek('zwaar');
     const n = [523, 659, 784, 1047];
     n.forEach((f, i) => toon(f, 0.32, 'triangle', 0.24, i * 0.11));
   },
   ramp() {
+    dempMuziek('lang');
     ruis(1.2, 0.5, 380);
     toon(90, 1.0, 'sine', 0.3, 0, 30);
   },
   haven() {
+    dempMuziek('duidelijk');
     toon(392, 0.3, 'triangle', 0.18);
     toon(523, 0.4, 'triangle', 0.16, 0.14);
   },
   /** De cel pakt je op: een aanzwellende vlaag met een opgaande toon erin. */
   stormRand() {
+    dempMuziek('lang');
     ruis(1.4, 0.3, 900, 'bandpass');
     toon(180, 0.9, 'sine', 0.1, 0.1, 320);
   },
   /** De kernrand over: dof, laag, en niets opgaands meer. */
   stormKern() {
+    dempMuziek('lang');
     ruis(1.8, 0.42, 320);
     toon(150, 1.4, 'sine', 0.2, 0, 52);
   },
   /** Het want onder spanning. Hoe hoger `nood`, hoe scherper het kraakt. */
   kraak(nood = 0) {
+    dempMuziek('duidelijk');
     ruis(0.5 + 0.3 * nood, 0.18 + 0.16 * nood, 380 + 260 * nood);
     toon(140 - 40 * nood, 0.5, 'sawtooth', 0.1 + 0.1 * nood, 0, 60);
   },
@@ -1138,6 +1207,8 @@ export function muziekAan() {
 export function muziekStand() {
   const thema = state.thema || THEMAS.zee;
   const deelNr = Math.floor(positie / EENHEDEN_PER_DEEL);
+  const nu = state.ctx ? state.ctx.currentTime : 0;
+  const dempingActief = nu < state.muziekHersteldOp;
   return {
     thema: state.themaNaam || 'zee',
     deel: thema.vorm[deelNr % thema.vorm.length],
@@ -1147,5 +1218,10 @@ export function muziekStand() {
     opnameGeladen: Boolean(state.zeeOpname),
     opnameActief: state.zeeOpnameActief,
     opnameDuur: state.zeeOpname ? state.zeeOpname.duration : null,
+    demping: {
+      actief: dempingActief,
+      niveau: dempingActief ? state.muziekDempDoel : 1,
+      resterend: Math.max(0, state.muziekHersteldOp - nu),
+    },
   };
 }

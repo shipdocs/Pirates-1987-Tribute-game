@@ -407,6 +407,10 @@ export function maakSpeler(opties) {
     y: 0,
     koers: Math.PI,
     snelheid: 0,
+    // Draaisnelheid in radialen per seconde. Het roer versnelt en remt deze
+    // geleidelijk op aanloop naar het roer, zodat het schip vloeiend draait in
+    // plaats van te verspringen; de maximale draaisnelheid blijft onveranderd.
+    hoekSnelheid: 0,
     // Lopende schatjacht: null of het resultaat van wereld.plaatsSchat().
     schat: null,
     schattenGevonden: 0,
@@ -520,7 +524,7 @@ export function bewaar() {
   if (!Game.speler || !Game.wereld) return false;
   const w = Game.wereld;
   const data = {
-    versie: 6,
+    versie: 7,
     seed: w.seed,
     speler: Game.speler,
     // De wereldpolitiek staat op de wereld, niet op de speler, en volgt dus
@@ -595,6 +599,9 @@ export function laad() {
   if (sp.startLeeftijd == null) sp.startLeeftijd = 18;
   if (sp.leeftijd == null) sp.leeftijd = sp.startLeeftijd + (sp.dag || 0) / 365;
   if (sp.pensioenGevraagd == null) sp.pensioenGevraagd = 0;
+  // Saves van vóór versie 7 kenden de hoeksnelheid van het roer nog niet. Die
+  // begint stil: het schip hoeft alleen te draaien zolang er gestuurd wordt.
+  if (sp.hoekSnelheid == null) sp.hoekSnelheid = 0;
   // Saves van vóór versie 5 kenden de beruchte kapiteins nog niet. Nieuwe
   // legendes die later worden toegevoegd komen er langs deze weg ook bij.
   if (!Array.isArray(sp.items)) sp.items = [];

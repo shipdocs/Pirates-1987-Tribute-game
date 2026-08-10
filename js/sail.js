@@ -1,6 +1,6 @@
 // Overzichtsscène: varen over de Caribische Zee.
 import {
-  clamp, lerp, normAngle, dist, TAU, fmtDate, fmtGold, compassName, turnToward, pick, el,
+  clamp, lerp, normAngle, dist, TAU, fmtDate, fmtGold, compassName, pick, el,
 } from './util.js';
 import {
   WAREN, WAAR_INDEX, SCHIP_INDEX, NATIES, RANGEN, scheepsAanduiding, MOEILIJKHEDEN,
@@ -203,18 +203,27 @@ export function maakZeilScene() {
       werkStormBij(s, stormVeld, dt);
 
       // --- Sturen ---------------------------------------------------------
+      // Het roer hakt de koers niet meteen om, maar draait de hoeksnelheid
+      // `s.hoekSnelheid` geleidelijk bij: zolang het roer staat, loopt hij op
+      // naar de maximale draaisnelheid `wend`, en zodra het roer wordt
+      // losgelaten dooft hij uit. Zo blijft de topdraai even snel als voorheen
+      // (responsief), maar komt de boeg zonder verspringen op gang en valt hij
+      // zonder rukken stil — nergens verandert de hoeksnelheid sprongsgewijs.
       const bonus = w.scheepsBonus ? w.scheepsBonus(s) : { zeil: 0, roer: 0, hoogte: 0 };
       const wend = type.wend * (0.55 + 0.45 * schip.zeilen) * (1 + bonus.roer);
-      let draaide = false;
-      if (Game.toets('ArrowLeft') || Game.toets('KeyA')) {
-        s.koers = normAngle(s.koers - wend * dt);
-        draaide = true;
+      // Hoeksnelheid naar z'n doel dirigeren. Hoe hoger de ratio, des te
+      // korter de aanloop en hoe pittiger het sturen; lager voelt zeileriger.
+      const stuurBijregel = 5;
+      // Uitdooftempo zodra het roer in het midden ligt.
+      const stuurRust = 3.4;
+      const links = Game.toets('ArrowLeft') || Game.toets('KeyA');
+      const rechts = Game.toets('ArrowRight') || Game.toets('KeyD');
+      const stuur = (rechts ? 1 : 0) - (links ? 1 : 0);
+      // Met het roer vast draait de boeg soepel naar volle wendbaarheid.
+      if (stuur) {
+        s.hoekSnelheid = lerp(s.hoekSnelheid, stuur * wend, clamp(stuurBijregel * dt, 0, 1));
+        doelKoers = null;
       }
-      if (Game.toets('ArrowRight') || Game.toets('KeyD')) {
-        s.koers = normAngle(s.koers + wend * dt);
-        draaide = true;
-      }
-      if (draaide) doelKoers = null;
 
       // Klikken op zee zet een koers uit.
       if (Game.muis.klik) {
@@ -222,10 +231,29 @@ export function maakZeilScene() {
         const wy = cam.y + (Game.muis.y - Game.hoogte / 2) / cam.zoom;
         doelKoers = Math.atan2(wy - s.y, wx - s.x);
       }
-      if (doelKoers != null) {
-        s.koers = turnToward(s.koers, doelKoers, wend * dt);
-        if (Math.abs(normAngle(doelKoers - s.koers)) < 0.02) doelKoers = null;
+
+      // Zonder roer (of met een uitgezette koers) zachtjes bijsturen of
+      // afremmen. Een gewone koers remt zodra hij dichtbij is, zodat de boeg
+      // zonder oversteken op de doelhoek komt te liggen.
+      if (doelKoers != null && !stuur) {
+        const verschil = normAngle(doelKoers - s.koers);
+        const drempel = 0.018;
+        if (Math.abs(verschil) < drempel) {
+          s.koers = doelKoers;
+          s.hoekSnelheid = 0;
+          doelKoers = null;
+        } else {
+          // Evenredig sturen: veraf op volle draai, dichterbij trager.
+          s.hoekSnelheid = lerp(
+            s.hoekSnelheid,
+            clamp(verschil * 2.4, -wend, wend),
+            clamp(stuurBijregel * dt, 0, 1)
+          );
+        }
+      } else if (!stuur) {
+        s.hoekSnelheid = lerp(s.hoekSnelheid, 0, clamp(stuurRust * dt, 0, 1));
       }
+      s.koers = normAngle(s.koers + s.hoekSnelheid * dt);
 
       // Zeilstand.
       if (Game.toets('ArrowUp') || Game.toets('KeyW')) schip.zeilen = clamp(schip.zeilen + dt * 0.8, 0, 1);
@@ -341,6 +369,9 @@ export function maakZeilScene() {
           );
           vertrek = { vx: s.x, vy: s.y, tx: wx, ty: wy, t: 0, duur: 1.1 };
           s.koers = hoek;
+          // Na het losgooien ligt het roer recht: de boeg vaart de haven uit
+          // zonder een overgebleven draaiing mee te nemen.
+          s.hoekSnelheid = 0;
           // Uitvaren is het natuurlijke rustpunt: handel gedaan, werf gehad,
           // bemanning aangemonsterd. Hier bewaren scheelt de speler het verlies
           // van een hele havenronde als hij het tabblad sluit.

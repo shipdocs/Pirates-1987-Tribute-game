@@ -1665,7 +1665,7 @@ function romPad(ctx, L, B) {
 
 /**
  * De romp met alles wat er vast aan zit. Hangt alleen af van het type en het
- * aantal geschutspoorten, dus we bakken hem één keer in een sprite.
+ * aantal kanonspoorten, dus we bakken hem één keer in een sprite.
  */
 function tekenRompDetail(ctx, L, B, poorten) {
   // Romp.
@@ -1802,7 +1802,7 @@ function tekenRompDetail(ctx, L, B, poorten) {
       ctx.fillStyle = '#0d0a06';
       ctx.fillRect(px - 1, -B / 2 + 2.4, 2, 1);
       ctx.fillRect(px - 1, B / 2 - 3.4, 2, 1);
-      // Koperen randje om het geschutspoort.
+      // Koperen randje om de kanonspoort.
       ctx.strokeStyle = 'rgba(214,178,92,0.6)';
       ctx.lineWidth = 0.5;
       ctx.strokeRect(px - 1.2, -B / 2 + 0.5, 2.4, 1.8);
@@ -1870,7 +1870,7 @@ function rompSprite(typeId, poorten, dichtheid) {
 
 /**
  * Tekent één schip. Coördinaten in wereldruimte, camera-transform actief.
- * opts: {zeilen 0..1, vaart, kanonnen, tijd, schaal}
+ * opts: {zeilen 0..1, vaart, geschut, tijd, schaal}
  */
 /**
  * Hoe een schip in de zeegang werkt, recht van boven gezien.
@@ -1947,8 +1947,8 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
     landFactor = raak / 6;
   }
 
-  // Zoveel geschutspoorten als het schip werkelijk stukken aan een boord heeft.
-  const stukken = opts.kanonnen != null ? opts.kanonnen : SCHIP_INDEX[typeId]?.kanonnen ?? 0;
+  // Zoveel kanonspoorten als het schip werkelijk stukken aan een boord heeft.
+  const stukken = opts.geschut != null ? opts.geschut : SCHIP_INDEX[typeId]?.geschut ?? 0;
   const poorten = clamp(Math.round(stukken / 2), 0, Math.max(1, Math.floor(L / 4.6)));
 
   // Werken van het schip in de zeegang.
@@ -3443,7 +3443,7 @@ export function hudBalk(ctx, x, y, w, h, fractie, kleur, label) {
   ctx.restore();
 }
 
-/** Kleur van een balk die van goed naar slecht loopt (romp, moraal, volk). */
+/** Kleur van een balk die van goed naar slecht loopt (romp, geest, volk). */
 export function hudStand(f) {
   return f > 0.5 ? HUD.groen : f > 0.25 ? HUD.goud : HUD.rood;
 }

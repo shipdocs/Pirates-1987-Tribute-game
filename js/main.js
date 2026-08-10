@@ -161,7 +161,7 @@ function toonTitelmenu() {
     knoppen: (sch) => {
       const k = [
         {
-          label: 'Nieuw avontuur',
+          label: 'Nieuwe reis',
           actie: () => {
             sch.sluit();
             maakKapitein();
@@ -170,7 +170,7 @@ function toonTitelmenu() {
       ];
       if (heeftOpslag()) {
         k.push({
-          label: 'Verder waar je gebleven was',
+          label: 'De reis hervatten',
           actie: () => {
             const opgeslagen = laad();
             if (!opgeslagen) {
@@ -209,7 +209,7 @@ function toonTitelmenu() {
       // Eerst dit menu sluiten: het hulpscherm opent het straks zelf weer, en
       // anders blijft er bij elke rondgang een titelmenu op de stapel staan.
       k.push({
-        label: 'Bediening en spelregels',
+        label: 'Bevelen en spelregels',
         actie: () => {
           sch.sluit();
           toonHulp();
@@ -231,7 +231,7 @@ function toonTitelmenu() {
 
 function toonHulp() {
   UI.toonScherm({
-    titel: 'Bediening',
+    titel: 'Bevelen aan boord',
     breed: true,
     bouw(body) {
       const blok = (titel, rijen) => {
@@ -249,12 +249,12 @@ function toonHulp() {
       body.appendChild(
         blok('Op zee', [
           ['← → / A D', 'roer bakboord / stuurboord'],
-          ['↑ ↓ / W', 'meer of minder zeil'],
+          ['↑ ↓ / W', 'zeil bijzetten of reven'],
           ['klik', 'koers uitzetten naar dat punt'],
           ['scroll / + −', 'in- en uitzoomen'],
           ['M', 'zeekaart'],
           ['S', 'vloot en ruim'],
-          ['C', 'bemanning en betrekkingen'],
+          ['C', 'scheepsvolk en betrekkingen'],
           ['Esc', 'scheepsraad (bewaren, stoppen, geluid)'],
         ])
       );
@@ -266,7 +266,7 @@ function toonHulp() {
           ['1 2 3', 'rondkogel · kettingkogel · schroot'],
           ['Tab', 'volgende soort kogel'],
           ['B', `enteren (binnen ${ENTERAFSTAND} meter)`],
-          ['Esc', 'proberen te vluchten'],
+          ['Esc', 'het gevecht afbreken'],
         ])
       );
       body.appendChild(
@@ -288,7 +288,7 @@ function toonHulp() {
         '<b>De kern van het spel:</b> de wind bepaalt alles. Voor de wind vaar je snel, pal tegen de wind ' +
         'kom je nauwelijks vooruit — kleine schepen kunnen veel hoger aan de wind liggen dan zware galjoenen. ' +
         'Koop goedkoop in plantagesteden, verkoop duur in forten en schatkamers. Verdeel op tijd de buit, ' +
-        'want een bemanning zonder uitzicht op goud loopt weg. En hoe langer je vaart, hoe ouder je wordt.';
+        'want scheepsvolk zonder uitzicht op goud loopt weg. En hoe langer je vaart, hoe ouder je wordt.';
       body.appendChild(p);
 
       const g = el('p', 'verhaal');
@@ -299,7 +299,7 @@ function toonHulp() {
         'waaier — dichtbij dekt die het hele schip af, ver weg gaat het meeste in zee. ' +
         '<br><br>Tegen een zwaardere tegenstander vecht je niet zijn romp kapot, maar zijn batterij: ' +
         'rondkogels slaan stukken uit hun affuiten, en wie niet meer terug kan schieten strijkt de vlag ' +
-        'zodra je langszij komt. Kettingkogel maakt hem eerst onbestuurbaar, schroot dunt zijn bemanning ' +
+        'zodra je langszij komt. Kettingkogel maakt hem eerst onbestuurbaar, schroot dunt zijn scheepsvolk ' +
         'uit voor je entert. Let wel op de dracht: schroot draagt nog geen kwart van een rondkogel.';
       body.appendChild(g);
     },
@@ -329,7 +329,7 @@ function toonErelijst() {
           [
             { label: '' },
             { label: 'Kapitein' },
-            { label: 'Onder' },
+            { label: 'In dienst van' },
             { label: 'Jaren', rechts: true },
             { label: 'Vermogen', rechts: true },
             { label: 'Score', rechts: true },
@@ -357,12 +357,12 @@ function maakKapitein() {
   const keuze = {
     naam: '',
     natie: 'engeland',
-    talent: 'schermen',
-    moeilijkheid: 'kaperkapitein',
+    talent: 'meesterschermer',
+    moeilijkheid: 'bootsgezel',
   };
 
   const scherm = UI.toonScherm({
-    titel: 'Wie ben jij?',
+    titel: 'Wie voert het bevel?',
     onder: 'De Caraïben, het jaar onzes Heren 1660',
     breed: true,
     klasse: 'overlay-maak',
@@ -406,7 +406,7 @@ function maakKapitein() {
 
       // Talent.
       const talentBlok = el('div', 'maak-blok');
-      talentBlok.appendChild(el('h3', null, 'Waar ben je goed in?'));
+      talentBlok.appendChild(el('h3', null, 'Waarin ben je bedreven?'));
       const kiesTalent = el('div', 'keuzerij keuzerij-breed');
       for (const t of TALENTEN) {
         const k = el('button', 'keuze' + (keuze.talent === t.id ? ' gekozen' : ''));
@@ -423,7 +423,7 @@ function maakKapitein() {
 
       // Moeilijkheid.
       const moeiBlok = el('div', 'maak-blok');
-      moeiBlok.appendChild(el('h3', null, 'Hoe zwaar mag het worden?'));
+      moeiBlok.appendChild(el('h3', null, 'Hoe zwaar mag de vaart zijn?'));
       const kiesMoei = el('div', 'keuzerij');
       for (const m of MOEILIJKHEDEN) {
         const k = el('button', 'keuze' + (keuze.moeilijkheid === m.id ? ' gekozen' : ''));
@@ -512,7 +512,7 @@ function begin(keuze) {
   audio.ontgrendel();
   audio.startMuziek();
   Game.zetScene(maakZeilScene());
-  Game.melding(`${speler.naam} verlaat ${start.naam}. De wereld ligt open.`);
+  Game.melding(`${speler.naam} verlaat ${start.naam}. De zee ligt open.`);
 }
 
 // --- Start ----------------------------------------------------------------

@@ -28,7 +28,7 @@ export const MUNITIE = [
     bereik: 0.62, snelheid: 0.82,
   },
   {
-    id: 'schroot', naam: 'Schroot', kort: 'SCHROOT', doel: 'bemanning',
+    id: 'schroot', naam: 'Schroot', kort: 'SCHROOT', doel: 'scheepsvolk',
     omschrijving: 'Maait het dek schoon, maar draagt nauwelijks.',
     bereik: 0.38, snelheid: 0.92,
   },
@@ -53,11 +53,11 @@ export const SCHOOTSVELD = 0.52;
 export const ENTERAFSTAND = 95;
 
 /**
- * Een schip voert de helft van zijn geschut aan elk boord. De bovengrens houdt
+ * Een schip voert de helft van zijn stukken aan elk boord. De bovengrens houdt
  * het scherm en de rekentijd binnen de perken bij de zwaarste linieschepen.
  */
-export function salvoStukken(kanonnen) {
-  return clamp(Math.round(kanonnen / 2), 0, 14);
+export function salvoStukken(geschut) {
+  return clamp(Math.round(geschut / 2), 0, 14);
 }
 
 /**
@@ -70,7 +70,7 @@ export function spreiding(stukken) {
 
 /** Maximale dracht, per schipstype en munitiesoort. */
 export function schootsafstand(type, munitie) {
-  return (360 + type.kanonnen * 2) * (munitie ? munitie.bereik : 1);
+  return (360 + type.geschut * 2) * (munitie ? munitie.bereik : 1);
 }
 
 /**
@@ -126,18 +126,18 @@ export function raaktRomp(kx, ky, s, halveL, halveB) {
 // --- Herladen en schade ---------------------------------------------------
 
 /**
- * Herlaadtijd. Grote stukken zijn traag, en een uitgedunde bemanning krijgt ze
+ * Herlaadtijd. Grote stukken zijn traag, en uitgedund scheepsvolk krijgt ze
  * nog langzamer terug in batterij — verlies aan volk is dus echt verlies aan
  * vuurkracht.
  */
-export function herlaadTijd(type, bemanningDeel, kanonnierBonus = 0) {
-  const basis = 2.9 * type.herlaad - 0.5 * kanonnierBonus;
-  return Math.max(0.7, basis * clamp(1.45 - bemanningDeel, 0.8, 1.6));
+export function herlaadTijd(type, scheepsvolkDeel, konstabelBonus = 0) {
+  const basis = 2.9 * type.herlaad - 0.5 * konstabelBonus;
+  return Math.max(0.7, basis * clamp(1.45 - scheepsvolkDeel, 0.8, 1.6));
 }
 
 /** Zwaarder geschut slaat harder in, maar lang niet evenredig met het aantal. */
-export function schadePerTreffer(schutterKanonnen) {
-  return 0.85 + Math.sqrt(Math.max(0, schutterKanonnen)) * 0.095;
+export function schadePerTreffer(schutterGeschut) {
+  return 0.85 + Math.sqrt(Math.max(0, schutterGeschut)) * 0.095;
 }
 
 /** Welk deel van de rondkogeltreffers op het geschutsdek belandt in plaats van in de romp. */
@@ -153,8 +153,8 @@ export const KANS_GESCHUT = 0.3;
 export const TREFFERS_ONTWAPENEN = 34;
 
 /** Hoeveel stukken één treffer op het geschutsdek uitschakelt (mag gebroken zijn). */
-export function geschutVerlies(startKanonnen) {
-  return startKanonnen / TREFFERS_ONTWAPENEN;
+export function geschutVerlies(startGeschut) {
+  return startGeschut / TREFFERS_ONTWAPENEN;
 }
 
 /** Aantal koppen dat een lading schroot velt. */
@@ -170,8 +170,8 @@ export const KETTING_TUIGAGE = 0.04;
  */
 export function strijdlust(s) {
   const romp = clamp(s.romp / s.maxRomp, 0, 1);
-  const volk = clamp(s.bemanning / Math.max(1, s.startBemanning), 0, 1);
-  const geschut = clamp(s.kanonnen / Math.max(1, s.startKanonnen), 0, 1);
+  const volk = clamp(s.scheepsvolk / Math.max(1, s.startScheepsvolk), 0, 1);
+  const geschut = clamp(s.geschut / Math.max(1, s.startGeschut), 0, 1);
   return clamp(romp * 45 + volk * 30 + geschut * 25, 0, 100);
 }
 
@@ -185,8 +185,8 @@ export const OVERGAVE_AFSTAND = 340;
  * tegen een zwaardere tegenstander — schiet zijn batterij stil en kom binnen.
  */
 export function geeftOp(s, afstand, drempel = 22) {
-  if (s.bemanning <= 0) return true;
+  if (s.scheepsvolk <= 0) return true;
   if (afstand >= OVERGAVE_AFSTAND) return false;
-  if (s.kanonnen <= 0) return true;
+  if (s.geschut <= 0) return true;
   return strijdlust(s) < drempel;
 }

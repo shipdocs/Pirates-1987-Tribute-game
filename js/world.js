@@ -762,8 +762,8 @@ export class Wereld {
       // Een legende vaart vol bemand en zwaarder bewapend dan zijn scheepstype
       // op papier draagt; de romp blijft normaal, zodat de zeewaardigheid in de
       // zeeslag klopt.
-      bemanning: Math.round(type.bemanning * (legende ? legende.kracht : rnd(rng, 0.45, 0.85))),
-      kanonnen: Math.round(type.kanonnen * (legende ? legende.kracht : rnd(rng, 0.5, 1))),
+      scheepsvolk: Math.round(type.scheepsvolk * (legende ? legende.kracht : rnd(rng, 0.45, 0.85))),
+      geschut: Math.round(type.geschut * (legende ? legende.kracht : rnd(rng, 0.5, 1))),
       goud: legende
         ? Math.round(rnd(rng, 4000, 9000) * legende.kracht)
         : Math.round(rnd(rng, 200, 2600) * (marine ? 0.5 : 1) * (type.ruim / 100)),
@@ -1021,8 +1021,8 @@ export class Wereld {
     const vType = SCHIP_INDEX[v.type];
     const eigen = speler.schepen && speler.schepen[0];
     const eType = SCHIP_INDEX[eigen ? eigen.type : 'sloep'];
-    const sterkteV = vType.snelheid * (1 + (vType.kanonnen + vType.bemanning / 6) / 60);
-    const sterkteS = eType.snelheid * (1 + ((eigen ? eigen.kanonnen : 0) + speler.bemanning / 6) / 60);
+    const sterkteV = vType.snelheid * (1 + (vType.geschut + vType.scheepsvolk / 6) / 60);
+    const sterkteS = eType.snelheid * (1 + ((eigen ? eigen.geschut : 0) + speler.scheepsvolk / 6) / 60);
 
     let kans;
     if (v.natie === 'piraat') {

@@ -92,36 +92,18 @@ wat jij koopt en verkoopt), scheepswerf (herstellen, kanonnen, schepen kopen en
 verkopen, vlaggenschip wisselen) en de gouverneur (bevorderingen, landgoed,
 kaperbrieven, gratie, de dochter van de gouverneur en uiteindelijk je aftreden).
 
-**Muziek.** Twee thema's, allebei op de *tresillo* — het 3+3+2-ritme met
-Afro-Caribische wortels dat later de bodem werd van zowat alle eilandmuziek.
-De bas valt op één, op de tegentel van twee en op vier; de akkoorden vallen er
-telkens náást. Dat schuren laat de maat wiegen zonder dat er iets hard hoeft te
-slaan.
+**Muziek.** Op zee klinkt *Island Gold Chase*: een lokaal meegeleverde,
+opgewekte Caribische opname van ruim drie minuten. Het stille slot wordt niet
+afgespeeld; twee exemplaren lopen kort over elkaar heen zodat de muziek zonder
+harde sprong opnieuw kan beginnen. Kan de browser het bestand niet laden of
+decoderen, dan neemt het oorspronkelijke, volledig gesynthetiseerde zeethema
+automatisch over.
 
-Op zee klinkt het in F-groot, 103 slagen per minuut, geplukt in plaats van
-aangehouden: korte aanslagen met een boventoon die sneller uitdooft dan de
-grondtoon, waardoor het naar hout klinkt in plaats van naar een orgel. In de
-zeeslag en het duel schakelt het over naar D-klein op 143 slagen, gehamerd in
-plaats van geplukt, met een A7 waarvan de ene vreemde noot de maat naar de
-volgende toe trekt.
-
-Beide zijn opgebouwd uit delen van acht maten, en per deel wisselt de
-bezetting: niet elke stem speelt altijd mee. Er zijn adempauzes waarin de
-melodie zwijgt en een lage tegenstem hem alleen draagt, en delen waarin alles
-tegelijk klinkt. Omdat de vorm en de bezetting verschillende lengtes hebben
-schuiven ze langs elkaar; op zee duurt het bijna vier minuten voordat er iets
-letterlijk wordt herhaald.
-
-Daar bovenop valt het scheepsvolk af en toe in. Een klinker is niets anders dan
-een paar vaste resonanties boven op een toon, dus met drie smalle filters wordt
-een zaagtand een "oh" — en door die filters naar een andere klinker te schuiven
-klinkt het als een woord dat je net niet verstaat. Dat is de bedoeling: ze
-zingen mee, je hoort niet wát. In het gevecht wordt het zingen schreeuwen.
-
-En eromheen de zee: branding die aanrolt en breekt, krakend hout, een enkele
-scheepsbel en af en toe een meeuw. Alles ter plekke opgewekt uit oscillatoren
-en geruis — er is geen enkel geluidsbestand, ook niet voor de meeuw of de bel.
-Muziek en geluid staan los van elkaar in de scheepsraad.
+In de zeeslag en het duel schakelt het spel over naar de bestaande
+Web Audio-compositie in D-klein op 143 slagen per minuut, gehamerd en met een A7
+die iedere frase naar de volgende trekt. Branding, krakend hout, de scheepsbel
+en meeuwen blijven ook op de gewone zeereis ter plekke opgewekt uit oscillatoren
+en geruis. Muziek en geluid staan los van elkaar in de scheepsraad.
 
 **Beruchte kapiteins.** Zes namen varen ergens op deze zee: Dolle Jack in zijn
 brigantijn, de Weduwe van Tortuga, de Kraai met een linieschip dat niemand hem
@@ -199,6 +181,7 @@ logboek wist (titelscherm → *Het logboek wissen*).
 ```
 index.html            startpunt
 css/game.css          perkament-, goud- en zeethema
+assets/muziek/        lokaal meegeleverde zeemuziek en herkomstnotitie
 js/
   main.js             opstart, titelscherm, kapitein maken
   game.js             spelkern: toestand, scènes, invoer, opslag
@@ -213,7 +196,7 @@ js/
   town.js             havenschermen
   ui.js               perkamentpanelen en dialogen
   util.js             wiskunde- en opmaakhulpjes
-  audio.js            geluid en muziek uit de Web Audio API (zelf gespeeld)
+  audio.js            opgenomen zeemuziek, synthese, ambiance en geluidseffecten
 ```
 
 `gevechtsmodel.js` raakt bewust geen canvas, geluid of DOM aan. Daardoor is het

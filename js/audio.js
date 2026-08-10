@@ -1,7 +1,12 @@
 // © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
 // voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
 
-// Alle geluid wordt in de browser zelf opgewekt; geen externe bestanden nodig.
+// Effecten, ambiance en gevechtsmuziek worden in de browser opgewekt. Op zee
+// klinkt een lokaal meegeleverde opname, met de oude synthese als terugval.
+const ZEE_OPNAME_URL = new URL('../assets/muziek/island-gold-chase.mp3', import.meta.url);
+const ZEE_OVERGANG = 4;
+const ZEE_EINDMARGE = 1.2;
+
 const state = {
   ctx: null,
   master: null,
@@ -21,6 +26,13 @@ const state = {
   thema: null,
   themaNaam: 'zee',
   ruisBuf: null,
+  zeeOpname: null,
+  zeeOpnameBelofte: null,
+  zeeOpnameMislukt: false,
+  zeeOpnameActief: false,
+  zeeBronnen: new Set(),
+  zeeLoopTimer: null,
+  muziekGeneratie: 0,
 };
 
 function ctx() {
@@ -56,6 +68,119 @@ function ctx() {
     state.galm = vertraag;
   }
   return state.ctx;
+}
+
+/** Laadt en decodeert de Caribische zeemuziek hoogstens eenmaal per sessie. */
+function laadZeeOpname(c) {
+  if (state.zeeOpname) return Promise.resolve(state.zeeOpname);
+  if (state.zeeOpnameBelofte) return state.zeeOpnameBelofte;
+
+  state.zeeOpnameBelofte = fetch(ZEE_OPNAME_URL)
+    .then((antwoord) => {
+      if (!antwoord.ok) throw new Error(`HTTP ${antwoord.status}`);
+      return antwoord.arrayBuffer();
+    })
+    .then((data) => c.decodeAudioData(data))
+    .then((buffer) => {
+      if (!buffer || buffer.duration <= ZEE_OVERGANG + ZEE_EINDMARGE) {
+        throw new Error('de opname is te kort');
+      }
+      state.zeeOpname = buffer;
+      return buffer;
+    })
+    .catch((fout) => {
+      state.zeeOpnameBelofte = null;
+      throw fout;
+    });
+
+  return state.zeeOpnameBelofte;
+}
+
+/** Stopt alle spelende en reeds ingeplande exemplaren van de zee-opname. */
+function stopZeeOpname() {
+  if (state.zeeLoopTimer) {
+    clearTimeout(state.zeeLoopTimer);
+    state.zeeLoopTimer = null;
+  }
+  for (const item of state.zeeBronnen) {
+    try {
+      item.bron.stop();
+    } catch {
+      // Een reeds afgelopen AudioBufferSourceNode hoeft niet nogmaals te stoppen.
+    }
+  }
+  state.zeeBronnen.clear();
+  state.zeeOpnameActief = false;
+}
+
+/**
+ * Plant een afspeelbeurt en laat het volgende exemplaar vóór het stille slot
+ * invallen. Zo blijft de drie minuten lange opname doorlopen zonder harde sprong.
+ */
+function planZeeBron(start, valtIn, generatie) {
+  const c = state.ctx;
+  const buffer = state.zeeOpname;
+  if (
+    !c || !buffer || !state.muziekAan || state.themaNaam !== 'zee' ||
+    generatie !== state.muziekGeneratie
+  ) return;
+
+  const speelduur = Math.max(1, buffer.duration - ZEE_EINDMARGE);
+  const overgang = Math.min(ZEE_OVERGANG, speelduur / 3);
+  const wissel = start + speelduur - overgang;
+  const bron = c.createBufferSource();
+  const niveau = c.createGain();
+  bron.buffer = buffer;
+
+  if (valtIn) {
+    niveau.gain.setValueAtTime(0, start);
+    niveau.gain.linearRampToValueAtTime(1, start + overgang);
+  } else {
+    niveau.gain.setValueAtTime(1, start);
+  }
+  niveau.gain.setValueAtTime(1, wissel);
+  niveau.gain.linearRampToValueAtTime(0, start + speelduur);
+
+  bron.connect(niveau);
+  niveau.connect(state.muziekGain);
+  const item = { bron, niveau };
+  state.zeeBronnen.add(item);
+  bron.onended = () => state.zeeBronnen.delete(item);
+  bron.start(start);
+  bron.stop(start + speelduur + 0.05);
+
+  // Maak de volgende bron kort vóór zijn start aan. De audioklok bepaalt het
+  // precieze moment; setTimeout hoeft alleen op tijd te zijn om hem te plannen.
+  const planOver = Math.max(0, (wissel - c.currentTime - 0.75) * 1000);
+  state.zeeLoopTimer = setTimeout(() => {
+    state.zeeLoopTimer = null;
+    planZeeBron(wissel, true, generatie);
+  }, planOver);
+}
+
+/** Start de opname zodra hij klaarstaat, of activeert de synthese bij fouten. */
+async function startZeeOpname(generatie) {
+  const c = state.ctx;
+  if (!c || state.zeeOpnameMislukt) return;
+
+  try {
+    await laadZeeOpname(c);
+  } catch (fout) {
+    if (generatie !== state.muziekGeneratie) return;
+    state.zeeOpnameMislukt = true;
+    positie = 0;
+    volgendeEenheid = c.currentTime + 0.06;
+    console.warn('Zeemuziek kon niet worden geladen; de synthese neemt het over.', fout);
+    return;
+  }
+
+  if (
+    !state.muziekAan || state.themaNaam !== 'zee' ||
+    generatie !== state.muziekGeneratie
+  ) return;
+
+  state.zeeOpnameActief = true;
+  planZeeBron(c.currentTime + 0.06, false, generatie);
 }
 
 export function ontgrendel() {
@@ -854,60 +979,63 @@ function planEenheid(index, start) {
   const tel = inDeel % 16;
   const akkoord = deel.akkoorden[maat];
   const stem = thema.stem === 'hamer' ? hamer : pluk;
+  const speelSynthese = state.themaNaam !== 'zee' || state.zeeOpnameMislukt;
 
-  // --- Melodie en tegenstem ---
-  const noot = deel.op.get(inDeel);
-  if (noot) {
-    const [toon, lengte] = noot;
-    const duur = lengte * eenheid;
-    if (bez.melodie) stem(toon, start, duur, 0.34, 0.34, true);
-    // De tegenstem loopt een octaaf lager mee: hij kan nooit vals staan, en in
-    // de adempauze draagt hij de melodie in zijn eentje.
-    if (bez.tegen) stem(toon - 12, start, duur, bez.melodie ? 0.12 : 0.24, 0.15);
-    // Versiering: halverwege een lange noot een tweede aanslag op een toon uit
-    // hetzelfde akkoord. Uit het akkoord, dus hij kan niet verkeerd vallen.
-    if (bez.versier && lengte >= 6) {
-      const extra = akkoord.greep[1 + Math.floor(Math.random() * (akkoord.greep.length - 1))];
-      stem(extra, start + (lengte / 2) * eenheid, (lengte / 2) * eenheid, 0.13, 0.4);
+  if (speelSynthese) {
+    // --- Melodie en tegenstem ---
+    const noot = deel.op.get(inDeel);
+    if (noot) {
+      const [toon, lengte] = noot;
+      const duur = lengte * eenheid;
+      if (bez.melodie) stem(toon, start, duur, 0.34, 0.34, true);
+      // De tegenstem loopt een octaaf lager mee: hij kan nooit vals staan, en in
+      // de adempauze draagt hij de melodie in zijn eentje.
+      if (bez.tegen) stem(toon - 12, start, duur, bez.melodie ? 0.12 : 0.24, 0.15);
+      // Versiering: halverwege een lange noot een tweede aanslag op een toon uit
+      // hetzelfde akkoord. Uit het akkoord, dus hij kan niet verkeerd vallen.
+      if (bez.versier && lengte >= 6) {
+        const extra = akkoord.greep[1 + Math.floor(Math.random() * (akkoord.greep.length - 1))];
+        stem(extra, start + (lengte / 2) * eenheid, (lengte / 2) * eenheid, 0.13, 0.4);
+      }
     }
-  }
 
-  // --- Bas op de tresillo ---
-  if (tel === TRESILLO[0]) stem(akkoord.bas, start, eenheid * 5, 0.3, 0.06);
-  if (tel === TRESILLO[1]) stem(akkoord.vijfde, start, eenheid * 4, 0.2, 0.06);
-  if (tel === TRESILLO[2]) stem(akkoord.bas, start, eenheid * 4, 0.26, 0.06);
+    // --- Bas op de tresillo ---
+    if (tel === TRESILLO[0]) stem(akkoord.bas, start, eenheid * 5, 0.3, 0.06);
+    if (tel === TRESILLO[1]) stem(akkoord.vijfde, start, eenheid * 4, 0.2, 0.06);
+    if (tel === TRESILLO[2]) stem(akkoord.bas, start, eenheid * 4, 0.26, 0.06);
 
-  // --- Akkoord op de tegentel: het tikje van een cuatro ---
-  if (bez.akkoord && TEGENTEL.includes(tel)) {
-    akkoord.greep.forEach((t, i) => {
-      stem(t, start + i * 0.008, eenheid * 1.6, 0.05, 0.5);
-    });
-  }
+    // --- Akkoord op de tegentel: het tikje van een cuatro ---
+    if (bez.akkoord && TEGENTEL.includes(tel)) {
+      akkoord.greep.forEach((t, i) => {
+        stem(t, start + i * 0.008, eenheid * 1.6, 0.05, 0.5);
+      });
+    }
 
-  // --- Slagwerk ---
-  if (bez.schud && tel % 2 === 0) schud(start, tel % 4 === 2);
-  if (bez.trom) {
-    if (TRESILLO.includes(tel)) trom(start, tel === 0 || tel === 12);
-    if (tel === 8) trom(start, false);
-  }
+    // --- Slagwerk ---
+    if (bez.schud && tel % 2 === 0) schud(start, tel % 4 === 2);
+    if (bez.trom) {
+      if (TRESILLO.includes(tel)) trom(start, tel === 0 || tel === 12);
+      if (tel === 8) trom(start, false);
+    }
 
-  // --- Son clave: het houten anker van de warmte ---
-  if (bez.clave && SON_CLAVE.includes(tel)) clave(start);
+    // --- Son clave: het houten anker van de warmte ---
+    if (bez.clave && SON_CLAVE.includes(tel)) clave(start);
 
-  // --- Lage conga's vullen de tresillo-bas aan ---
-  if (bez.conga) {
-    if (TRESILLO.includes(tel)) conga(start, tel === 0 || tel === 12);
-    if (tel === 8) conga(start, false);
-  }
+    // --- Lage conga's vullen de tresillo-bas aan ---
+    if (bez.conga) {
+      if (TRESILLO.includes(tel)) conga(start, tel === 0 || tel === 12);
+      if (tel === 8) conga(start, false);
+    }
 
-  // --- Koor: het volk valt in op het eind van een zin ---
-  if (bez.koor && tel === 10 && (maat === 3 || maat === 7)) {
-    koor([akkoord.greep[0] - 12, akkoord.greep[2] - 12, akkoord.greep[0]],
-      start, eenheid * 6, KLINKERS.o, KLINKERS.a);
-  }
-  // --- Roep: kort en hard, tegen de tresillo in ---
-  if (bez.roep && tel === 12 && maat % 2 === 1) {
-    roep([akkoord.greep[0] - 12, akkoord.greep[2] - 12], start);
+    // --- Koor: het volk valt in op het eind van een zin ---
+    if (bez.koor && tel === 10 && (maat === 3 || maat === 7)) {
+      koor([akkoord.greep[0] - 12, akkoord.greep[2] - 12, akkoord.greep[0]],
+        start, eenheid * 6, KLINKERS.o, KLINKERS.a);
+    }
+    // --- Roep: kort en hard, tegen de tresillo in ---
+    if (bez.roep && tel === 12 && maat % 2 === 1) {
+      roep([akkoord.greep[0] - 12, akkoord.greep[2] - 12], start);
+    }
   }
 
   // --- De zee eromheen ---
@@ -964,6 +1092,8 @@ export function startMuziek(naam = 'zee') {
     clearInterval(state.muziekTimer);
     state.muziekTimer = null;
   }
+  state.muziekGeneratie++;
+  stopZeeOpname();
   state.thema = thema;
   state.muziekAan = true;
   // Een nieuw thema begint bij zijn eigen begin, anders val je middenin een
@@ -972,11 +1102,14 @@ export function startMuziek(naam = 'zee') {
   volgendeEenheid = c.currentTime + 0.1;
   state.muziekTimer = setInterval(planner, TIK);
   planner();
+  if (state.themaNaam === 'zee') startZeeOpname(state.muziekGeneratie);
 }
 
 /** Alles stil. Verandert de wens van de speler niet. */
 export function stopMuziek() {
+  state.muziekGeneratie++;
   state.muziekAan = false;
+  stopZeeOpname();
   if (state.muziekTimer) {
     clearInterval(state.muziekTimer);
     state.muziekTimer = null;
@@ -1010,5 +1143,9 @@ export function muziekStand() {
     deel: thema.vorm[deelNr % thema.vorm.length],
     bezetting: deelNr % thema.bezetting.length,
     maat: Math.floor((positie % EENHEDEN_PER_DEEL) / 16),
+    bron: state.themaNaam === 'zee' && !state.zeeOpnameMislukt ? 'opname' : 'synthese',
+    opnameGeladen: Boolean(state.zeeOpname),
+    opnameActief: state.zeeOpnameActief,
+    opnameDuur: state.zeeOpname ? state.zeeOpname.duration : null,
   };
 }

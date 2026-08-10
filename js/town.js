@@ -6,7 +6,7 @@ import {
   OPDRACHT_SOORTEN, UPGRADES, FAMILIE_ROLLEN, LEGENDES, LEGENDE_INDEX,
 } from './data.js';
 import {
-  Game, vlaggenschip, ruimTotaal, ruimVrij, vlootBemanningMax, nieuwSchip, talentBonus, berekenScore,
+  Game, vlaggenschip, ruimTotaal, ruimVrij, vlootScheepsvolkMax, nieuwSchip, talentBonus, berekenScore,
   bewaarInErelijst, wisOpslag, PENSIOEN_DRANG,
 } from './game.js';
 import * as UI from './ui.js';
@@ -28,7 +28,7 @@ export function openHaven(stad, opVertrek) {
         body.appendChild(UI.maakFiguur('zeeman'));
         const p = el('p', 'verhaal');
         p.innerHTML =
-          `De kanonnen van het fort volgen je schip. Op de kade wappert de ${NATIES[stad.natie].bijv.toLowerCase()} vlag, ` +
+          `Het geschut van het fort volgt je schip. Op de kade wappert de ${NATIES[stad.natie].bijv.toLowerCase()} vlag, ` +
           'en jouw naam staat er zwart op wit als vijand van de kroon.';
         body.appendChild(p);
       },
@@ -42,7 +42,7 @@ export function openHaven(stad, opVertrek) {
           },
         },
         {
-          label: 'Wegvaren',
+          label: 'Afvaren',
           actie: () => {
             sch.sluit();
             opVertrek();
@@ -126,8 +126,8 @@ function hoofdmenu(stad, opVertrek) {
       const info = el('div', 'haven-info');
       info.innerHTML =
         `<span>Goud in het ruim</span><b>${fmtGold(s.goud)}</b>` +
-        `<span>Bemanning</span><b>${s.bemanning} / ${vlootBemanningMax(s)}</b>` +
-        `<span>Moraal</span><b>${Math.round(s.moraal)}%</b>` +
+        `<span>Scheepsvolk</span><b>${s.scheepsvolk} / ${vlootScheepsvolkMax(s)}</b>` +
+        `<span>Geest aan boord</span><b>${Math.round(s.geest)}%</b>` +
         `<span>Romp vlaggenschip</span><b>${Math.round(vlaggenschip(s).romp)} / ${vlaggenschip(s).maxRomp}</b>` +
         `<span>Verhouding met ${natie.naam}</span><b>${relatieWoord(s.relatie[stad.natie])}</b>`;
       body.appendChild(info);
@@ -459,7 +459,7 @@ function kroeg(stad, ouder) {
       const p = el('p', 'verhaal');
       p.innerHTML =
         `De waard veegt een kroes af. "Wat wordt het, kapitein? Volk, drank of nieuws?"` +
-        `<br><small>Goud in het ruim: <b>${fmtGold(s.goud)}</b> · bemanning <b>${s.bemanning}</b> van ${vlootBemanningMax(s)}</small>`;
+        `<br><small>Goud in het ruim: <b>${fmtGold(s.goud)}</b> · scheepsvolk <b>${s.scheepsvolk}</b> van ${vlootScheepsvolkMax(s)}</small>`;
       body.appendChild(p);
       if (sch._bericht) {
         const b = el('p', 'kroeg-bericht');
@@ -487,16 +487,16 @@ function kroeg(stad, ouder) {
 }
 
 function beschikbaarVolk(stad, s) {
-  const ruimte = vlootBemanningMax(s) - s.bemanning;
+  const ruimte = vlootScheepsvolkMax(s) - s.scheepsvolk;
   const aanbod = Math.round(
-    stad.grootte * 14 * (0.5 + s.roem / 400) * (1 + 0.35 * talentBonus(s, 'charme')) *
+    stad.grootte * 14 * (0.5 + s.roem / 400) * (1 + 0.35 * talentBonus(s, 'gladde_tong')) *
       (stad.soort === 'roversnest' ? 1.8 : 1)
   );
   return clamp(Math.min(ruimte, aanbod), 0, 400);
 }
 
 function huurPrijs(stad, s) {
-  return Math.round(lerp(42, 24, clamp(s.roem / 300, 0, 1)) * (talentBonus(s, 'charme') ? 0.8 : 1));
+  return Math.round(lerp(42, 24, clamp(s.roem / 300, 0, 1)) * (talentBonus(s, 'gladde_tong') ? 0.8 : 1));
 }
 
 function monsterAan(stad, sch, beschikbaar, prijs) {
@@ -510,17 +510,17 @@ function monsterAan(stad, sch, beschikbaar, prijs) {
     return;
   }
   s.goud -= n * prijs;
-  s.bemanning += n;
-  s.moraal = clamp(s.moraal + 3, 0, 100);
+  s.scheepsvolk += n;
+  s.geest = clamp(s.geest + 3, 0, 100);
   audio.sfx.munt();
-  sch._bericht = `<b>${n} man</b> tekent bij voor ${fmtGold(n * prijs)} goudstukken.`;
+  sch._bericht = `<b>${n} man</b> monstert aan voor ${fmtGold(n * prijs)} goudstukken.`;
   sch.ververs();
 }
 
 function rondjeGeven(stad, sch) {
   const s = Game.speler;
   s.goud -= 100;
-  s.moraal = clamp(s.moraal + 6, 0, 100);
+  s.geest = clamp(s.geest + 6, 0, 100);
   audio.sfx.munt();
   const w = Game.wereld;
 
@@ -605,11 +605,11 @@ async function vreemdeling(stad, sch) {
       `een hertaling? Men zegt dat uw <b>${rolNaam}</b> ergens in <b>${s.familie.zoekStad}</b> gevangen zit."`;
     s.familie.laatsteTip = s.dag;
     sch.ververs();
-  } else if (rol < 0.78 && s.bemanning > 20) {
-    const n = Math.round(s.bemanning * 0.12);
-    s.bemanning -= n;
-    s.moraal = clamp(s.moraal - 4, 0, 100);
-    sch._bericht = `<b>${n} man</b> is aan de rum gebleven en niet meer aan boord verschenen.`;
+  } else if (rol < 0.78 && s.scheepsvolk > 20) {
+    const n = Math.round(s.scheepsvolk * 0.12);
+    s.scheepsvolk -= n;
+    s.geest = clamp(s.geest - 4, 0, 100);
+    sch._bericht = `<b>${n} man</b> is na de rum gedrost.`;
     audio.sfx.fout();
     sch.ververs();
   } else {
@@ -622,10 +622,10 @@ function verdeelBuit(stad, ouder) {
   const s = Game.speler;
   const rangDeel = s.rang[stad.natie] * 0.02;
   const roemDeel = clamp(s.roem / 1200, 0, 0.18);
-  const kapiteinsdeel = clamp(0.35 + rangDeel + roemDeel + (talentBonus(s, 'charme') ? 0.05 : 0), 0.2, 0.72);
+  const kapiteinsdeel = clamp(0.35 + rangDeel + roemDeel + (talentBonus(s, 'gladde_tong') ? 0.05 : 0), 0.2, 0.72);
   const totaal = s.goud;
   const mijn = Math.round(totaal * kapiteinsdeel);
-  const perMan = Math.max(0, Math.round((totaal - mijn) / Math.max(1, s.bemanning)));
+  const perMan = Math.max(0, Math.round((totaal - mijn) / Math.max(1, s.scheepsvolk)));
 
   UI.toonScherm({
     titel: 'De buit verdelen',
@@ -647,7 +647,7 @@ function verdeelBuit(stad, ouder) {
                 { html: `<b>${fmtGold(mijn)}</b>`, klasse: 'rechts' },
               ],
             },
-            { cellen: [{ tekst: `Per bemanningslid (${s.bemanning} man)` }, { tekst: fmtGold(perMan), klasse: 'rechts' }] },
+            { cellen: [{ tekst: `Per kop (${s.scheepsvolk} man)` }, { tekst: fmtGold(perMan), klasse: 'rechts' }] },
           ]
         )
       );
@@ -663,8 +663,8 @@ function verdeelBuit(stad, ouder) {
         actie: () => {
           s.gespaard += mijn;
           s.goud = 0;
-          s.bemanning = Math.max(12, Math.round(s.bemanning * 0.4));
-          s.moraal = 85;
+          s.scheepsvolk = Math.max(12, Math.round(s.scheepsvolk * 0.4));
+          s.geest = 85;
           s.laatsteVerdeling = s.dag;
           s.roem += Math.round(totaal / 3000);
           audio.sfx.munt();
@@ -732,11 +732,11 @@ function handel(stad, ouder) {
       body.appendChild(
         UI.tabel(
           [
-            { label: 'Waar' },
+            { label: 'Goed' },
             { label: 'Prijs', rechts: true },
-            { label: 'Voorraad', rechts: true },
+            { label: 'In pakhuis', rechts: true },
             { label: 'In ruim', rechts: true },
-            { label: 'Kopen / verkopen' },
+            { label: 'Inkopen / verkopen' },
           ],
           rijen
         )
@@ -744,7 +744,7 @@ function handel(stad, ouder) {
 
       const uitleg = el('p', 'kleintje');
       uitleg.innerHTML =
-        'Plantagesteden verkopen suiker, tabak en katoen goedkoop; forten en schatkamers betalen goed voor voedsel en handelswaar. ' +
+        'Plantagesteden verkopen suiker, tabak en katoen goedkoop; forten en schatkamers betalen goed voor proviand en koopwaar. ' +
         '<span class="goedkoop">Groen</span> = koopje, <span class="duur">rood</span> = hoge prijs.';
       body.appendChild(uitleg);
     },
@@ -816,15 +816,15 @@ function werf(stad, ouder) {
         const up = sh.upgrades || {};
         rij.innerHTML =
           `<span class="werf-naam">${t.naam}${i === 0 ? ' <em>(vlaggenschip)</em>' : ''}</span>` +
-          `<span class="werf-stat">romp ${Math.round(sh.romp)}/${sh.maxRomp} · ${sh.kanonnen}/${t.kanonnen} kanon` +
+          `<span class="werf-stat">romp ${Math.round(sh.romp)}/${sh.maxRomp} · ${sh.geschut}/${t.geschut} stukken` +
           (up.roer || up.zeilen || up.romp || up.weer
-            ? ` · uitrusting z${up.zeilen || 0}/r${up.roer || 0}/h${up.romp || 0}` +
+            ? ` · toerusting z${up.zeilen || 0}/r${up.roer || 0}/h${up.romp || 0}` +
               `${up.weer ? `/w${up.weer}` : ''}`
             : '') +
           `</span>`;
         const acties = el('div', 'werf-acties');
 
-        const herstel = el('button', 'mini', kosten > 0 ? `Herstellen (${fmtGold(kosten)})` : 'Gaaf');
+        const herstel = el('button', 'mini', kosten > 0 ? `Kalfateren (${fmtGold(kosten)})` : 'Gaaf');
         herstel.disabled = kosten <= 0 || s.goud < kosten;
         herstel.onclick = () => {
           s.goud -= kosten;
@@ -836,25 +836,25 @@ function werf(stad, ouder) {
         acties.appendChild(herstel);
 
         const kanonPrijs = 480;
-        const kanon = el('button', 'mini', `+1 kanon (${fmtGold(kanonPrijs)})`);
-        kanon.disabled = sh.kanonnen >= t.kanonnen || s.goud < kanonPrijs || (i === 0 && ruimVrij(sh) < 2);
+        const kanon = el('button', 'mini', `+1 stuk geschut (${fmtGold(kanonPrijs)})`);
+        kanon.disabled = sh.geschut >= t.geschut || s.goud < kanonPrijs || (i === 0 && ruimVrij(sh) < 2);
         kanon.onclick = () => {
           s.goud -= kanonPrijs;
-          sh.kanonnen++;
+          sh.geschut++;
           audio.sfx.munt();
           sch._bericht = 'Er wordt een extra stuk geschut aan boord gehesen.';
           sch.ververs();
         };
         acties.appendChild(kanon);
 
-        // Uitrusting: verbeter zeilen, romp of roer op de werf. `weer` heeft
-        // twee niveaus: eerst het weerglas, daarna de precisiebarometer.
+        // Toerusting: verbeter zeilen, romp of roer op de werf. `weer` heeft
+        // twee niveaus: eerst het weerglas, daarna een fijner weerglas.
         for (const [key, upg] of Object.entries(UPGRADES)) {
           const lvl = up[key] || 0;
           const prijs = Math.round(upg.basis * Math.pow(1.6, lvl));
           let label;
-          if (key === 'weer') label = lvl === 0 ? 'Weerglas' : 'Precisiebarometer';
-          else label = `+${key === 'zeilen' ? 'zeil' : key === 'roer' ? 'roer' : 'romp'}`;
+          if (key === 'weer') label = lvl === 0 ? 'Weerglas' : 'Fijn weerglas';
+          else label = upg.naam;
           const k = el('button', 'mini', `${label} (${fmtGold(prijs)})`);
           k.disabled = lvl >= upg.max || s.goud < prijs || (key === 'romp' && sh.romp < sh.maxRomp - 1);
           k.onclick = () => {
@@ -867,14 +867,14 @@ function werf(stad, ouder) {
               sh.romp = Math.min(sh.maxRomp, sh.romp + extra);
             }
             audio.sfx.munt();
-            sch._bericht = `De ${upg.naam.toLowerCase()} van ${metLidwoord(sh.type)} is verbeterd (niveau ${lvl + 1}).`;
+            sch._bericht = `Verbetering voltooid: ${upg.naam.toLowerCase()} op ${metLidwoord(sh.type)} (trap ${lvl + 1}).`;
             sch.ververs();
           };
           acties.appendChild(k);
         }
 
         if (i > 0) {
-          const verkoop = el('button', 'mini rood', `Verkopen (${fmtGold(scheepsWaarde(sh))})`);
+          const verkoop = el('button', 'mini rood', `Van de hand doen (${fmtGold(scheepsWaarde(sh))})`);
           verkoop.onclick = () => {
             s.goud += scheepsWaarde(sh);
             s.schepen.splice(i, 1);
@@ -907,10 +907,10 @@ function werf(stad, ouder) {
         const rij = el('div', 'werf-rij');
         rij.innerHTML =
           `<span class="werf-naam">${t.naam}</span>` +
-          `<span class="werf-stat">romp ${t.romp} · ${t.kanonnen} kanon · ruim ${t.ruim} · ${t.bemanning} koppen</span>`;
+          `<span class="werf-stat">romp ${t.romp} · ${t.geschut} stukken · ruim ${t.ruim} · ${t.scheepsvolk} koppen</span>`;
         const acties = el('div', 'werf-acties');
         const prijs = Math.round(t.prijs * (1.25 - stad.grootte * 0.04));
-        const koop = el('button', 'mini', `Kopen (${fmtGold(prijs)})`);
+        const koop = el('button', 'mini', `Aanschaffen (${fmtGold(prijs)})`);
         koop.disabled = s.goud < prijs || s.schepen.length >= 8;
         koop.onclick = () => {
           s.goud -= prijs;
@@ -981,7 +981,7 @@ function gouverneur(stad, ouder) {
         `<span>Jouw rang</span><b>${s.rang[stad.natie] > 0 ? RANGEN[clamp(s.rang[stad.natie], 0, RANGEN.length - 1)].naam : 'geen'}</b>` +
         `<span>Land van ${natie.naam}</span><b>${s.land[stad.natie]} hectare</b>` +
         `<span>Roem</span><b>${Math.round(s.roem)}</b>` +
-        `<span>Eigen spaargeld</span><b>${fmtGold(s.gespaard)}</b>`;
+        `<span>Eigen kist</span><b>${fmtGold(s.gespaard)}</b>`;
       body.appendChild(st);
     },
     knoppen: (sch) => {
@@ -1057,7 +1057,7 @@ async function dochter(stad, sch) {
   const r = makeRng(stad.id * 104729 + Math.floor(s.dag / 90));
   const naam = `${VOORNAMEN_V[Math.floor(r() * VOORNAMEN_V.length)]} ${ACHTERNAMEN[Math.floor(r() * ACHTERNAMEN.length)]}`;
   const charme = clamp(
-    0.2 + s.rang[stad.natie] * 0.09 + clamp(s.roem / 400, 0, 0.3) + (talentBonus(s, 'charme') ? 0.2 : 0) +
+    0.2 + s.rang[stad.natie] * 0.09 + clamp(s.roem / 400, 0, 0.3) + (talentBonus(s, 'gladde_tong') ? 0.2 : 0) +
       clamp(s.gespaard / 200000, 0, 0.15),
     0.05,
     0.95
@@ -1269,7 +1269,7 @@ async function rapporteerOpdracht(stad, sch) {
   // Extra lading als beloning (specerijen), als er ruim is.
   const schip = vlaggenschip(s);
   const spIdx = WAREN.findIndex((x) => x.id === 'specerijen');
-  if (spIdx >= 0 && schip.lading[spIdx] + 10 <= SCHIP_INDEX[schip.type].ruim - schip.kanonnen * 2) {
+  if (spIdx >= 0 && schip.lading[spIdx] + 10 <= SCHIP_INDEX[schip.type].ruim - schip.geschut * 2) {
     schip.lading[spIdx] += 10;
   }
   audio.sfx.fanfare();
@@ -1291,16 +1291,16 @@ async function bestormStad(stad, opVertrek) {
   const s = Game.speler;
   const garnizoen = Math.round(stad.garnizoen);
   const kans = clamp(
-    0.5 + (s.bemanning - garnizoen) / Math.max(30, garnizoen * 1.8) + (s.moraal - 50) / 260,
+    0.5 + (s.scheepsvolk - garnizoen) / Math.max(30, garnizoen * 1.8) + (s.geest - 50) / 260,
     0.05,
     0.95
   );
 
   const ja = await UI.vraag(
     `${stad.naam} bestormen`,
-    `Je zet ${s.bemanning} man aan land tegen een garnizoen van ongeveer ${garnizoen}. ` +
+    `Je zet ${s.scheepsvolk} man aan land tegen een garnizoen van ongeveer ${garnizoen}. ` +
       `De stuurman schat de kans op ongeveer <b>${Math.round(kans * 100)}%</b>.` +
-      (s.moraal < 40 ? '<br><b>De bemanning is niet in de stemming voor een bestorming.</b>' : ''),
+      (s.geest < 40 ? '<br><b>Het scheepsvolk is niet in de stemming voor een bestorming.</b>' : ''),
     [
       { label: 'Aanvallen!', waarde: true, soort: 'gevaar' },
       { label: 'Terug aan boord', waarde: false, esc: true },
@@ -1312,12 +1312,12 @@ async function bestormStad(stad, opVertrek) {
     return;
   }
 
-  const verliezen = Math.round(s.bemanning * lerp(0.32, 0.1, kans) * (0.6 + Math.random() * 0.8));
-  s.bemanning = Math.max(1, s.bemanning - verliezen);
+  const verliezen = Math.round(s.scheepsvolk * lerp(0.32, 0.1, kans) * (0.6 + Math.random() * 0.8));
+  s.scheepsvolk = Math.max(1, s.scheepsvolk - verliezen);
   stad.garnizoen = Math.max(0, stad.garnizoen - Math.round(garnizoen * (0.3 + Math.random() * 0.5)));
 
   if (Math.random() > kans) {
-    s.moraal = clamp(s.moraal - 20, 0, 100);
+    s.geest = clamp(s.geest - 20, 0, 100);
     await UI.vraag(
       'Teruggeslagen',
       `Het musketvuur vanaf de wallen is te zwaar. Je verliest <b>${verliezen} man</b> en trekt je terug naar de sloepen.`,
@@ -1343,15 +1343,15 @@ async function bestormStad(stad, opVertrek) {
       tegenstander: pick(rng, KAPITEIN_NAMEN),
       natie: stad.natie,
       vaardigheid: clamp(0.3 + stad.grootte * 0.11, 0.2, 0.92),
-      voordeel: clamp(s.bemanning / Math.max(10, garnizoen), 0.5, 2.2),
+      voordeel: clamp(s.scheepsvolk / Math.max(10, garnizoen), 0.5, 2.2),
       // Je staat op het binnenplein van het fort, niet op een scheepsdek.
       achtergrond: 'fort',
       terug(gewonnen) {
         Game.zetScene(zeilScene);
         if (gewonnen) veroverStad(stad, opVertrek);
         else {
-          s.moraal = clamp(s.moraal - 25, 0, 100);
-          s.bemanning = Math.max(1, Math.round(s.bemanning * 0.6));
+          s.geest = clamp(s.geest - 25, 0, 100);
+          s.scheepsvolk = Math.max(1, Math.round(s.scheepsvolk * 0.6));
           s.relatie[stad.natie] = clamp(s.relatie[stad.natie] - 20, -100, 100);
           Game.melding('De bestorming is stukgelopen op de bevelhebber.', 'rood');
           opVertrek();
@@ -1386,7 +1386,7 @@ async function veroverStad(stad, opVertrek) {
   s.goud += schat;
   s.veroverdeSteden++;
   s.roem += 45;
-  s.moraal = clamp(s.moraal + 18, 0, 100);
+  s.geest = clamp(s.geest + 18, 0, 100);
   s.relatie[oudeNatie] = clamp(s.relatie[oudeNatie] - 35, -100, 100);
 
   if (keuze === 'geef') {
@@ -1429,14 +1429,14 @@ async function zoekFamilie(stad, sch) {
   const s = Game.speler;
   const rol = s.familie ? s.familie.rol : 'familielid';
   // Hogere roem en charme helpen; anders een loos spoor.
-  const kans = clamp(0.45 + s.roem / 900 + (talentBonus(s, 'charme') ? 0.15 : 0), 0.2, 0.95);
+  const kans = clamp(0.45 + s.roem / 900 + (talentBonus(s, 'gladde_tong') ? 0.15 : 0), 0.2, 0.95);
   if (Math.random() < kans) {
     // Niet het familielid zelf, maar het spoor: een naam om achterna te varen.
     const schurk = LEGENDES.find((l) => l.schurk);
     s.familie.spoor = true;
     s.familie.zoekStad = null;
     s.roem += 25;
-    s.moraal = clamp(s.moraal + 8, 0, 100);
+    s.geest = clamp(s.geest + 8, 0, 100);
     audio.sfx.fout();
     await UI.vraag(
       'Een naam, eindelijk',
@@ -1542,7 +1542,7 @@ export async function tredAf(stad) {
           : 'Deze loopbaan haalde de erelijst niet — er zijn tien grotere namen.';
       body.appendChild(nb);
     },
-    knoppen: () => [{ label: 'Een nieuw avontuur beginnen', actie: () => window.location.reload() }],
+    knoppen: () => [{ label: 'Een nieuwe reis beginnen', actie: () => window.location.reload() }],
   });
   audio.sfx.fanfare();
 }

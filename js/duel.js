@@ -21,7 +21,7 @@ const TOETS_HOOGTE = {
  */
 export function maakDuel(opts) {
   const speler = Game.speler;
-  const schermer = talentBonus(speler, 'schermen');
+  const schermer = talentBonus(speler, 'meesterschermer');
 
   // Ouderdom kort het venster in waarin je kunt pareren en laat de adem
   // trager terugkomen. Het meesterschermer-talent weegt daar ruwweg tegenop:
@@ -47,7 +47,7 @@ export function maakDuel(opts) {
   let vonken = [];
   let tijd = 0;
 
-  // Bemanningsvoordeel duwt langzaam in jouw voordeel.
+  // Overmacht aan scheepsvolk duwt langzaam in jouw voordeel.
   const drift = clamp((opts.voordeel || 1) - 1, -0.5, 0.7) * 0.028;
 
   // Beeldopbouw: de schermers staan groot in beeld, vlak boven de onderrand.
@@ -308,7 +308,7 @@ export function maakDuel(opts) {
 
   function raakSpeler() {
     duw(0.16, 'speler');
-    Game.speler.moraal = clamp(Game.speler.moraal - 0.4, 0, 100);
+    Game.speler.geest = clamp(Game.speler.geest - 0.4, 0, 100);
     fase = 'herstelSpeler';
     faseT = 0;
     const bp = botsPunt(vijandHoogte);

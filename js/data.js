@@ -1,4 +1,4 @@
-// Statische speldata: naties, handelswaar, scheepstypen, steden en namen.
+// Statische speldata: naties, koopwaar, scheepstypen, steden en namen.
 
 /**
  * `kleur` is de kaartkleur, `merk` de vorm van het kaartsymbool.
@@ -58,15 +58,15 @@ export const NATIES = {
 
 export const NATIE_IDS = ['spanje', 'engeland', 'frankrijk', 'nederland'];
 
-/** Handelswaar. `basis` is de richtprijs per eenheid in goudstukken. */
+/** Koopwaar. `basis` is de richtprijs per eenheid in goudstukken. */
 export const WAREN = [
-  { id: 'voedsel', naam: 'Voedsel', basis: 40, kleur: '#c9a24a' },
+  { id: 'proviand', naam: 'Proviand', basis: 40, kleur: '#c9a24a' },
   { id: 'suiker', naam: 'Suiker', basis: 90, kleur: '#e6ddc4' },
   { id: 'tabak', naam: 'Tabak', basis: 120, kleur: '#8a6a3a' },
   { id: 'katoen', naam: 'Katoen', basis: 110, kleur: '#dfe3e6' },
   { id: 'specerijen', naam: 'Specerijen', basis: 220, kleur: '#b5502a' },
-  { id: 'handelswaar', naam: 'Handelswaar', basis: 150, kleur: '#6f8fae' },
-  { id: 'kanonnen', naam: 'Kanonnen', basis: 400, kleur: '#5a5f66' },
+  { id: 'koopwaar', naam: 'Koopwaar', basis: 150, kleur: '#6f8fae' },
+  { id: 'geschut', naam: 'Geschut', basis: 400, kleur: '#5a5f66' },
 ];
 
 export const WAAR_INDEX = Object.fromEntries(WAREN.map((w, i) => [w.id, i]));
@@ -80,19 +80,19 @@ export const WAAR_INDEX = Object.fromEntries(WAREN.map((w, i) => [w.id, i]));
  */
 export const SCHEPEN = [
   // `herlaad` is een vermenigvuldiger: lager = sneller herladen.
-  { id: 'pinas', naam: 'Pinas', romp: 68, kanonnen: 4, ruim: 40, bemanning: 40, snelheid: 60, wend: 1.5, hoogte: 0.42, herlaad: 0.88, prijs: 1200, lidwoord: 'de' },
-  { id: 'sloep', naam: 'Sloep', romp: 82, kanonnen: 6, ruim: 48, bemanning: 60, snelheid: 65, wend: 1.6, hoogte: 0.46, herlaad: 0.82, prijs: 1800, lidwoord: 'de' },
-  { id: 'oorlogssloep', naam: 'Oorlogssloep', romp: 106, kanonnen: 10, ruim: 56, bemanning: 90, snelheid: 68, wend: 1.55, hoogte: 0.46, herlaad: 0.86, prijs: 3600, lidwoord: 'de' },
-  { id: 'bark', naam: 'Bark', romp: 96, kanonnen: 6, ruim: 80, bemanning: 60, snelheid: 53, wend: 1.25, hoogte: 0.34, herlaad: 0.95, prijs: 2000, lidwoord: 'de' },
-  { id: 'brigantijn', naam: 'Brigantijn', romp: 126, kanonnen: 12, ruim: 96, bemanning: 110, snelheid: 57, wend: 1.3, hoogte: 0.38, herlaad: 0.92, prijs: 4200, lidwoord: 'de' },
-  { id: 'koopvaarder', naam: 'Koopvaarder', romp: 136, kanonnen: 10, ruim: 160, bemanning: 90, snelheid: 48, wend: 1.0, hoogte: 0.28, herlaad: 1.05, prijs: 4000, lidwoord: 'de' },
-  { id: 'grote_koopvaarder', naam: 'Grote koopvaarder', romp: 168, kanonnen: 16, ruim: 220, bemanning: 130, snelheid: 46, wend: 0.92, hoogte: 0.26, herlaad: 1.15, prijs: 6500, lidwoord: 'de' },
-  { id: 'fluit', naam: 'Fluitschip', romp: 130, kanonnen: 8, ruim: 200, bemanning: 80, snelheid: 51, wend: 1.05, hoogte: 0.3, herlaad: 1.0, prijs: 4500, lidwoord: 'het' },
-  { id: 'vrachtfluit', naam: 'Vrachtfluit', romp: 158, kanonnen: 10, ruim: 280, bemanning: 100, snelheid: 47, wend: 0.95, hoogte: 0.28, herlaad: 1.12, prijs: 6800, lidwoord: 'de' },
-  { id: 'fregat', naam: 'Fregat', romp: 206, kanonnen: 32, ruim: 160, bemanning: 200, snelheid: 55, wend: 1.1, hoogte: 0.32, herlaad: 1.25, prijs: 11000, lidwoord: 'het' },
-  { id: 'galjoen', naam: 'Galjoen', romp: 222, kanonnen: 24, ruim: 260, bemanning: 200, snelheid: 43, wend: 0.82, hoogte: 0.22, herlaad: 1.35, prijs: 10500, lidwoord: 'het' },
-  { id: 'oorlogsgaljoen', naam: 'Oorlogsgaljoen', romp: 270, kanonnen: 40, ruim: 240, bemanning: 260, snelheid: 44, wend: 0.85, hoogte: 0.24, herlaad: 1.45, prijs: 16000, lidwoord: 'het' },
-  { id: 'linieschip', naam: 'Linieschip', romp: 340, kanonnen: 48, ruim: 200, bemanning: 320, snelheid: 46, wend: 0.8, hoogte: 0.26, herlaad: 1.6, prijs: 22000, lidwoord: 'het' },
+  { id: 'pinas', naam: 'Pinas', romp: 68, geschut: 4, ruim: 40, scheepsvolk: 40, snelheid: 60, wend: 1.5, hoogte: 0.42, herlaad: 0.88, prijs: 1200, lidwoord: 'de' },
+  { id: 'sloep', naam: 'Sloep', romp: 82, geschut: 6, ruim: 48, scheepsvolk: 60, snelheid: 65, wend: 1.6, hoogte: 0.46, herlaad: 0.82, prijs: 1800, lidwoord: 'de' },
+  { id: 'oorlogssloep', naam: 'Oorlogssloep', romp: 106, geschut: 10, ruim: 56, scheepsvolk: 90, snelheid: 68, wend: 1.55, hoogte: 0.46, herlaad: 0.86, prijs: 3600, lidwoord: 'de' },
+  { id: 'bark', naam: 'Bark', romp: 96, geschut: 6, ruim: 80, scheepsvolk: 60, snelheid: 53, wend: 1.25, hoogte: 0.34, herlaad: 0.95, prijs: 2000, lidwoord: 'de' },
+  { id: 'brigantijn', naam: 'Brigantijn', romp: 126, geschut: 12, ruim: 96, scheepsvolk: 110, snelheid: 57, wend: 1.3, hoogte: 0.38, herlaad: 0.92, prijs: 4200, lidwoord: 'de' },
+  { id: 'koopvaarder', naam: 'Koopvaarder', romp: 136, geschut: 10, ruim: 160, scheepsvolk: 90, snelheid: 48, wend: 1.0, hoogte: 0.28, herlaad: 1.05, prijs: 4000, lidwoord: 'de' },
+  { id: 'grote_koopvaarder', naam: 'Grote koopvaarder', romp: 168, geschut: 16, ruim: 220, scheepsvolk: 130, snelheid: 46, wend: 0.92, hoogte: 0.26, herlaad: 1.15, prijs: 6500, lidwoord: 'de' },
+  { id: 'fluit', naam: 'Fluitschip', romp: 130, geschut: 8, ruim: 200, scheepsvolk: 80, snelheid: 51, wend: 1.05, hoogte: 0.3, herlaad: 1.0, prijs: 4500, lidwoord: 'het' },
+  { id: 'vrachtfluit', naam: 'Vrachtfluit', romp: 158, geschut: 10, ruim: 280, scheepsvolk: 100, snelheid: 47, wend: 0.95, hoogte: 0.28, herlaad: 1.12, prijs: 6800, lidwoord: 'de' },
+  { id: 'fregat', naam: 'Fregat', romp: 206, geschut: 32, ruim: 160, scheepsvolk: 200, snelheid: 55, wend: 1.1, hoogte: 0.32, herlaad: 1.25, prijs: 11000, lidwoord: 'het' },
+  { id: 'galjoen', naam: 'Galjoen', romp: 222, geschut: 24, ruim: 260, scheepsvolk: 200, snelheid: 43, wend: 0.82, hoogte: 0.22, herlaad: 1.35, prijs: 10500, lidwoord: 'het' },
+  { id: 'oorlogsgaljoen', naam: 'Oorlogsgaljoen', romp: 270, geschut: 40, ruim: 240, scheepsvolk: 260, snelheid: 44, wend: 0.85, hoogte: 0.24, herlaad: 1.45, prijs: 16000, lidwoord: 'het' },
+  { id: 'linieschip', naam: 'Linieschip', romp: 340, geschut: 48, ruim: 200, scheepsvolk: 320, snelheid: 46, wend: 0.8, hoogte: 0.26, herlaad: 1.6, prijs: 22000, lidwoord: 'het' },
 ];
 
 export const SCHIP_INDEX = Object.fromEntries(SCHEPEN.map((s) => [s.id, s]));
@@ -134,27 +134,27 @@ export function scheepsAanduiding(natieId, typeId) {
 
 /** Startvaardigheden, zoals de "special abilities" uit het origineel. */
 export const TALENTEN = [
-  { id: 'schermen', naam: 'Meesterschermer', omschrijving: 'Je pareert sneller en slaat harder toe in een duel.' },
-  { id: 'navigatie', naam: 'Fijn navigator', omschrijving: 'Je schepen halen meer snelheid uit elke wind.' },
-  { id: 'kanonnier', naam: 'Meesterkanonnier', omschrijving: 'Je kanonnen herladen sneller en schieten zuiverder.' },
-  { id: 'charme', naam: 'Gevat en charmant', omschrijving: 'Gouverneurs, kroegbazen en dames zijn je gunstiger gezind.' },
-  { id: 'timmerman', naam: 'Bekwaam scheepstimmerman', omschrijving: 'Je romp houdt meer schade uit en herstelt onderweg.' },
+  { id: 'meesterschermer', naam: 'Meesterschermer', omschrijving: 'Je pareert sneller en slaat harder toe in een duel.' },
+  { id: 'stuurmanskunst', naam: 'Bevaren stuurman', omschrijving: 'Je schepen halen meer vaart uit iedere wind.' },
+  { id: 'opperkonstabel', naam: 'Opperkonstabel', omschrijving: 'Je geschut wordt sneller geladen en zuiverder gericht.' },
+  { id: 'gladde_tong', naam: 'Glad van tong', omschrijving: 'Gouverneurs, waarden en dames zijn je gunstiger gezind.' },
+  { id: 'scheepstimmerman', naam: 'Bekwaam scheepstimmerman', omschrijving: 'Je romp verdraagt meer averij en herstelt onderweg.' },
 ];
 
 export const MOEILIJKHEDEN = [
   { id: 'scheepsjongen', naam: 'Scheepsjongen', mult: 0.5, storm: 0.6, omschrijving: 'Rustig leren zeilen.' },
-  { id: 'kaperkapitein', naam: 'Kaperkapitein', mult: 1.0, storm: 1.0, omschrijving: 'De eerlijke uitdaging.' },
-  { id: 'zwaardvechter', naam: 'Zwaardvechter', mult: 1.5, storm: 1.4, omschrijving: 'Zware tegenstand, meer buit.' },
-  { id: 'legende', naam: 'Legende', mult: 2.2, storm: 1.8, omschrijving: 'Alleen voor doorgewinterde zeerovers.' },
+  { id: 'bootsgezel', naam: 'Bootsgezel', mult: 1.0, storm: 1.0, omschrijving: 'De eerlijke uitdaging.' },
+  { id: 'bevaren_kapitein', naam: 'Bevaren kapitein', mult: 1.5, storm: 1.4, omschrijving: 'Zware tegenstand, meer buit.' },
+  { id: 'oude_zeerob', naam: 'Oude zeerob', mult: 2.2, storm: 1.8, omschrijving: 'Alleen voor doorgewinterde zeerovers.' },
 ];
 
 /** Rangen per natie, van laag naar hoog. */
 export const RANGEN = [
   { naam: 'Zeerover', drempel: 0, land: 0 },
-  { naam: 'Kaperbrief', drempel: 6000, land: 4 },
+  { naam: 'Kaper', drempel: 6000, land: 4 },
   { naam: 'Kapitein', drempel: 18000, land: 8 },
-  { naam: 'Majoor', drempel: 40000, land: 16 },
-  { naam: 'Kolonel', drempel: 80000, land: 28 },
+  { naam: 'Commandeur', drempel: 40000, land: 16 },
+  { naam: 'Schout-bij-nacht', drempel: 80000, land: 28 },
   { naam: 'Admiraal', drempel: 150000, land: 48 },
   { naam: 'Baron', drempel: 260000, land: 80 },
   { naam: 'Markies', drempel: 420000, land: 120 },
@@ -211,12 +211,12 @@ export const STEDEN = [
 
 /** Wat een stadssoort veel produceert (goedkoop) en wat ze juist nodig heeft (duur). */
 export const SOORT_ECONOMIE = {
-  haven: { produceert: ['handelswaar'], vraagt: ['voedsel', 'specerijen'] },
-  plantage: { produceert: ['suiker', 'tabak', 'katoen'], vraagt: ['handelswaar', 'kanonnen'] },
-  fort: { produceert: [], vraagt: ['voedsel', 'kanonnen', 'handelswaar'] },
-  schatkamer: { produceert: ['specerijen'], vraagt: ['voedsel', 'handelswaar', 'katoen'] },
-  parels: { produceert: ['specerijen'], vraagt: ['voedsel', 'handelswaar'] },
-  roversnest: { produceert: ['kanonnen'], vraagt: ['voedsel', 'suiker'] },
+  haven: { produceert: ['koopwaar'], vraagt: ['proviand', 'specerijen'] },
+  plantage: { produceert: ['suiker', 'tabak', 'katoen'], vraagt: ['koopwaar', 'geschut'] },
+  fort: { produceert: [], vraagt: ['proviand', 'geschut', 'koopwaar'] },
+  schatkamer: { produceert: ['specerijen'], vraagt: ['proviand', 'koopwaar', 'katoen'] },
+  parels: { produceert: ['specerijen'], vraagt: ['proviand', 'koopwaar'] },
+  roversnest: { produceert: ['geschut'], vraagt: ['proviand', 'suiker'] },
 };
 
 export const KAPITEIN_NAMEN = [
@@ -233,7 +233,7 @@ export const GERUCHTEN = [
   'Het garnizoen van {stad} is uitgedund; de muren zijn zwak.',
   'Men zegt dat {kapitein} zijn buit begraven heeft bij {stad}.',
   'De prijs van {waar} is ingestort in {stad}.',
-  '{kapitein} zoekt bemanning en betaalt vorstelijk.',
+  '{kapitein} monstert volk en betaalt vorstelijk.',
 ];
 
 export const VOORNAMEN_M = ['Roderick', 'Willem', 'Diego', 'Jean', 'Thomas', 'Cornelis', 'Alonso', 'Pieter'];
@@ -246,18 +246,18 @@ export const ACHTERNAMEN = ['van Dijck', 'Morgan', 'de la Vega', 'Bonnet', 'Ster
 export const OPDRACHT_SOORTEN = {
   lever: {
     titel: 'Een levering',
-    omschrijving: 'Breng {aantal} eenheden {waar} naar {bestemming}. De papieren liggen klaar bij de koopman.',
+    omschrijving: 'Breng {aantal} eenheden {waar} naar {bestemming}. De vrachtbrief ligt klaar bij de koopman.',
   },
   spion: {
     titel: 'Koerierswerk',
     omschrijving: 'Haal het verzegelde pakket op in {van} en lever het af in {naar}. Niets openmaken.',
   },
   verover: {
-    titel: 'De vlag veroveren',
+    titel: 'Een stad voor de kroon',
     omschrijving: 'Neem {stad} in voor de kroon. De koning wil die stad.',
   },
   jacht: {
-    titel: 'De zee zuiveren',
+    titel: 'Een vijandelijke vlag strijken',
     omschrijving: 'Breng een {natie} oorlogsschip tot zinken of strijk hun vlag. De reede is onveilig.',
   },
 };
@@ -269,14 +269,14 @@ export const OPDRACHT_SOORTEN = {
  * van het eerste niveau; elk volgend niveau kost meer. `stap` is de bonus per
  * niveau. `romp` verhoogt maxRomp permanent (die telt zo vanzelf mee in
  * herstel, HUD en gevecht); `zeilen` en `roer` zijn vermenigvuldigers die de
- * beweging op zee gebruiken. `weer` (weerglas → precisiebarometer) dempt de
+ * beweging op zee gebruiken. `weer` (weerglas → fijn weerglas) dempt de
  * schade die een storm aanricht en geldt alleen voor het vlaggenschip.
  */
 export const UPGRADES = {
-  zeilen: { naam: 'Zeilen', omschrijving: 'kruidt de snelheid op', basis: 900, max: 3, stap: 0.04 },
-  romp: { naam: 'Rompversteviging', omschrijving: 'verstevigt de spanten', basis: 1200, max: 3, stap: 0.05 },
-  roer: { naam: 'Roer', omschrijving: 'scherpt de wendbaarheid', basis: 700, max: 3, stap: 0.05 },
-  weer: { naam: 'Weerglas', omschrijving: 'kondigt stormen aan en dempt hun schade', basis: 1500, max: 2, stap: 0 },
+  zeilen: { naam: 'Zeilvoering', omschrijving: 'zet meer doek bij', basis: 900, max: 3, stap: 0.04 },
+  romp: { naam: 'Zwaardere spanten', omschrijving: 'maakt de romp sterker', basis: 1200, max: 3, stap: 0.05 },
+  roer: { naam: 'Roerwerk', omschrijving: 'laat het schip korter draaien', basis: 700, max: 3, stap: 0.05 },
+  weer: { naam: 'Weerglas', omschrijving: 'waarschuwt voor buien en beperkt averij', basis: 1500, max: 2, stap: 0 },
 };
 
 export const FAMILIE_ROLLEN = ['broer', 'zus', 'vader', 'moeder'];
@@ -302,7 +302,7 @@ export const LEGENDES = [
     jachtgebied: 'spanje',
     kracht: 1.3,
     roem: 300,
-    buit: 'koperhuid',
+    buit: 'gekalktehuid',
     verhaal: 'Voer ooit voor de kroon van Spanje en nam de vloot mee toen hij genoeg had van wachten op zijn soldij.',
   },
   {
@@ -336,7 +336,7 @@ export const LEGENDES = [
     kracht: 1.25,
     roem: 210,
     buit: 'hangmatten',
-    verhaal: 'Houdt zijn volk in leven waar andere kapiteins hun bemanning aan de honger verliezen.',
+    verhaal: 'Houdt zijn volk in leven waar andere kapiteins hun scheepsvolk aan de honger verliezen.',
   },
   {
     id: 'morvan',
@@ -417,10 +417,10 @@ export const SCHATREGIOS = [
  * kapitein zelf en vaart het dus mee naar elk volgend vlaggenschip.
  */
 export const ITEMS = {
-  koperhuid: { naam: 'Koperen huidbeslag', effect: 'snelheid', waarde: 0.06, omschrijving: 'Geen aangroei meer op de huid: het schip loopt harder.' },
-  katoenzeil: { naam: 'Katoenen zeilen', effect: 'hoogte', waarde: 0.05, omschrijving: 'Strak katoen houdt de wind vast; je ligt hoger aan de wind.' },
+  gekalktehuid: { naam: 'Gekalkte scheepshuid', effect: 'snelheid', waarde: 0.06, omschrijving: 'Kalk weert worm en aangroei: het schip loopt harder.' },
+  katoenzeil: { naam: 'Fijn zeildoek', effect: 'hoogte', waarde: 0.05, omschrijving: 'Goed gesneden doek staat strak; je ligt hoger aan de wind.' },
   gebogenroer: { naam: 'Gebogen roerkoning', effect: 'wend', waarde: 0.09, omschrijving: 'Het roer bijt dieper: het schip draait korter.' },
-  fijnkruit: { naam: 'Fijn kruit', effect: 'dracht', waarde: 0.12, omschrijving: 'Fijner gemalen kruit brandt sneller af; de kogels dragen verder.' },
+  fijnkruit: { naam: 'Fijngemalen buskruit', effect: 'dracht', waarde: 0.12, omschrijving: 'Het kruit brandt sneller af; de kogels dragen verder.' },
   dubbelaffuit: { naam: 'Dubbele affuiten', effect: 'herlaad', waarde: 0.1, omschrijving: 'De stukken lopen zuiverder terug in batterij; je herlaadt sneller.' },
   hangmatten: { naam: 'Driedubbele hangmatten', effect: 'volk', waarde: 0.15, omschrijving: 'Drie lagen diep slapen: er kan meer volk mee.' },
 };

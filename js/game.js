@@ -439,10 +439,10 @@ export function nieuwSchip(typeId, opts = {}) {
     maxRomp: romp,
     romp: opts.romp != null ? opts.romp : romp,
     zeilen: opts.zeilen != null ? opts.zeilen : 1,
-    kanonnen: opts.kanonnen != null ? opts.kanonnen : Math.round(t.kanonnen * 0.6),
+    geschut: opts.geschut != null ? opts.geschut : Math.round(t.geschut * 0.6),
     lading: opts.lading || new Array(WAREN.length).fill(0),
-    // Scheepsuitrusting: niveau 0..max per verbetering. `weer` (weerglas en
-    // barometer) dempt stormschade en geldt alleen voor het vlaggenschip.
+    // Scheepstoerusting: niveau 0..max per verbetering. `weer` (weerglas en
+    // fijn weerglas) dempt stormschade en geldt alleen voor het vlaggenschip.
     upgrades: opts.upgrades || { zeilen: 0, romp: 0, roer: 0, weer: 0 },
   };
 }
@@ -459,7 +459,7 @@ export function maakSpeler(opties) {
   // De Spanjaarden zijn standaard wat vijandiger tegen kapers.
   if (opties.natie !== 'spanje') relatie.spanje = -25;
 
-  const vlaggenschip = nieuwSchip('sloep', { lading: nieuweLading({ voedsel: 30 }) });
+  const vlaggenschip = nieuwSchip('sloep', { lading: nieuweLading({ proviand: 30 }) });
   return {
     naam: opties.naam,
     natie: opties.natie,
@@ -470,8 +470,8 @@ export function maakSpeler(opties) {
     leeftijd: 18,
     goud: 600,
     gespaard: 0,
-    bemanning: 40,
-    moraal: 70,
+    scheepsvolk: 40,
+    geest: 70,
     relatie,
     rang,
     land,
@@ -524,11 +524,11 @@ export function ruimTotaal(schip) {
 }
 
 export function ruimVrij(schip) {
-  return SCHIP_INDEX[schip.type].ruim - ruimTotaal(schip) - schip.kanonnen * 2;
+  return SCHIP_INDEX[schip.type].ruim - ruimTotaal(schip) - schip.geschut * 2;
 }
 
-export function vlootBemanningMax(speler) {
-  const romp = speler.schepen.reduce((a, s) => a + SCHIP_INDEX[s.type].bemanning, 0);
+export function vlootScheepsvolkMax(speler) {
+  const romp = speler.schepen.reduce((a, s) => a + SCHIP_INDEX[s.type].scheepsvolk, 0);
   // Driedubbele hangmatten: er kan meer volk mee dan de werf had bedacht.
   return Math.round(romp * (1 + itemBonus(speler, 'volk')));
 }
@@ -545,7 +545,7 @@ export function rangVan(speler, natie) {
 
 /** Vanaf deze leeftijd begint de kapitein te slijten. */
 export const FIT_TOT = 40;
-/** Vanaf hier dringt de bemanning aan op rust. */
+/** Vanaf hier dringt het scheepsvolk aan op rust. */
 export const PENSIOEN_HINT = 55;
 /** Vanaf hier legt een bevriende haven hem het commando neer. */
 export const PENSIOEN_DRANG = 62;
@@ -562,7 +562,7 @@ export function leeftijdFactor(speler) {
   return clamp(1 - Math.max(0, speler.leeftijd - FIT_TOT) * slijtage, 0.6, 1);
 }
 
-/** Kort woord voor de conditie, voor het bemanningsscherm. */
+/** Kort woord voor de conditie, voor het scheepsvolkscherm. */
 export function conditieWoord(speler) {
   const f = leeftijdFactor(speler);
   if (f > 0.97) return 'in de kracht van de jaren';
@@ -598,7 +598,7 @@ export function bewaar() {
   if (!Game.speler || !Game.wereld) return false;
   const w = Game.wereld;
   const data = {
-    versie: 8,
+    versie: 9,
     seed: w.seed,
     speler: Game.speler,
     // De wereldpolitiek staat op de wereld, niet op de speler, en volgt dus
@@ -677,6 +677,38 @@ export function laad() {
   }
   // Oude saves saneren: ontbrekende velden krijgen hun standaardwaarde.
   const sp = data.speler;
+  // Versie 9 trekt de maritieme namen ook door in de spelstaat. Deze smalle
+  // omzetting houdt lokale ontwikkelsaves bruikbaar zonder de oude veldnamen
+  // in de rest van het spel te blijven meeslepen.
+  if ((data.versie || 0) < 9) {
+    if (sp.scheepsvolk == null) sp.scheepsvolk = sp.bemanning == null ? 40 : sp.bemanning;
+    if (sp.geest == null) sp.geest = sp.moraal == null ? 70 : sp.moraal;
+    delete sp.bemanning;
+    delete sp.moraal;
+    const talenten = {
+      schermen: 'meesterschermer',
+      navigatie: 'stuurmanskunst',
+      kanonnier: 'opperkonstabel',
+      charme: 'gladde_tong',
+      timmerman: 'scheepstimmerman',
+    };
+    const moeilijkheden = {
+      kaperkapitein: 'bootsgezel',
+      zwaardvechter: 'bevaren_kapitein',
+      legende: 'oude_zeerob',
+    };
+    sp.talent = talenten[sp.talent] || sp.talent;
+    sp.moeilijkheid = moeilijkheden[sp.moeilijkheid] || sp.moeilijkheid;
+    if (Array.isArray(sp.items)) {
+      sp.items = sp.items.map((id) => id === 'koperhuid' ? 'gekalktehuid' : id);
+    }
+    if (sp.opdracht && sp.opdracht.waar === 'voedsel') sp.opdracht.waar = 'proviand';
+    if (sp.opdracht && sp.opdracht.waar === 'handelswaar') sp.opdracht.waar = 'koopwaar';
+    for (const schip of sp.schepen || []) {
+      if (schip.geschut == null) schip.geschut = schip.kanonnen || 0;
+      delete schip.kanonnen;
+    }
+  }
   // Saves van vóór versie 8: de speler en de lopende schatjacht liggen in de
   // oude wereldeenheden; ze worden mee opgerekt voordat iets ze gebruikt.
   if ((data.versie || 0) < 8) {

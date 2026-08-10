@@ -15,13 +15,13 @@ import * as UI from './ui.js';
 import * as audio from './audio.js';
 import { maakZeeslag } from './battle.js';
 import { openHaven } from './town.js';
-import { toonKaart, toonScheepsstatus, toonBemanning, toonMenu } from './zeil-schermen.js';
+import { toonKaart, toonScheepsstatus, toonScheepsvolk, toonMenu } from './zeil-schermen.js';
 
-const VOEDSEL = WAAR_INDEX.voedsel;
+const PROVIAND = WAAR_INDEX.proviand;
 // De fysieke wereld is opnieuw groter geworden en de schepen varen langzamer,
 // maar de kalender loopt bewust niet evenredig mee: een overtocht duurt nu wel
 // langer kloktijd — de wereld moet groot voelen — maar kost evenveel dagen
-// proviand, moraal en kapiteinsjaren als vóór de schaalvergroting.
+// proviand, geest en kapiteinsjaren als vóór de schaalvergroting.
 // 0.044 = 0.12 (oud) × (196/350) (grotere kaart) × 0,65 (lagere snelheid).
 const DAGEN_PER_SECONDE = 0.044;
 
@@ -161,7 +161,7 @@ export function maakZeilScene() {
       } else if (code === 'KeyS') {
         toonScheepsstatus();
       } else if (code === 'KeyC') {
-        toonBemanning();
+        toonScheepsvolk();
       } else if (code === 'Escape') {
         toonMenu();
       } else if (code === 'Equal' || code === 'NumpadAdd') {
@@ -274,7 +274,7 @@ export function maakZeilScene() {
       // tegenin langzamer.
       const lokaal = w.stormWind ? w.stormWind(s.x, s.y) : { richting: w.windRichting, kracht: w.windKracht };
       const eff = zeilEfficiëntie(s.koers, lokaal.richting, type.hoogte + (bonus.hoogte || 0));
-      const navBonus = 1 + 0.16 * talentBonus(s, 'navigatie') + bonus.zeil;
+      const navBonus = 1 + 0.16 * talentBonus(s, 'stuurmanskunst') + bonus.zeil;
       const beschadigd = lerp(0.55, 1, clamp(schip.romp / schip.maxRomp, 0, 1));
       const zwaarBeladen = clamp(1 - (ruimTotaal(schip) / type.ruim) * 0.28, 0.7, 1);
       const doelSnelheid = type.snelheid * eff * lokaal.kracht * schip.zeilen * navBonus * beschadigd * zwaarBeladen;
@@ -317,7 +317,7 @@ export function maakZeilScene() {
       cam.y = lerp(cam.y, s.y + Math.sin(s.koers) * vooruit, clamp(dt * 3, 0, 1));
       houdCameraInKaart();
 
-      // --- Tijd, proviand en moraal ---------------------------------------
+      // --- Tijd, proviand en geest ---------------------------------------
       const dagen = dt * DAGEN_PER_SECONDE;
       const vorigeDag = Math.floor(s.dag);
       s.dag += dagen;
@@ -384,7 +384,7 @@ export function maakZeilScene() {
           // zonder een overgebleven draaiing mee te nemen.
           s.hoekSnelheid = 0;
           // Uitvaren is het natuurlijke rustpunt: handel gedaan, werf gehad,
-          // bemanning aangemonsterd. Hier bewaren scheelt de speler het verlies
+          // scheepsvolk aangemonsterd. Hier bewaren scheelt de speler het verlies
           // van een hele havenronde als hij het tabblad sluit.
           if (bewaar()) Game.melding('Het logboek is bijgewerkt bij het uitvaren.');
         });
@@ -445,7 +445,7 @@ export function maakZeilScene() {
         R.tekenSchip(c, v.x, v.y, v.koers, v.type, v.natie, w.windRichting, {
           vaart: v.snelheid / 90,
           tijd: Game.tijd,
-          kanonnen: v.kanonnen,
+          geschut: v.geschut,
           schaal: scheepSchaal,
           isLand: doeLandCheck,
           zeegang: zeeWind,
@@ -469,7 +469,7 @@ export function maakZeilScene() {
           vaart: s.snelheid / 90,
           tijd: Game.tijd,
           zeilen: schip.zeilen,
-          kanonnen: s.schepen[i].kanonnen,
+          geschut: s.schepen[i].geschut,
           schaal: scheepSchaal,
           isLand: doeLandCheck,
           zeegang: zeeWind,
@@ -479,7 +479,7 @@ export function maakZeilScene() {
         vaart: s.snelheid / 90,
         tijd: Game.tijd,
         zeilen: schip.zeilen,
-        kanonnen: schip.kanonnen,
+        geschut: schip.geschut,
         schaal: spelerSchaal,
         isLand: doeLandCheck,
         rompFractie: schip.romp / schip.maxRomp,
@@ -533,7 +533,7 @@ export function maakZeilScene() {
   function werkStormBij(s, veld, dt) {
     const schip = vlaggenschip(s);
     const moe = MOEILIJKHEDEN.find((m) => m.id === s.moeilijkheid) || MOEILIJKHEDEN[1];
-    // Weerglas (1) en precisiebarometer (2): de stuurman ziet de vlagen aankomen
+    // Weerglas (1) en fijn weerglas (2): de stuurman ziet de vlagen aankomen
     // en laat op tijd vieren.
     const weer = (schip.upgrades && schip.upgrades.weer) || 0;
     const demping = [0, 0.4, 0.65][Math.min(weer, 2)] || 0;
@@ -584,8 +584,8 @@ export function maakZeilScene() {
       // een maalstroom die je in één keer uitkleedt.
       stormBelasting = 0.5;
       stormWaarschuwing = 1;
-      const verloren = Math.max(1, Math.round(s.bemanning * 0.09));
-      s.bemanning = Math.max(6, s.bemanning - verloren);
+      const verloren = Math.max(1, Math.round(s.scheepsvolk * 0.09));
+      s.scheepsvolk = Math.max(6, s.scheepsvolk - verloren);
       // Naar rato van het schip: een vaste klap zou een sloep meteen halveren
       // en een linieschip nauwelijks raken.
       schip.romp = Math.max(10, schip.romp - Math.round(schip.maxRomp * (0.09 + veld.gevaar * 0.06)));
@@ -641,24 +641,24 @@ export function maakZeilScene() {
 
   function dagWisseling(s, w) {
     const schip = vlaggenschip(s);
-    const nodig = Math.max(1, Math.round(s.bemanning / 22));
-    if (schip.lading[VOEDSEL] >= nodig) {
-      schip.lading[VOEDSEL] -= nodig;
-      s.moraal = clamp(s.moraal - 0.35, 0, 100);
+    const nodig = Math.max(1, Math.round(s.scheepsvolk / 22));
+    if (schip.lading[PROVIAND] >= nodig) {
+      schip.lading[PROVIAND] -= nodig;
+      s.geest = clamp(s.geest - 0.35, 0, 100);
     } else {
-      schip.lading[VOEDSEL] = 0;
-      s.moraal = clamp(s.moraal - 4, 0, 100);
+      schip.lading[PROVIAND] = 0;
+      s.geest = clamp(s.geest - 4, 0, 100);
       if (hongerKoeling <= 0) {
         hongerKoeling = 20;
-        Game.melding('De proviand is op! De bemanning mort.', 'rood');
+        Game.melding('De proviand is op! Het scheepsvolk mort.', 'rood');
         audio.sfx.fout();
       }
     }
-    // Timmerman lapt onderweg de romp op.
-    if (talentBonus(s, 'timmerman') && schip.romp < schip.maxRomp) {
+    // De scheepstimmerman lapt onderweg de romp op.
+    if (talentBonus(s, 'scheepstimmerman') && schip.romp < schip.maxRomp) {
       schip.romp = Math.min(schip.maxRomp, schip.romp + 0.6);
     }
-    if (s.moraal < 12 && Math.random() < 0.2) muiterij(s);
+    if (s.geest < 12 && Math.random() < 0.2) muiterij(s);
     // De jaren gaan tellen: het volk begint erover, lang voordat een haven het
     // hardop zegt.
     if (s.leeftijd >= PENSIOEN_HINT && Math.random() < 0.012) {
@@ -667,10 +667,10 @@ export function maakZeilScene() {
   }
 
   function muiterij(s) {
-    const weg = Math.max(1, Math.round(s.bemanning * 0.18));
-    s.bemanning = Math.max(6, s.bemanning - weg);
-    s.moraal = clamp(s.moraal + 14, 0, 100);
-    Game.melding(`${weg} man is gedeserteerd bij de eerste gelegenheid.`, 'rood');
+    const weg = Math.max(1, Math.round(s.scheepsvolk * 0.18));
+    s.scheepsvolk = Math.max(6, s.scheepsvolk - weg);
+    s.geest = clamp(s.geest + 14, 0, 100);
+    Game.melding(`${weg} man is bij de eerste gelegenheid gedrost.`, 'rood');
     audio.sfx.fout();
   }
 
@@ -765,9 +765,9 @@ export function maakZeilScene() {
       Game.melding(`De kist bevat ${fmtGold(goud)} goudstukken. Buit!`, 'goud');
       audio.sfx.munt();
     } else if (getal < 0.7) {
-      const verloren = Math.round(s.bemanning * 0.1);
-      s.bemanning = Math.max(6, s.bemanning - verloren);
-      s.moraal = clamp(s.moraal - 8, 0, 100);
+      const verloren = Math.round(s.scheepsvolk * 0.1);
+      s.scheepsvolk = Math.max(6, s.scheepsvolk - verloren);
+      s.geest = clamp(s.geest - 8, 0, 100);
       Game.melding('Het bleek een valstrik — piraten loerden op nieuwsgierigen.', 'rood');
       audio.sfx.fout();
     } else {
@@ -790,14 +790,14 @@ export function maakZeilScene() {
         `"Ik ruil ${waarde.naam.toLowerCase()} voor een derde van de marktprijs. ` +
         `Zolang uw ruim het houdt, natuurlijk."`,
       [
-        { label: `Kopen (${fmtGold(prijs)} p.e.)`, waarde: 'koop', uit: maxKoop <= 0 },
-        { label: 'Geen tijd', waarde: 'weg' },
+        { label: `Inkopen (${fmtGold(prijs)} p.e.)`, waarde: 'koop', uit: maxKoop <= 0 },
+        { label: 'Doorzeilen', waarde: 'weg' },
       ],
       { figuur: 'zeeman' }
     );
     if (keuze !== 'koop') return;
     const schip = vlaggenschip(s);
-    const ruimVrij = SCHIP_INDEX[schip.type].ruim - schip.lading.reduce((a, b) => a + b, 0) - schip.kanonnen * 2;
+    const ruimVrij = SCHIP_INDEX[schip.type].ruim - schip.lading.reduce((a, b) => a + b, 0) - schip.geschut * 2;
     const kan = Math.min(Math.floor(ruimVrij), maxKoop);
     if (kan <= 0) {
       Game.melding('Je ruim is vol.', 'rood');
@@ -813,29 +813,29 @@ export function maakZeilScene() {
   async function gebeurtenisBootNood(s) {
     if (UI.ietsOpen()) return;
     const keuze = await UI.vraag(
-      'Boot in nood',
+      'Sloep in nood',
       `Een sloep met een gescheurd zeil roept om hulp. Acht man zwaaien. ` +
         'De kapitein belooft een beloning als je hen aan land brengt.',
       [
-        { label: 'Opnemen', waarde: 'op' },
-        { label: 'Voorbijvaren', waarde: 'weg' },
+        { label: 'Langszij komen', waarde: 'op' },
+        { label: 'Doorzeilen', waarde: 'weg' },
       ],
       { figuur: 'zeeman' }
     );
     if (keuze !== 'op') return;
     // Soms zijn het juist een stel piraten.
     if (Math.random() < 0.2) {
-      const verloren = Math.round(s.bemanning * 0.15);
-      s.bemanning = Math.max(6, s.bemanning - verloren);
+      const verloren = Math.round(s.scheepsvolk * 0.15);
+      s.scheepsvolk = Math.max(6, s.scheepsvolk - verloren);
       s.goud = Math.max(0, s.goud - Math.round(s.goud * 0.1));
-      s.moraal = clamp(s.moraal - 10, 0, 100);
+      s.geest = clamp(s.geest - 10, 0, 100);
       Game.melding('Het waren piraten! Ze sloegen toe en gingen er met een deel van de buit vandoor.', 'rood');
       audio.sfx.ramp();
     } else {
       const beloning = Math.round(300 + Math.random() * 900);
       s.goud += beloning;
       s.roem += 4;
-      s.moraal = clamp(s.moraal + 4, 0, 100);
+      s.geest = clamp(s.geest + 4, 0, 100);
       Game.melding(`De geredde kapitein betaalt ${fmtGold(beloning)} goudstukken.`, 'goud');
       audio.sfx.munt();
     }
@@ -843,7 +843,7 @@ export function maakZeilScene() {
 
   function gebeurtenisDolfijnen(s) {
     if (UI.ietsOpen()) return;
-    s.moraal = clamp(s.moraal + 2, 0, 100);
+    s.geest = clamp(s.geest + 2, 0, 100);
     Game.melding('Een school dolfijnen zwemt een tijdje met je mee. Goed volk.', 'goud');
   }
 
@@ -857,16 +857,16 @@ export function maakZeilScene() {
 
     const beschrijving = legende
       ? `De uitkijk roept het van de mast: het is <b>${legende.naam}</b>, ${legende.bijnaam}. ` +
-        `${metLidwoord(vloot.type, true)} draagt ${vloot.kanonnen} stukken geschut en ` +
-        `${vloot.bemanning} koppen. ${legende.verhaal}<br><br>Ze houden recht op je aan.`
+        `${metLidwoord(vloot.type, true)} draagt ${vloot.geschut} stukken geschut en ` +
+        `${vloot.scheepsvolk} koppen. ${legende.verhaal}<br><br>Ze houden recht op je aan.`
       : `Aan de horizon doemt een <b>${scheepsAanduiding(vloot.natie, vloot.type)}</b> op, ` +
-        `naar schatting ${vloot.kanonnen} stukken geschut en ${vloot.bemanning} koppen aan boord.` +
+        `naar schatting ${vloot.geschut} stukken geschut en ${vloot.scheepsvolk} koppen aan boord.` +
         (vijandig ? ' Ze zetten koers naar jóu toe.' : '');
 
     const keuzes = [
-      { label: 'Aanvallen', waarde: 'aanval', soort: 'gevaar' },
-      { label: 'Aanroepen', waarde: 'roep' },
-      { label: 'Wegvaren', waarde: 'weg' },
+      { label: 'De jacht openen', waarde: 'aanval', soort: 'gevaar' },
+      { label: 'Praaien', waarde: 'roep' },
+      { label: 'Doorzeilen', waarde: 'weg' },
     ];
     const keuze = await UI.vraag(
       legende ? 'Een naam aan de horizon' : 'Zeil in zicht!',
@@ -910,7 +910,7 @@ export function maakZeilScene() {
         await UI.vraag(
           'Ze halen je in',
           'Hun boegspriet is al bijna binnen schootsafstand. Ontsnappen zit er niet in.',
-          [{ label: 'Klaar voor de strijd', waarde: 'ok', soort: 'gevaar' }]
+          [{ label: 'Klaar voor de volle laag', waarde: 'ok', soort: 'gevaar' }]
         );
         beginZeeslag(vloot);
       } else {
@@ -1030,7 +1030,7 @@ export function maakZeilScene() {
       } else {
         missers++;
         s.dag += 2;
-        s.moraal = clamp(s.moraal - 6, 0, 100);
+        s.geest = clamp(s.geest - 6, 0, 100);
         audio.sfx.fout();
         await UI.vraag(
           'Verkeerd gelopen',
@@ -1055,7 +1055,7 @@ export function maakZeilScene() {
     const buit = Math.round((5000 + Math.random() * 9000) * (1 + (s.schattenGevonden || 0) * 0.25));
     s.goud += buit;
     s.roem += 30;
-    s.moraal = clamp(s.moraal + 12, 0, 100);
+    s.geest = clamp(s.geest + 12, 0, 100);
     s.schattenGevonden = (s.schattenGevonden || 0) + 1;
     s.schat = null;
     audio.sfx.fanfare();
@@ -1081,7 +1081,7 @@ const WIND_BANDEN = [
   [0.72, 'flauwe koelte'],
   [0.98, 'kalme bries'],
   [1.24, 'stevige bries'],
-  [1.55, 'harde wind'],
+  [1.55, 'stijve bries'],
   [Infinity, 'stormweer'],
 ];
 
@@ -1143,8 +1143,8 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
     ['goud', fmtGold(s.goud)],
     ['kompas', compassName(s.koers)],
     ['wind', `${compassName(normAngle(lokaal.richting + Math.PI))}  ${(lokaal.kracht * 5).toFixed(1)}`],
-    ['volk', `${s.bemanning}`],
-    ['proviand', `${schip.lading[WAAR_INDEX.voedsel]}`],
+    ['volk', `${s.scheepsvolk}`],
+    ['proviand', `${schip.lading[WAAR_INDEX.proviand]}`],
   ];
   let x = 24;
   for (const [icoon, tekst] of items) {
@@ -1201,7 +1201,7 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
   c.textBaseline = 'middle';
   c.fillStyle = R.HUD.inktZacht;
   c.textAlign = 'left';
-  c.fillText('ZEILEN', 28, vh - 58);
+  c.fillText('ZEILVOERING', 28, vh - 58);
   // Hoe je ten opzichte van de wind ligt, in woord en kleur. Eén blik leert je
   // dat afvallen loont — daar is geen getal voor nodig.
   const trim = zeilWoord(s.koers, lokaal.richting);
@@ -1263,7 +1263,7 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
   c.font = '11px Georgia, serif';
   c.textAlign = 'left';
   c.textBaseline = 'middle';
-  const hulp = '← → sturen · ↑ ↓ zeilen · klik = koers · M kaart · S schip · C bemanning · Esc menu';
+  const hulp = '← → roer · ↑ ↓ zeil · klik = koers · M kaart · S schip · C scheepsvolk · Esc raad';
   const hw = c.measureText(hulp).width;
   R.hudPaneel(c, 16, vh - 104, hw + 24, 20, 4);
   c.fillStyle = R.HUD.inktZacht;

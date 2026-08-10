@@ -3,7 +3,7 @@ import { clamp, TAU, fmtDate, fmtGold, el } from './util.js';
 import { WAREN, SCHIP_INDEX, NATIES, RANGEN, LEGENDES, ITEMS } from './data.js';
 import { WORLD_W, WORLD_H } from './world.js';
 import {
-  Game, roundRect, vlaggenschip, ruimTotaal, vlootBemanningMax, bewaar, conditieWoord,
+  Game, roundRect, vlaggenschip, ruimTotaal, vlootScheepsvolkMax, bewaar, conditieWoord,
 } from './game.js';
 import * as R from './render.js';
 import * as UI from './ui.js';
@@ -140,13 +140,13 @@ export function toonScheepsstatus() {
         const up = sh.upgrades || {};
         info.innerHTML =
           `<span>Romp</span><span>${Math.round(sh.romp)} / ${sh.maxRomp}</span>` +
-          `<span>Kanonnen</span><span>${sh.kanonnen} / ${t.kanonnen}</span>` +
+          `<span>Geschut</span><span>${sh.geschut} / ${t.geschut}</span>` +
           `<span>Ruim</span><span>${ruimTotaal(sh)} / ${t.ruim}</span>` +
-          `<span>Snelheid</span><span>${t.snelheid}</span>` +
+          `<span>Vaart</span><span>${(t.snelheid / 8).toFixed(1)} knopen</span>` +
           `<span>Wendbaarheid</span><span>${t.wend.toFixed(2)}</span>` +
           `<span>Aan de wind</span><span>${Math.round(t.hoogte * 100)}%</span>` +
           (up.zeilen || up.roer || up.romp || up.weer
-            ? `<span>Uitrusting</span><span>zeil ${up.zeilen || 0} · ` +
+            ? `<span>Toerusting</span><span>zeil ${up.zeilen || 0} · ` +
               `roer ${up.roer || 0} · romp ${up.romp || 0}` +
               `${up.weer ? ` · weer ${up.weer}` : ''}</span>`
             : '');
@@ -160,7 +160,7 @@ export function toonScheepsstatus() {
       const sh = vlaggenschip(s);
       lading.appendChild(
         UI.tabel(
-          [{ label: 'Waar' }, { label: 'Aantal', rechts: true }],
+          [{ label: 'Goed' }, { label: 'Stuks', rechts: true }],
           WAREN.map((w, i) => ({
             cellen: [{ tekst: w.naam }, { tekst: String(sh.lading[i]), klasse: 'rechts' }],
           }))
@@ -172,25 +172,27 @@ export function toonScheepsstatus() {
   });
 }
 
-/** Toont bemanning, voortgang, relaties en persoonlijke verhaallijnen. */
-export function toonBemanning() {
+/** Toont scheepsvolk, voortgang, relaties en persoonlijke verhaallijnen. */
+export function toonScheepsvolk() {
   const s = Game.speler;
   UI.toonScherm({
-    titel: 'Bemanning en buit',
+    titel: 'Scheepsvolk en buit',
     bouw(body) {
       const d = document.createElement('div');
       d.className = 'schipkaart';
       d.innerHTML =
         `<div class="schipkaart-info">` +
-        `<span>Bemanning</span><span>${s.bemanning} / ${vlootBemanningMax(s)}</span>` +
-        `<span>Moraal</span><span>${Math.round(s.moraal)}%</span>` +
+        `<span>Scheepsvolk</span><span>${s.scheepsvolk} / ${vlootScheepsvolkMax(s)}</span>` +
+        `<span>Geest aan boord</span><span>${Math.round(s.geest)}%</span>` +
         `<span>Buit in het ruim</span><span>${fmtGold(s.goud)} goudstukken</span>` +
-        `<span>Eigen spaargeld</span><span>${fmtGold(s.gespaard)} goudstukken</span>` +
+        `<span>Eigen kist</span><span>${fmtGold(s.gespaard)} goudstukken</span>` +
         `<span>Roem</span><span>${Math.round(s.roem)}</span>` +
         `<span>Leeftijd</span><span>${Math.floor(s.leeftijd)} jaar · ${conditieWoord(s)}</span>` +
         `</div>`;
       body.appendChild(d);
-      body.appendChild(UI.balk(s.moraal, 100, s.moraal < 30 ? '#c65b45' : '#7bb36a', 'Moraal'));
+      body.appendChild(
+        UI.balk(s.geest, 100, s.geest < 30 ? '#c65b45' : '#7bb36a', 'Geest aan boord')
+      );
 
       // Lange lijn: het vermiste familielid en de lopende opdracht.
       const lange = document.createElement('div');
@@ -275,7 +277,7 @@ export function toonBemanning() {
 
       const rel = document.createElement('div');
       rel.className = 'schipkaart';
-      rel.innerHTML = '<h3>Betrekkingen</h3>';
+      rel.innerHTML = '<h3>Verstandhouding met de kronen</h3>';
       rel.appendChild(
         UI.tabel(
           [{ label: 'Natie' }, { label: 'Verhouding' }, { label: 'Rang', rechts: true }],
@@ -317,20 +319,20 @@ export function toonMenu() {
     knoppen: (sch) => [
       { label: 'Verder varen', esc: true, actie: () => sch.sluit() },
       {
-        label: 'Spel bewaren',
+        label: 'Het logboek bijwerken',
         actie: () => {
           if (bewaar()) Game.melding('Het logboek is bijgewerkt.');
-          else Game.melding('Bewaren mislukt.', 'rood');
+          else Game.melding('Het logboek kon niet worden bijgewerkt.', 'rood');
           sch.sluit();
         },
       },
       {
-        label: 'Bewaren en stoppen',
+        label: 'Het logboek sluiten en stoppen',
         actie: () => {
           if (bewaar()) {
             window.location.reload();
           } else {
-            Game.melding('Bewaren mislukt — er wordt niet gestopt.', 'rood');
+            Game.melding('Het logboek bleef ongewijzigd — er wordt niet gestopt.', 'rood');
             sch.sluit();
           }
         },
@@ -343,7 +345,7 @@ export function toonMenu() {
         },
       },
       {
-        // Apart van het geluid: wie de kanonnen wil horen maar niet de deun,
+        // Apart van het geluid: wie het geschut wil horen maar niet de deun,
         // hoeft niet alles het zwijgen op te leggen.
         label: audio.muziekAan() ? 'Muziek uit' : 'Muziek aan',
         actie: () => {
@@ -407,7 +409,7 @@ export function toonMenu() {
         },
       },
       {
-        label: 'Stoppen zonder bewaren',
+        label: 'Stoppen zonder het logboek bij te werken',
         soort: 'gevaar',
         actie: async () => {
           sch.sluit();
@@ -415,9 +417,9 @@ export function toonMenu() {
           // de rode knop drukt, hoeft zijn reis niet kwijt te raken.
           const keuze = await UI.vraag(
             'Weet je het zeker?',
-            'Alles wat je sinds de laatste keer bewaren hebt gedaan, gaat verloren.',
+            'Alles sinds de laatste bijwerking van het logboek gaat verloren.',
             [
-              { label: 'Toch eerst bewaren', waarde: 'bewaar' },
+              { label: 'Toch eerst het logboek bijwerken', waarde: 'bewaar' },
               { label: 'Ja, stoppen', waarde: 'stop', soort: 'gevaar' },
               { label: 'Nee, verder varen', waarde: 'nee', esc: true },
             ]
@@ -425,7 +427,7 @@ export function toonMenu() {
           if (keuze === 'stop') window.location.reload();
           else if (keuze === 'bewaar') {
             if (bewaar()) window.location.reload();
-            else Game.melding('Bewaren mislukt — er wordt niet gestopt.', 'rood');
+            else Game.melding('Het logboek bleef ongewijzigd — er wordt niet gestopt.', 'rood');
           }
         },
       },

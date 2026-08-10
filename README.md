@@ -103,7 +103,9 @@ In de zeeslag en het duel schakelt het spel over naar de bestaande
 Web Audio-compositie in D-klein op 143 slagen per minuut, gehamerd en met een A7
 die iedere frase naar de volgende trekt. Branding, krakend hout, de scheepsbel
 en meeuwen blijven ook op de gewone zeereis ter plekke opgewekt uit oscillatoren
-en geruis. Muziek en geluid staan los van elkaar in de scheepsraad.
+en geruis. Bij kanonschoten, treffers en andere nadrukkelijke effecten zakt de
+muziek kort en vloeiend weg, zodat het spelgeluid verstaanbaar blijft. Muziek en
+geluid staan los van elkaar in de scheepsraad.
 
 **Beruchte kapiteins.** Zes namen varen ergens op deze zee: Dolle Jack in zijn
 brigantijn, de Weduwe van Tortuga, de Kraai met een linieschip dat niemand hem

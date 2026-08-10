@@ -26,6 +26,19 @@ This file provides guidance to agents when working with code in this repository.
 - **Data lookup**: arrays in `js/data.js` are paired with id-index maps (`WAREN`→`WAAR_INDEX`, `SCHEPEN`→`SCHIP_INDEX`). Cargo is an array indexed by `WAAR_INDEX` (use `nieuweLading()`); never use string keys.
 - **Units**: positions/speeds are "wereldeenheden" on a lat/lon-projected map (`PPD = 196` world units per degree, in `world.js`). Angles are radians, 0 = east. Sailing time is intentionally partially decoupled from physical scale (`DAGEN_PER_SECONDE = 0.12` in `sail.js`).
 - **Battle terrain**: every sea battle gets deterministic local coast and rocks from the world seed, encounter position, and opponent. Terrain blocks ships and cannonballs; ship-size clearance is intentional, so small vessels can use gaps that large vessels cannot.
+- **Animated offsets are integrated per frame, never `time × current speed`.** The latter is a position derived from the *present* speed, so any change to that speed silently rewrites the whole history: the wave field jumped thousands of pixels on a wind shift, and while the wind turned it raced away at a speed that grew with session length. See `zeeDriftBij()` in `render.js`; the same trap applies to anything drifting with wind, current or camera.
+- **A canvas `filter: blur(r)` reaches roughly `3r`, not `r`.** Blurring a layer that exactly covers the screen therefore pulls in the transparent area beyond its edge and leaves a dark border. Draw the source oversized (see `tekenMiniatuur()` in `game.js`), and put an unblurred copy underneath as a safety net.
+- **Constants that two systems must agree on live in one exported helper.** The luffing dead angle is used both by the sail curve and by the fleets' tacking course; when those drifted apart, fleets steered for an angle where they stall. See `dodeHoek()` in `world.js`.
+
+## Measuring in the browser
+
+Visual and feel changes are verified by driving the real game headless (Playwright + the cached Chromium in `~/.cache/ms-playwright`), serving the repo over HTTP and importing the modules in the page — the ES-module cache makes them the same instances the game uses. Traps that have cost time:
+
+- **`werkBij` returns early while a UI overlay is open** (`UI.ietsOpen()`). A test that parks the ship somewhere is frozen the moment a random sea event or an enemy encounter opens a screen, and every later phase then silently "passes". Call `UI.sluitAlles()` every frame in the test loop, and clear `wereld.vloten` plus stub `vlotenTik` when measuring something else.
+- **A test that starts at a random position makes two screenshots incomparable.** Pin the position, the world seed and the wind before measuring anything, or you are measuring noise.
+- **Headless numbers are software-rendered.** They say something about draw calls, pixel maths and correctness; nothing about frame rate on real hardware.
+- **Measure the quantity you actually care about.** A pixel bounding box is quantised to whole pixels and hides a few degrees of rotation; image moments give the angle directly. Sample the same value over a long enough window that you catch the extremes of every period involved.
+- **For visual bugs, give each suspect a signal colour and render once.** Three minutes per round, but it excludes definitively where guessing does not.
 
 ## Style
 

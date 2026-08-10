@@ -235,7 +235,11 @@ Dit is een eerbetoon, geen kopie: alle code, vormgeving, geluid en tekst zijn
 voor dit project geschreven. *Sid Meier's Pirates!* is eigendom van zijn
 rechthebbenden; er is geen materiaal uit het origineel overgenomen.
 
-De code is beschikbaar onder de [GNU GPL v3](LICENSE) (© 2026 Martin Splinter,
-Bargeflow / Shipdocs). Dat betekent: gebruik en wijzig het vrij, maar elke
-afgeleide versie moet ook onder de GPL open source blijven en de naam van de
-oorspronkelijke auteur erin vermelden.
+De code is *geen* open source. Alles in deze repository — code, vormgeving,
+geluid en tekst — is © 2026 Martin Splinter (Bargeflow / Shipdocs), alle
+rechten voorbehouden; zie [LICENSE](LICENSE). Kopiëren, wijzigen, verspreiden
+of zelf hosten mag alleen met voorafgaande schriftelijke toestemming.
+Licentieaanvragen: info@shipdocs.app.
+
+Eerdere versies stonden onder de GNU GPL v3; die eerder verleende rechten
+blijven gelden voor díe versies.

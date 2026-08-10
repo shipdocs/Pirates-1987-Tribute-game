@@ -42,9 +42,11 @@ kleur hoe je vaart; de windroos rechts wijst waarheen het waait.
 
 De passaat komt uit het oosten, maar dat is het gemiddelde en niet de grens: de
 wind dwaalt er omheen, ademt in vlagen en draait een enkele keer werkelijk om.
-De uitkijk meldt het als het weer omslaat. Je schip merkt het ook — kop op zee
-gaat het stampen en slaat de boeg water op, dwars in de golven rolt het, en een
-sloep werkt in dezelfde zee veel harder dan een linieschip.
+Rustige witte wolken trekken mee met zijn richting en kracht; donkere wolken
+horen uitsluitend bij een stormcel. De uitkijk meldt het als het weer omslaat.
+Je schip merkt het ook — kop op zee gaat het stampen en slaat de boeg water op,
+dwars in de golven rolt het, en een sloep werkt in dezelfde zee veel harder dan
+een linieschip.
 
 **Buien.** Een stormcel is geen pech maar een keuze. Hij draait om zijn kern, en
 in de band eromheen — die lichte, meedraaiende ring op de kaart — vind je de

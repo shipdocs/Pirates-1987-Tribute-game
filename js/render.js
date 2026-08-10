@@ -2430,13 +2430,10 @@ export function tekenRook(ctx, p) {
 
 // --- Stormwolken -----------------------------------------------------------
 
-// Grijstinten voor de wolkenlagen, van bijna-zwart in de kern tot helder wit
-// aan de buitenrand — de zachte kleurovergang waar een natte bui om vraagt.
+// Grijstinten voor de echte stormlagen: kalme wolken hebben hun eigen witte
+// tekenlaag en worden nooit meer met dit dreigende wolkenlijf vermengd.
 const WOLK_DONKER = [22, 34, 50];
 const WOLK_MIDDEN = [52, 68, 88];
-const WOLK_LICHT = [108, 124, 142];
-const WOLK_HELDER = [164, 176, 190];
-const WOLK_WIT = [232, 236, 240];
 
 /** Mengt twee grijstinten tot een hexkleur (zonder '#') op fractie t. */
 function mengGrijs(a, b, t) {
@@ -2489,6 +2486,138 @@ function tekenDeeg(ctx, x, y, r, kleur, rot, alpha) {
   ctx.restore();
 }
 
+// --- Kalme windwolken ----------------------------------------------------
+
+// Drie kleine varianten voorkomen een zichtbaar stempelpatroon. In
+// tegenstelling tot de zachte deegwolken van een storm hebben deze sprites een
+// helder lijf en herkenbare stapelkoppen: wolkjes, geen mistplekken.
+const windWolkSprites = [];
+
+function windWolkSprite(variant) {
+  if (windWolkSprites[variant]) return windWolkSprites[variant];
+  const c = offscreen(192, 128);
+  const g = c.getContext('2d');
+  const v = variant % 3;
+  const wolkPad = new Path2D();
+  const ovaal = (x, y, rx, ry, rot = 0) => {
+    // Zonder moveTo verbindt Canvas twee ellipsen met een rechte lijn. In een
+    // samengestelde vorm kan die lijn een wig uit de wolk snijden.
+    wolkPad.moveTo(x + Math.cos(rot) * rx, y + Math.sin(rot) * rx);
+    wolkPad.ellipse(x, y, rx, ry, rot, 0, TAU);
+  };
+  ovaal(96, 78, 57, 24);
+  ovaal(139, 74 - v * 2, 31 + v * 2, 24, 0.06);
+  ovaal(104 + v * 4, 53, 32, 30 + v, -0.08);
+  ovaal(70 - v * 3, 61, 27, 24 + v * 2, 0.04);
+  ovaal(39, 77 + v, 24, 16 + v, -0.08);
+  ovaal(20, 82 - v, 13, 9);
+
+  g.save();
+  g.translate(0, 7);
+  g.filter = 'blur(6px)';
+  g.fillStyle = 'rgba(75,105,125,0.28)';
+  g.fill(wolkPad);
+  g.restore();
+
+  const lijf = g.createLinearGradient(0, 38, 0, 101);
+  lijf.addColorStop(0, '#ffffff');
+  lijf.addColorStop(0.58, '#f7faf9');
+  lijf.addColorStop(1, '#dce8ec');
+  g.fillStyle = lijf;
+  g.fill(wolkPad);
+
+  windWolkSprites[variant] = c;
+  return c;
+}
+
+function tekenWindWolk(ctx, x, y, r, rot, alpha, variant) {
+  const img = windWolkSprite(variant);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.drawImage(img, -r * 1.5, -r, r * 3, r * 2);
+  ctx.restore();
+}
+
+// Een vast, gezaaid wolkenveld dat als geheel met de wind meedrijft. De
+// afzonderlijke wolken veranderen nooit plotseling van vorm: alleen hun
+// positie schuift geïntegreerd op, zodat een winddraai geen beeldsprong geeft.
+const windWolkVeld = { wereld: null, wolken: [], driftX: 0, driftY: 0, tijd: null };
+
+function zorgVoorWindWolken(wereld) {
+  if (windWolkVeld.wereld === wereld) return windWolkVeld.wolken;
+  const rng = makeRng((wereld.seed ^ 0x77c10d) >>> 0);
+  const wolken = [];
+  const kolommen = 14;
+  const rijen = 10;
+  for (let rij = 0; rij < rijen; rij++) {
+    for (let kolom = 0; kolom < kolommen; kolom++) {
+      wolken.push({
+        x: ((kolom + 0.12 + rng() * 0.76) / kolommen) * WORLD_W,
+        y: ((rij + 0.12 + rng() * 0.76) / rijen) * WORLD_H,
+        r: 18 + rng() * 12,
+        draai: (rng() - 0.5) * 0.22,
+        alfa: 0.62 + rng() * 0.16,
+        fase: rng() * TAU,
+        variant: Math.floor(rng() * 3),
+      });
+    }
+  }
+  windWolkVeld.wereld = wereld;
+  windWolkVeld.wolken = wolken;
+  windWolkVeld.driftX = 0;
+  windWolkVeld.driftY = 0;
+  windWolkVeld.tijd = null;
+  return wolken;
+}
+
+function werkWolkDriftBij(wereld, tijd) {
+  if (windWolkVeld.tijd === null) {
+    windWolkVeld.tijd = tijd;
+    return;
+  }
+  const dt = clamp(tijd - windWolkVeld.tijd, 0, 0.25);
+  windWolkVeld.tijd = tijd;
+  if (sierRustig()) return;
+  const snelheid = 18 * clamp(wereld.windKracht || 1, 0.35, 1.8);
+  windWolkVeld.driftX = mod(
+    windWolkVeld.driftX + Math.cos(wereld.windRichting) * snelheid * dt,
+    WORLD_W
+  );
+  windWolkVeld.driftY = mod(
+    windWolkVeld.driftY + Math.sin(wereld.windRichting) * snelheid * dt,
+    WORLD_H
+  );
+}
+
+/**
+ * Rustige witte stapelwolken op de zeilkaart. Hun trekrichting en snelheid
+ * volgen de gewone wind; donkere wolken worden uitsluitend door de echte
+ * stormcellen getekend.
+ */
+export function tekenWolken(ctx, wereld, cam, vw, vh, tijd) {
+  const wolken = zorgVoorWindWolken(wereld);
+  werkWolkDriftBij(wereld, tijd);
+  const zoom = cam.zoom || 1;
+  const marge = 130;
+  const x0 = cam.x - vw / 2 / zoom - marge;
+  const x1 = cam.x + vw / 2 / zoom + marge;
+  const y0 = cam.y - vh / 2 / zoom - marge;
+  const y1 = cam.y + vh / 2 / zoom + marge;
+  const wind = wereld.windRichting || 0;
+  const st = sierTijd(tijd);
+
+  for (const wolk of wolken) {
+    const x = mod(wolk.x + windWolkVeld.driftX, WORLD_W);
+    const y = mod(wolk.y + windWolkVeld.driftY, WORLD_H);
+    if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+    const zweef = Math.sin(st * 0.18 + wolk.fase) * 1.5;
+    const rot = wind + wolk.draai;
+    tekenWindWolk(ctx, x, y + zweef, wolk.r, rot, wolk.alfa, wolk.variant);
+  }
+}
+
 /** Vult een onregelmatige, golvende klont: de natuurlijke rand van de wolk. */
 function wolkSilhouet(ctx, x, y, r, fase) {
   ctx.beginPath();
@@ -2511,14 +2640,12 @@ function wolkSilhouet(ctx, x, y, r, fase) {
 /**
  * Levendig wolkencomplex per stormcel, in wereldruimte.
  *
- * Geen egale donkere vlek meer, maar een gelaagd deeg van wolkenpartikels:
- * lichte cumulus rondom én in de mazen van de bui, een draaiend en ademend
- * lijf van donkere deegwolken, spiraalarmen die om de kern kronkelen en een
- * zwarte, rafelige kern. Alles volgt één deterministisch zaadje per cel, zodat
- * het landschap per beeld hetzelfde is, terwijl de trage draai, het zweven,
- * de vervorming en de verwaaiing met de wind de storm continu laten evolueren.
- * De rugband en de kernrand blijven leesbaar — daar neemt de speler zijn
- * besluit, dus die grenzen mogen nooit in het wolkenbrouwsel verdwijnen.
+ * Geen egale donkere vlek, maar een gelaagd lijf van donkere deegwolken,
+ * spiraalarmen en een zwarte, rafelige kern. Gewone witte stapelwolken zitten
+ * bewust in hun eigen tekenlaag. Alles volgt één deterministisch zaadje per
+ * cel, zodat de vorm van een bewegende storm niet verspringt, terwijl de trage
+ * draai en vervorming hem wel laten leven. De rugband en de kernrand blijven
+ * leesbaar — daar neemt de speler zijn besluit.
  */
 export function tekenStormen(ctx, wereld, cam, vw, vh, tijd) {
   if (!wereld.stormen || !wereld.stormen.length) return;
@@ -2537,10 +2664,16 @@ export function tekenStormen(ctx, wereld, cam, vw, vh, tijd) {
     if (s.x < zx0 - s.straal || s.x > zx1 + s.straal) continue;
     if (s.y < zy0 - s.straal || s.y > zy1 + s.straal) continue;
 
-    // De wolkenhopen worden uit dit zaadje getrokken, niet uit Math.random —
-    // zo is het landschap per beeld identiek en blijft alles deterministisch.
+    // Alleen blijvende eigenschappen horen in het zaad. De vorige versie nam
+    // de bewegende x/y-positie mee; bij iedere afrondingsgrens kreeg de hele
+    // storm daardoor plotseling nieuwe wolken en leek hij te stroboscopen.
     const rng = makeRng(
-      (Math.round(s.x * 7.31) * 31 + Math.round(s.y * 13.17) * 57 + Math.round(s.straal * 3.9)) >>> 0
+      (
+        Math.round((s.kern || 0) * 1000003) ^
+        Math.round(s.straal * 4093) ^
+        Math.round((s.levensduur || 0) * 8191) ^
+        ((s.draaiing || 1) > 0 ? 0x51ed270b : 0x1b873593)
+      ) >>> 0
     );
 
     const groei = clamp(s.leeftijd < 0.5 ? s.leeftijd / 0.5 : 1 - (s.leeftijd - 0.5) / 0.5, 0.15, 1);
@@ -2557,23 +2690,7 @@ export function tekenStormen(ctx, wereld, cam, vw, vh, tijd) {
     const wdrX = Math.cos(wereld.windRichting);
     const wdrY = Math.sin(wereld.windRichting);
 
-    // --- 1 · Lichte cumulus rondom en tussen de buien ----------------------
-    // Zachte, heldere stapelwolken aan de rand én in de mazen van de storm,
-    // die van donkergrijs naar bijna-wit overlopen — zo krijgt het hele
-    // weerbeeld afwisseling tussen zware en lichte partijen.
-    const nc = 9 + Math.round(rng() * 4);
-    for (let i = 0; i < nc; i++) {
-      const a = rng() * TAU + fase * 0.14;
-      const afstand = R * (0.55 + rng() * 1.35);
-      const drijft = clamp((afstand - R * 0.8) / (R * 1.4), 0, 1);
-      const px = s.x + Math.cos(a) * afstand + wdrX * afstand * 0.5 * drijft + Math.sin(st * 0.1 + i * 2.3) * 30;
-      const py = s.y + Math.sin(a) * afstand + wdrY * afstand * 0.5 * drijft + Math.cos(st * 0.09 + i * 3.1) * 30;
-      const r = (95 + rng() * 130) * groei;
-      const helder = mengGrijs(WOLK_LICHT, rng() < 0.5 ? WOLK_HELDER : WOLK_WIT, rng());
-      tekenDeeg(ctx, px, py, r, helder, fase * 0.3 + i * 1.7, (0.3 + rng() * 0.3) * groei);
-    }
-
-    // --- 2 · Het lijf: één donker silhouet dat ademt -----------------------
+    // --- 1 · Het lijf: één donker silhouet dat ademt -----------------------
     // De zwarte muur is geen schijf maar een onregelmatige deegklont die traag
     // vervormt — precies daar raken wolk en lucht elkaar.
     const lijfR = R * 0.92;
@@ -2585,7 +2702,7 @@ export function tekenStormen(ctx, wereld, cam, vw, vh, tijd) {
     wolkSilhouet(ctx, s.x + wdrX * R * 0.08, s.y + wdrY * R * 0.08, lijfR, fase * draai * 0.35);
     ctx.fill();
 
-    // --- 3 · Het wolkenlijf: dichte deegwolken die draaien, zweven, vervormen
+    // --- 2 · Het wolkenlijf: dichte deegwolken die draaien, zweven, vervormen
     // Variërende dichtheid, grootte en transparantie: kleine wolken dicht op
     // de kern, grote slierten eromheen die verder met de wind meesleuren.
     const nw = 17 + Math.round(groei * 8);
@@ -2601,16 +2718,15 @@ export function tekenStormen(ctx, wereld, cam, vw, vh, tijd) {
       const r = (100 + rng() * 170 + s.straal * 0.07) * groei;
       const diepte = clamp(afstand / (R * 0.95), 0, 1); // 0 in de kern, 1 aan de rand
       const kleur = mengGrijs(WOLK_DONKER, WOLK_MIDDEN, diepte * 0.7 + rng() * 0.3);
-      // Grote, verre wolken wat opener, zodat het licht door de dunne delen
-      // heen kan spelen en de storm diepte krijgt.
+      // Grote, verre wolken wat opener, zodat het donkere lijf diepte houdt.
       const alpha = clamp(0.5 - 0.18 * diepte + rng() * 0.15, 0.15, 0.75) * groei;
       tekenDeeg(ctx, px, py, r, kleur, fase * draai * 0.3 + i * 2.3, alpha);
     }
 
-    // --- 4 · Spiraalarmen: de werveling die het oog als storm leest ---------
+    // --- 3 · Spiraalarmen: de werveling die het oog als storm leest ---------
     for (let arm = 0; arm < 2; arm++) {
       const aStart = fase * draai * 0.65 + arm * Math.PI;
-      const armKleur = mengGrijs(arm ? WOLK_DONKER : WOLK_LICHT, WOLK_MIDDEN, arm ? 0.25 : 0.3);
+      const armKleur = mengGrijs(WOLK_DONKER, WOLK_MIDDEN, arm ? 0.22 : 0.48);
       for (let k = 0; k < 6; k++) {
         const t = k / 6;
         const a = aStart + t * 4.6 * draai;
@@ -2624,46 +2740,7 @@ export function tekenStormen(ctx, wereld, cam, vw, vh, tijd) {
       }
     }
 
-    // --- 5 · Licht door de dunne delen -------------------------------------
-    // Waar het wolkendek dun is, piept de lucht erdoorheen: heldere,
-    // lichtblauwe schemerplekken middenin de bui geven het complex diepte.
-    const nz = 6 + Math.round(rng() * 4);
-    for (let i = 0; i < nz; i++) {
-      const a = rng() * TAU + fase * 0.2;
-      const afstand = R * (0.2 + rng() * 0.7);
-      const drijft = clamp((afstand - R * 0.3) / (R * 0.8), 0, 1);
-      const px = s.x + Math.cos(a) * afstand + wdrX * afstand * 0.4 * drijft + Math.sin(st * 0.15 + i * 4.1) * 22;
-      const py = s.y + Math.sin(a) * afstand + wdrY * afstand * 0.4 * drijft + Math.cos(st * 0.12 + i * 2.7) * 22;
-      const r = (70 + rng() * 120) * groei;
-      const helder = mengGrijs(WOLK_HELDER, WOLK_WIT, rng() < 0.5 ? 0.5 : 0.85);
-      tekenDeeg(ctx, px, py, r, helder, fase * 0.5 + i, (0.16 + rng() * 0.12) * groei);
-    }
-
-    // --- 6 · Randlicht op de zonzijde --------------------------------------
-    // De zon staat vast linksboven; de bovenste flank van het wolkenlijf vangt
-    // daardoor een heldere gloed, en de toppen daar krijgen een felle witte kap.
-    const zonA = Math.atan2(-ZON_Y, -ZON_X);
-    for (let i = 0; i < 7; i++) {
-      const a = zonA + (rng() - 0.5) * 1.1;
-      const afstand = R * (0.45 + rng() * 0.5);
-      const px = s.x + Math.cos(a) * afstand + Math.sin(st * 0.11 + i * 1.9) * 26;
-      const py = s.y + Math.sin(a) * afstand + Math.cos(st * 0.1 + i * 3.3) * 26;
-      const r = (90 + rng() * 130) * groei;
-      tekenDeeg(ctx, px, py, r, mengGrijs(WOLK_HELDER, WOLK_WIT, rng()), fase * 0.4 + i, (0.28 + rng() * 0.18) * groei);
-    }
-    // En een zachte gloed waar de zon langs het hele lijf strijkt.
-    const glans = ctx.createRadialGradient(
-      s.x - R * 0.55, s.y - R * 0.7, 0,
-      s.x - R * 0.55, s.y - R * 0.7, R * 0.85
-    );
-    glans.addColorStop(0, `rgba(${rgbVan(mengGrijs(WOLK_HELDER, WOLK_WIT, 0.35))},${0.2 * groei})`);
-    glans.addColorStop(1, 'rgba(160,180,200,0)');
-    ctx.fillStyle = glans;
-    ctx.beginPath();
-    ctx.arc(s.x - R * 0.55, s.y - R * 0.7, R * 0.85, 0, TAU);
-    ctx.fill();
-
-    // --- 7 · De kern -------------------------------------------------------
+    // --- 4 · De kern -------------------------------------------------------
     // Waar het gevaar begint: een bijna-zwarte, rafelige muur die traag draait
     // en ademt. Alleen volgroeide cellen hebben er een.
     const kernR = stormStraalBij(s, STORM_KERN);
@@ -2695,7 +2772,7 @@ export function tekenStormen(ctx, wereld, cam, vw, vh, tijd) {
       ctx.setLineDash([]);
     }
 
-    // --- 8 · De rugband ----------------------------------------------------
+    // --- 5 · De rugband ----------------------------------------------------
     // De snelle band: waar de rugwind piekt. Een lichte, meedraaiende boog die
     // laat zien wélke kant je erlangs moet — met de draaiing mee jaag je mee,
     // ertegenin val je stil.

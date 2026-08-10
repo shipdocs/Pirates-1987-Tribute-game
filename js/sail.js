@@ -386,6 +386,9 @@ export function maakZeilScene() {
       R.tekenDiepte(c, w);
       R.tekenKaartlijnen(c, cam, vw, vh);
       R.tekenLand(c, w, cam, vw, vh);
+      // Rustige witte wolken maken richting en snelheid van de gewone wind
+      // zichtbaar; de donkere wolken hieronder horen alleen bij stormcellen.
+      R.tekenWolken(c, w, cam, vw, vh, Game.tijd);
       // Stormwolken: donkere cumulus die met de wind meedrijven, óver het land
       // heen getekend zodat ze van veraf als dreiging zichtbaar zijn.
       R.tekenStormen(c, w, cam, vw, vh, Game.tijd);

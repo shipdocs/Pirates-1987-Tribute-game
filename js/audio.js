@@ -142,6 +142,28 @@ export const sfx = {
   klik() {
     toon(620, 0.06, 'triangle', 0.14);
   },
+  // De houten toeg zijn in het ankerscherm: een droge, korte tik die niet door
+  // de muziek heen schreeuwt. Twee dicht op elkaar geeft het schip zijn
+  // scheepsklok-achtige wachtritme.
+  toeg() {
+    toon(950, 0.05, 'triangle', 0.1);
+  },
+  toegHoog() {
+    toon(1400, 0.06, 'triangle', 0.1);
+  },
+  // De wachtglas-renner slaat het glas — een tik die even rond blijft hangen.
+  glas() {
+    toon(1150, 0.12, 'triangle', 0.16);
+    toon(2300, 0.1, 'triangle', 0.08, 0.02);
+  },
+  // Klaar met een bezigheid: een zonnige opgaande terts, als het afronden van
+  // een zeekaart. Niet zo pompeus als de fanfare bij een stad.
+  klaar() {
+    toon(660, 0.13, 'triangle', 0.2);
+    toon(830, 0.16, 'triangle', 0.18, 0.09);
+    toon(990, 0.22, 'triangle', 0.14, 0.18);
+    toon(1320, 0.26, 'triangle', 0.1, 0.27);
+  },
   fout() {
     toon(180, 0.18, 'square', 0.16, 0, 110);
   },

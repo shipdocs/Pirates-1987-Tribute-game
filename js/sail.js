@@ -6,7 +6,7 @@ import {
   WAREN, WAAR_INDEX, SCHIP_INDEX, scheepsAanduiding, MOEILIJKHEDEN,
   metLidwoord, LEGENDE_INDEX, PUNT_INDEX,
 } from './data.js';
-import { WORLD_W, WORLD_H, SCHAT_ZICHT, zeilEfficiëntie } from './world.js';
+import { WORLD_W, WORLD_H, SCHAT_ZICHT, zeilEfficiëntie, DAGEN_PER_SECONDE } from './world.js';
 import {
   Game, vlaggenschip, ruimTotaal, bewaar, talentBonus, PENSIOEN_HINT,
 } from './game.js';
@@ -19,12 +19,9 @@ import { toonKaart, toonScheepsstatus, toonScheepsvolk, toonMenu } from './zeil-
 import { ankerDialoog, uitkijkRapport, startUitkijk, UITKIJK_VERTRAGING } from './anker.js';
 
 const PROVIAND = WAAR_INDEX.proviand;
-// De fysieke wereld is opnieuw groter geworden en de schepen varen langzamer,
-// maar de kalender loopt bewust niet evenredig mee: een overtocht duurt nu wel
-// langer kloktijd — de wereld moet groot voelen — maar kost evenveel dagen
-// proviand, geest en kapiteinsjaren als vóór de schaalvergroting.
-// 0.044 = 0.12 (oud) × (196/350) (grotere kaart) × 0,65 (lagere snelheid).
-const DAGEN_PER_SECONDE = 0.044;
+// De kalendersnelheid is gedeeld met het ankersysteem (`world.js`): onder zeil
+// én aan het anker verstrijkt de tijd in hetzelfde tempo, anders zou een
+// ankerbezigheid een snellere wereld hebben dan varen.
 
 // Stormbelasting per seconde: hoe snel de spanning in romp en want oploopt bij
 // volle last, en hoeveel het schip er vanzelf van herstelt. Met deze twee is de

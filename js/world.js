@@ -21,6 +21,15 @@ export const WORLD_H = (LAT1 - LAT0) * PPD;
 // overtocht niet vaker dan vroeger langs leeg water gaat.
 const DOEL_VLOTEN = 82;
 
+// De kalender loopt bewust niet evenredig mee met de fysieke schaal: een
+// overtocht duurt nu wel langer kloktijd — de wereld moet groot voelen — maar
+// kost evenveel dagen proviand, geest en kapiteinsjaren als vóór de
+// schaalvergroting. Onder zeil én aan het anker gebruikt het spel dezelfde
+// snelheid, anders zou een ankerbezigheid een snellere wereld hebben dan varen.
+// 0.044 = 0.12 (oud) × (196/350) (grotere kaart) × 0,65 (lagere snelheid),
+// en komt dicht in de buurt van één speeluur per echte seconde.
+export const DAGEN_PER_SECONDE = 0.044;
+
 /**
  * Hoe dicht je langs de kust moet varen voordat de stuurman het perkament
  * thuisbrengt. Dezelfde waarde begrenst waar een schat mag liggen, zodat elke

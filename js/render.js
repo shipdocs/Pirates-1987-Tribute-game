@@ -3,16 +3,10 @@ import { TAU, clamp, lerp, makeRng, normAngle, sierTijd, sierRustig } from './ut
 import { NATIES, SCHIP_INDEX, SCHEEP_MAAT } from './data.js';
 // world.js leunt alleen op util en data, dus dit levert geen kringetje op.
 import { STORM_KERN, stormStraalBij } from './world.js';
-import { WORLD_W, WORLD_H } from './world.js';
+import { PPD, WORLD_W, WORLD_H } from './world.js';
+import { offscreen, bandVoor, maakBakkerij, plaats } from './sprite.js';
 
 // --- Kleine hulpjes -------------------------------------------------------
-
-function offscreen(w, h) {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  return c;
-}
 
 const mod = (a, n) => ((a % n) + n) % n;
 
@@ -1602,24 +1596,44 @@ export function schuimLangs(ctx, bouwPad, breedte, alfa, tijd, snel = 1) {
  * de zoom: één graad als je erop zit, vijf als je de hele Caraïben overziet.
  * Elke vijfde lijn telt als hoofdgraad en staat wat steviger aan.
  */
+/**
+ * Het lat/lon-raster van de kaart.
+ *
+ * De stap komt uit `PPD` en nergens anders vandaan. Hij stond hier jarenlang als
+ * los getal (92), en toen de wereld groter werd — 92 → 196 → 350 eenheden per
+ * graad — bleef dat getal staan. Het raster gaf daardoor niet langer graden aan
+ * maar een kwart graad, bijna vier keer zo dicht als bedoeld.
+ *
+ * En het liep over de hele wereld: veertienduizend bij achtduizend eenheden aan
+ * lijnen, elk beeld opnieuw, terwijl er hooguit een schermbreedte van in beeld
+ * staat. Alleen de lijnen tekenen die het beeld raken scheelt het leeuwendeel.
+ */
 export function tekenKaartlijnen(ctx, cam, vw, vh) {
-  const graad = 92;
   const zoom = cam.zoom || 1;
   const graden = zoom > 1.2 ? 1 : zoom > 0.5 ? 2 : 5;
-  const stap = graad * graden;
+  const stap = PPD * graden;
+
+  // Het zichtbare vak, met een halve stap speling zodat een lijn die net buiten
+  // beeld begint niet halverwege ophoudt.
+  const zx0 = Math.max(0, cam.x - vw / 2 / zoom - stap);
+  const zx1 = Math.min(WORLD_W, cam.x + vw / 2 / zoom + stap);
+  const zy0 = Math.max(0, cam.y - vh / 2 / zoom - stap);
+  const zy1 = Math.min(WORLD_H, cam.y + vh / 2 / zoom + stap);
+  if (zx1 <= zx0 || zy1 <= zy0) return;
+
   ctx.save();
   ctx.lineWidth = 1 / zoom;
   for (const [veelvoud, kleur] of [[1, 'rgba(220,205,160,0.06)'], [5, 'rgba(220,205,160,0.13)']]) {
     const s = stap * veelvoud;
     ctx.strokeStyle = kleur;
     ctx.beginPath();
-    for (let x = 0; x <= WORLD_W; x += s) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, WORLD_H);
+    for (let x = Math.ceil(zx0 / s) * s; x <= zx1; x += s) {
+      ctx.moveTo(x, zy0);
+      ctx.lineTo(x, zy1);
     }
-    for (let y = 0; y <= WORLD_H; y += s) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(WORLD_W, y);
+    for (let y = Math.ceil(zy0 / s) * s; y <= zy1; y += s) {
+      ctx.moveTo(zx0, y);
+      ctx.lineTo(zx1, y);
     }
     ctx.stroke();
   }
@@ -1664,10 +1678,12 @@ function romPad(ctx, L, B) {
 }
 
 /**
- * De romp met alles wat er vast aan zit. Hangt alleen af van het type en het
- * aantal geschutspoorten, dus we bakken hem één keer in een sprite.
+ * De romp met alles wat er vast aan zit: houtwerk, dek, geschut, dekwerk en het
+ * staande want. Hangt alleen af van het type en het aantal geschutspoorten, dus
+ * we bakken hem één keer in een sprite — en juist daarom kan er detail in dat
+ * per beeld onbetaalbaar zou zijn.
  */
-function tekenRompDetail(ctx, L, B, poorten) {
+function tekenRompDetail(ctx, L, B, poorten, masten) {
   // Romp.
   const grad = ctx.createLinearGradient(0, -B / 2, 0, B / 2);
   grad.addColorStop(0, '#8f6840');
@@ -1807,6 +1823,111 @@ function tekenRompDetail(ctx, L, B, poorten) {
       ctx.lineWidth = 0.5;
       ctx.strokeRect(px - 1.2, -B / 2 + 0.5, 2.4, 1.8);
       ctx.strokeRect(px - 1.2, B / 2 - 2.3, 2.4, 1.8);
+      // De loop die uit de poort steekt. Een open poort zonder stuk erin is een
+      // gat; met een loop erin zie je waar de breedzijde vandaan komt. Kort en
+      // in hout gehouden: zwarte staven van anderhalve eenheid maakten van de
+      // poortenrij een kam, en de koperen randjes zijn al opvallend genoeg.
+      ctx.fillStyle = '#2b1f12';
+      ctx.fillRect(px - 0.3, -B / 2 - 0.5, 0.6, 1.0);
+      ctx.fillRect(px - 0.3, B / 2 - 0.5, 0.6, 1.0);
+    }
+  }
+
+  // --- Dekwerk --------------------------------------------------------------
+  // Alles hieronder hangt uitsluitend van het scheepstype af, dus het hoort in
+  // de sprite en niet in de tekenlus. Dat is precies waarom het er nu ís: per
+  // beeld zou dit niet te betalen zijn, één keer gebakken kost het niets.
+
+  // Eén luik met roosterwerk, midscheeps. Twee bleken er één te veel: samen met
+  // het staande want stond het dek vol ruitjes en las het als een stapel kratten.
+  for (const [lx, lw] of [[-L * 0.04, L * 0.09]]) {
+    const lh = B * 0.17;
+    ctx.fillStyle = '#5a3f22';
+    ctx.fillRect(lx - lw / 2, -lh / 2, lw, lh);
+    ctx.strokeStyle = 'rgba(28,18,10,0.5)';
+    ctx.lineWidth = 0.3;
+    for (let i = 1; i < 3; i++) {
+      const gx = lx - lw / 2 + (i * lw) / 3;
+      ctx.beginPath();
+      ctx.moveTo(gx, -lh / 2);
+      ctx.lineTo(gx, lh / 2);
+      ctx.stroke();
+    }
+    for (let i = 1; i < 3; i++) {
+      const gy = -lh / 2 + (i * lh) / 3;
+      ctx.beginPath();
+      ctx.moveTo(lx - lw / 2, gy);
+      ctx.lineTo(lx + lw / 2, gy);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(210,180,130,0.22)';
+    ctx.lineWidth = 0.35;
+    ctx.strokeRect(lx - lw / 2, -lh / 2, lw, lh);
+  }
+
+  // De sloep, ondersteboven op het dek gesjord tussen de masten.
+  if (L > 26) {
+    ctx.fillStyle = '#6d4c29';
+    ctx.beginPath();
+    ctx.ellipse(-L * 0.16, 0, L * 0.08, B * 0.11, 0, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(32,22,12,0.55)';
+    ctx.lineWidth = 0.4;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-L * 0.24, 0);
+    ctx.lineTo(-L * 0.08, 0);
+    ctx.stroke();
+  }
+
+  // Betings vóór de mast, waar het lopend want op wordt belegd.
+  ctx.fillStyle = '#3a2a18';
+  for (const bx of [L * 0.26, -L * 0.3]) {
+    ctx.beginPath();
+    ctx.arc(bx, -B * 0.12, 0.5, 0, TAU);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(bx, B * 0.12, 0.5, 0, TAU);
+    ctx.fill();
+  }
+
+  // --- Staand want ----------------------------------------------------------
+  // Dit stond in de tekenlus en verscheen alleen mét zeil. Staand want blijft
+  // juist staan als de zeilen gegeid zijn — het houdt de mast overeind. Nu in
+  // de sprite, en meteen als echt want: hoofdtouwen van de mast naar de
+  // rusten, met weeflijnen ertussen.
+  const mastX = [];
+  for (let m = 0; m < masten; m++) {
+    mastX.push(masten === 1 ? L * 0.32 : lerp(L * 0.32, -L * 0.22, m / (masten - 1)));
+  }
+  const rustY = B * 0.46;
+  ctx.strokeStyle = 'rgba(48,36,22,0.34)';
+  for (const mx of mastX) {
+    for (const zij of [-1, 1]) {
+      // Drie hoofdtouwen die naar achteren uitwaaieren, zoals een puttingwant.
+      ctx.lineWidth = 0.26;
+      for (let k = 0; k < 3; k++) {
+        const sp = (k - 1) * L * 0.032;
+        ctx.beginPath();
+        ctx.moveTo(mx, 0);
+        ctx.lineTo(mx + sp, zij * rustY);
+        ctx.stroke();
+      }
+      // Hier zaten weeflijnen — de sporten waarlangs het volk naar boven klimt.
+      // Van bovenaf maakten ze van elk want een laddertje op het dek, en met
+      // drie masten lagen er zes ladders op een schip van honderd pixels. Het
+      // want is smal en de sporten zijn korter dan een pixel: dan blijft er van
+      // touwwerk alleen ruis over. Alleen de hoofdtouwen dus.
+    }
+  }
+  // Stagen tussen de masten: de lengteverstaging van het tuig.
+  ctx.lineWidth = 0.3;
+  for (let i = 0; i < mastX.length - 1; i++) {
+    for (const zij of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(mastX[i], zij * B * 0.62);
+      ctx.lineTo(mastX[i + 1], zij * B * 0.62);
+      ctx.stroke();
     }
   }
 
@@ -1834,38 +1955,156 @@ function tekenRompDetail(ctx, L, B, poorten) {
 // Sprites per (type, poorten, resolutie). De resolutiebanden zorgen dat we
 // nooit vergroten en hooguit anderhalf keer verkleinen — dus geen wazige of
 // gerafelde rompen, of je nu uitgezoomd over de kaart kijkt of in een zeeslag
-// bovenop de vijand ligt.
-const ROMP_BANDEN = [1, 1.5, 2, 3, 4, 6, 8];
-const rompSprites = new Map();
+// bovenop de vijand ligt. De cache zelf staat in `sprite.js`; deze functie doet
+// niets anders dan de maten aanleveren.
+// Ruim een miljoen pixels: een linieschip op de hoogste zoomstand is in zijn
+// eentje al 134 duizend, dus dit houdt een compleet eskader vast zonder dat het
+// geheugen met de speelduur meegroeit.
+const rompBakkerij = maakBakkerij('rompen', 1.2e6);
 
 function rompSprite(typeId, poorten, dichtheid) {
-  let band = ROMP_BANDEN[ROMP_BANDEN.length - 1];
-  for (const b of ROMP_BANDEN) {
-    if (b >= dichtheid) {
-      band = b;
-      break;
+  const [L, B, masten] = scheepMaat(typeId);
+  // Ruim genoeg voor de boegspriet (tot 0,70·L) en het achterwerk.
+  return rompBakkerij.haal(`${typeId}|${poorten}`, L * 0.75, B * 0.75, bandVoor(dichtheid), (g) =>
+    tekenRompDetail(g, L, B, poorten, masten)
+  );
+}
+
+/**
+ * Eén razeil met zijn ra, gezien van boven, met de mast in de oorsprong.
+ *
+ * Alles hier staat vast ten opzichte van de ra. De trimhoek zit er nadrukkelijk
+ * níet in: het zeil draait als geheel mee, en juist daardoor hoeft de hoek niet
+ * in de cachesleutel. Zonder die eigenschap zou elke graad wind een eigen sprite
+ * vragen en was bakken zinloos.
+ */
+function tekenZeil(ctx, zl, zb, tuigage, m) {
+  // Zeil met een warme schaduw naar de ra en een lichte buik op de lij.
+  const zg = ctx.createLinearGradient(0, -zb, 0, zb);
+  zg.addColorStop(0, '#e8dfc4');
+  zg.addColorStop(0.45, '#f7f2e0');
+  zg.addColorStop(0.9, '#e3d8b8');
+  zg.addColorStop(1, '#cfc3a6');
+  ctx.fillStyle = zg;
+  ctx.strokeStyle = 'rgba(90,75,50,0.55)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  // Bol staand zeil: de buik staat naar lij.
+  ctx.moveTo(-zl * 0.25, -zb);
+  ctx.quadraticCurveTo(zl * 1.25, 0, -zl * 0.25, zb);
+  ctx.quadraticCurveTo(zl * 0.12, 0, -zl * 0.25, -zb);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.save();
+  ctx.clip();
+  // Schaduw in de holte van het zeil: het doek staat bol, dus vlak achter de ra
+  // valt minder licht dan op de buik. Dit is wat een zeil van een vlak vlekje
+  // onderscheidt.
+  const holte = ctx.createLinearGradient(-zl * 0.25, 0, zl * 0.5, 0);
+  holte.addColorStop(0, 'rgba(96,78,50,0.34)');
+  holte.addColorStop(0.55, 'rgba(120,100,66,0.04)');
+  holte.addColorStop(1, 'rgba(255,248,224,0.22)');
+  ctx.fillStyle = holte;
+  ctx.fillRect(-zl, -zb - 2, zl * 2, zb * 2 + 4);
+
+  // Bloem-/panellijnen: verticale baanstiksels en een bonnet-zoom onderaan.
+  ctx.strokeStyle = 'rgba(120,95,62,0.28)';
+  ctx.lineWidth = 0.45;
+  for (let p = 0; p < 3; p++) {
+    const sx = -zl * 0.18 + p * zl * 0.42;
+    ctx.beginPath();
+    ctx.moveTo(sx, -zb + 1);
+    ctx.quadraticCurveTo(sx + zl * 0.18, 0, sx, zb - 1);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(120,95,62,0.42)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(-zl * 0.22, zb - 1);
+  ctx.quadraticCurveTo(zl * 0.55, zb - 1.5, -zl * 0.05, zb - 1);
+  ctx.stroke();
+  // Bug: de ra-lijn met de reefpunten.
+  ctx.strokeStyle = 'rgba(90,75,50,0.4)';
+  ctx.lineWidth = 0.5;
+  for (let r = 1; r < 5; r++) {
+    const ry = -zb + r * ((zb * 2) / 5);
+    ctx.beginPath();
+    ctx.moveTo(-zl * 0.2, ry);
+    ctx.quadraticCurveTo(zl * 0.55, ry * 0.9, -zl * 0.05, ry);
+    ctx.stroke();
+  }
+  // Reefbanden: de dubbel genaaide stroken waar het zeil ingekort wordt.
+  ctx.fillStyle = 'rgba(150,126,86,0.18)';
+  for (const rb of [0.42, 0.68]) {
+    ctx.fillRect(-zl * 0.25, -zb + zb * 2 * rb, zl * 0.9, zb * 0.05);
+  }
+  ctx.restore();
+
+  // Gescheurde zeilen bij lage tuigage. Hoort binnen de sprite: hij hangt van de
+  // tuigage af, en die staat in de sleutel.
+  if (tuigage < 0.82) {
+    const gatAlfa = (0.82 - tuigage) * 1.6;
+    ctx.fillStyle = `rgba(4,20,36,${0.5 * gatAlfa})`;
+    const gn = 2 + Math.floor((1 - tuigage) * 5);
+    for (let g = 0; g < gn; g++) {
+      const gx = -zl * 0.2 + (((g * 37 + m * 11) % 60) / 60) * zl * 0.7;
+      const gy = -zb + (((g * 29 + m * 17) % 70) / 70) * zb * 1.6;
+      ctx.beginPath();
+      ctx.ellipse(gx, gy, 1.4, 1.8, 0, 0, TAU);
+      ctx.fill();
     }
   }
-  const sleutel = `${typeId}|${poorten}|${band}`;
-  let sp = rompSprites.get(sleutel);
-  if (sp) return sp;
 
+  // Ra.
+  ctx.strokeStyle = '#3a2a18';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(0, -zb - 2);
+  ctx.lineTo(0, zb + 2);
+  ctx.stroke();
+  // Raar (dwars).
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(-zl * 0.4, -zb);
+  ctx.lineTo(zl * 0.15, -zb);
+  ctx.moveTo(-zl * 0.4, zb);
+  ctx.lineTo(zl * 0.15, zb);
+  ctx.stroke();
+  // Toppenanten: de lijnen van de nokken naar de masttop, die de ra ophangen.
+  ctx.strokeStyle = 'rgba(48,36,22,0.5)';
+  ctx.lineWidth = 0.3;
+  ctx.beginPath();
+  ctx.moveTo(-zl * 0.34, -zb);
+  ctx.lineTo(0, -zb * 0.16);
+  ctx.moveTo(-zl * 0.34, zb);
+  ctx.lineTo(0, zb * 0.16);
+  ctx.stroke();
+}
+
+// Zeilen per (type, zeilstand, tuigage, mast). De stappen zijn grof genoeg dat
+// een schip er hooguit een handvol van vult, en fijn genoeg dat je het zeil ziet
+// bijzetten in plaats van springen.
+const ZEIL_STAPPEN = 12;
+const TUIG_STAPPEN = 8;
+const zeilBakkerij = maakBakkerij('zeilen', 1.2e6);
+
+function zeilSprite(typeId, grootte, tuigage, m, dichtheid) {
   const [L, B] = scheepMaat(typeId);
-  // Ruim genoeg voor de boegspriet (tot 0,70·L) en het achterwerk.
-  const halfL = L * 0.75;
-  const halfB = B * 0.75;
-  const w = Math.max(1, Math.ceil(halfL * 2 * band));
-  const h = Math.max(1, Math.ceil(halfB * 2 * band));
-  const c = offscreen(w, h);
-  const g = c.getContext('2d');
-  g.setTransform(band, 0, 0, band, halfL * band, halfB * band);
-  g.lineJoin = 'round';
-  tekenRompDetail(g, L, B, poorten);
-
-  sp = { canvas: c, ox: -halfL, oy: -halfB, w: halfL * 2, h: halfB * 2 };
-  if (rompSprites.size > 160) rompSprites.clear();
-  rompSprites.set(sleutel, sp);
-  return sp;
+  const gQ = Math.max(1, Math.round(grootte * ZEIL_STAPPEN)) / ZEIL_STAPPEN;
+  const tQ = Math.round(tuigage * TUIG_STAPPEN) / TUIG_STAPPEN;
+  const zb = B * 1.7 * gQ;
+  const zl = L * 0.34 * gQ;
+  // De buik reikt tot ongeveer een halve `zl` naar lij, de raar tot 0,4 naar
+  // loef; het vak is symmetrisch om de mast, dus de ruimste van de twee telt.
+  return zeilBakkerij.haal(
+    `${typeId}|${gQ}|${tQ}|${m}`,
+    zl * 0.6 + 3,
+    zb + 4,
+    bandVoor(dichtheid),
+    (g) => tekenZeil(g, zl, zb, tQ, m)
+  );
 }
 
 /**
@@ -2011,7 +2250,7 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
 
   // Romp met al het vaste houtwerk, uit de sprite.
   const sp = rompSprite(typeId, poorten, dichtheid);
-  ctx.drawImage(sp.canvas, sp.ox, sp.oy, sp.w, sp.h);
+  plaats(ctx, sp);
 
   // Onderwater-silhouet: een vage donkere romp die onder het vlak steekt en
   // het water een beetje 'diep' maakt. Dichter bij de kust wordt hij lichter,
@@ -2033,75 +2272,21 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
     for (let m = 0; m < masten; m++) {
       const px = lerp(L * 0.32, -L * 0.22, masten === 1 ? 0 : m / (masten - 1));
       const grootte = (m === 1 || masten === 1 ? 1 : 0.82) * zeilen;
-      ctx.save();
-      ctx.translate(px, 0);
-      ctx.rotate(trim);
-      // Zeil met een warme schaduw naar de ra en een lichte buik op de lij.
-      const zb = B * 1.7 * grootte;
-      const zl = L * 0.34 * grootte;
-      const zg = ctx.createLinearGradient(0, -zb, 0, zb);
-      zg.addColorStop(0, '#e8dfc4');
-      zg.addColorStop(0.45, '#f7f2e0');
-      zg.addColorStop(0.9, '#e3d8b8');
-      zg.addColorStop(1, '#cfc3a6');
-      ctx.fillStyle = zg;
-      ctx.strokeStyle = 'rgba(90,75,50,0.55)';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      // Bol staand zeil: de buik staat naar lij.
-      ctx.moveTo(-zl * 0.25, -zb);
-      ctx.quadraticCurveTo(zl * 1.25, 0, -zl * 0.25, zb);
-      ctx.quadraticCurveTo(zl * 0.12, 0, -zl * 0.25, -zb);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      // Bloem-/panellijnen: verticale baanstiksels en een bonnet-zoom onderaan.
-      ctx.save();
-      ctx.clip();
-      ctx.strokeStyle = 'rgba(120,95,62,0.28)';
-      ctx.lineWidth = 0.45;
-      for (let p = 0; p < 3; p++) {
-        const sx = -zl * 0.18 + p * zl * 0.42;
-        ctx.beginPath();
-        ctx.moveTo(sx, -zb + 1);
-        ctx.quadraticCurveTo(sx + zl * 0.18, 0, sx, zb - 1);
-        ctx.stroke();
+      if (grootte > 0.02) {
+        // Het zeil is een star geheel dat als eenheid met de ra meedraait — de
+        // vorm hangt niet van de trimhoek af, alleen de draaiing. Daarom kan het
+        // gebakken worden zonder de trim in de sleutel op te nemen; dat scheelt
+        // een cache met tientallen hoekstanden per scheepstype.
+        ctx.save();
+        ctx.translate(px, 0);
+        ctx.rotate(trim);
+        plaats(ctx, zeilSprite(typeId, grootte, tuigage, m, dichtheid));
+        ctx.restore();
       }
-      ctx.strokeStyle = 'rgba(120,95,62,0.42)';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(-zl * 0.22, zb - 1);
-      ctx.quadraticCurveTo(zl * 0.55, zb - 1.5, -zl * 0.05, zb - 1);
-      ctx.stroke();
-      // Bug: de ra-lijn met de reefpunten.
-      ctx.strokeStyle = 'rgba(90,75,50,0.4)';
-      ctx.lineWidth = 0.5;
-      for (let r = 1; r < 5; r++) {
-        const ry = -zb + r * ((zb * 2) / 5);
-        ctx.beginPath();
-        ctx.moveTo(-zl * 0.2, ry);
-        ctx.quadraticCurveTo(zl * 0.55, ry * 0.9, -zl * 0.05, ry);
-        ctx.stroke();
-      }
-      ctx.restore();
-      // Ra.
-      ctx.strokeStyle = '#3a2a18';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(0, -zb - 2);
-      ctx.lineTo(0, zb + 2);
-      ctx.stroke();
-      // Raar (dwars).
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(-zl * 0.4, -zb);
-      ctx.lineTo(zl * 0.15, -zb);
-      ctx.moveTo(-zl * 0.4, zb);
-      ctx.lineTo(zl * 0.15, zb);
-      ctx.stroke();
-      ctx.restore();
+
       // Mast met mars (het ronde platform, van bovenaf een schijfje om de mast).
-      // Bij lage tuigage kantelt de mast zichtbaar — los touwwerk, schade.
+      // Blijft levend: bij lage tuigage kantelt de mast zichtbaar, en die hoek
+      // loopt door met de schade.
       const kantel = (1 - tuigage) * 0.18 * (m % 2 ? -1 : 1);
       ctx.save();
       ctx.translate(px, 0);
@@ -2124,48 +2309,6 @@ export function tekenSchip(ctx, x, y, koers, typeId, natieId, windRichting, opts
         ctx.stroke();
       }
       ctx.restore();
-
-      // Blokkade: gescheurde zeilen bij lage tuigage.
-      if (tuigage < 0.82) {
-        ctx.save();
-        ctx.translate(px, 0);
-        ctx.rotate(trim);
-        const gatAlfa = (0.82 - tuigage) * 1.6;
-        ctx.fillStyle = `rgba(4,20,36,${0.5 * gatAlfa})`;
-        const gn = 2 + Math.floor((1 - tuigage) * 5);
-        for (let g = 0; g < gn; g++) {
-          const gx = -zl * 0.2 + ((g * 37 + m * 11) % 60) / 60 * zl * 0.7;
-          const gy = -zb + ((g * 29 + m * 17) % 70) / 70 * zb * 1.6;
-          ctx.beginPath();
-          ctx.ellipse(gx, gy, 1.4, 1.8, 0, 0, TAU);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-    }
-
-    // Wanten / tuigage tussen masten.
-    if (masten > 1) {
-      ctx.strokeStyle = 'rgba(60,45,30,0.35)';
-      ctx.lineWidth = 0.4;
-      const mastX = [];
-      for (let m = 0; m < masten; m++) {
-        mastX.push(lerp(L * 0.32, -L * 0.22, m / (masten - 1)));
-      }
-      // Tuigage staat vast aan de romp: de offset hangt niet van de zeilstand af.
-      const wy = B * 0.62;
-      for (let i = 0; i < mastX.length - 1; i++) {
-        const x1 = mastX[i],
-          x2 = mastX[i + 1];
-        ctx.beginPath();
-        ctx.moveTo(x1, -wy);
-        ctx.lineTo(x2, -wy);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(x1, wy);
-        ctx.lineTo(x2, wy);
-        ctx.stroke();
-      }
     }
   }
 
@@ -2274,17 +2417,62 @@ function roundRechthoek(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-/** Eén huisje: gevel, dak aan de schaduwzijde en een deur. */
-function tekenHuis(ctx, x, y, w, h, stijl) {
+/**
+ * Eén huisje: gevel, dak aan de schaduwzijde en een deur.
+ *
+ * Het dak krijgt een nok met een lichte en een donkere helft, en op de grotere
+ * panden een paar panlagen. Dat kost hier niets — dit hele huis wordt één keer
+ * in de stadssprite gebakken — en het is op de maat van een haven precies genoeg
+ * om een dak als dak te lezen in plaats van als een driehoekje kleur.
+ */
+function tekenHuis(ctx, x, y, w, h, stijl, pannen = false) {
+  const nok = y - h / 2 - h * 0.42;
   ctx.fillStyle = stijl.gevel;
   ctx.fillRect(x - w / 2, y - h / 2, w, h);
+  // Gevelschaduw aan de zijde waar de zon niet komt.
+  ctx.fillStyle = 'rgba(40,28,16,0.16)';
+  ctx.fillRect(x + w * 0.22, y - h / 2, w * 0.28, h);
+
+  // Dak in twee helften om de nok, zodat er licht op valt.
   ctx.fillStyle = stijl.dak;
   ctx.beginPath();
   ctx.moveTo(x - w / 2 - 0.5, y - h / 2);
-  ctx.lineTo(x, y - h / 2 - h * 0.42);
+  ctx.lineTo(x, nok);
   ctx.lineTo(x + w / 2 + 0.5, y - h / 2);
   ctx.closePath();
   ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.beginPath();
+  ctx.moveTo(x, nok);
+  ctx.lineTo(x + w / 2 + 0.5, y - h / 2);
+  ctx.lineTo(x, y - h / 2);
+  ctx.closePath();
+  ctx.fill();
+
+  if (pannen) {
+    // Panlagen evenwijdig aan de nok. Drie is genoeg: meer wordt op deze maat
+    // een grijze waas in plaats van een dak.
+    ctx.strokeStyle = 'rgba(30,18,10,0.28)';
+    ctx.lineWidth = 0.35;
+    for (let i = 1; i <= 3; i++) {
+      const t = i / 4;
+      const yy = lerp(nok, y - h / 2, t);
+      const halfW = (w / 2 + 0.5) * t;
+      ctx.beginPath();
+      ctx.moveTo(x - halfW, yy);
+      ctx.lineTo(x + halfW, yy);
+      ctx.stroke();
+    }
+  }
+
+  // Noklijn met een lichtvanger erop.
+  ctx.strokeStyle = 'rgba(255,236,196,0.4)';
+  ctx.lineWidth = 0.4;
+  ctx.beginPath();
+  ctx.moveTo(x - w * 0.4, nok + h * 0.06);
+  ctx.lineTo(x + w * 0.4, nok + h * 0.06);
+  ctx.stroke();
+
   ctx.fillStyle = 'rgba(40,28,16,0.72)';
   ctx.fillRect(x - w * 0.11, y, w * 0.22, h * 0.5);
 }
@@ -2305,155 +2493,352 @@ function bastionPad(r, punten) {
 }
 
 /**
- * Een nederzetting van boven.
+ * Vaste maten van een nederzetting.
  *
- * De oude opzet zette de huisjes in een ring rond het middelpunt; zo ligt geen
- * enkele echte stad erbij. Hier loopt er een straat van het achterland naar het
- * water — de richting waarin de stad ook daadwerkelijk haar rede heeft — met de
- * bebouwing eraan, de kerk aan het landeinde en het bastion bij de haven. Wie
- * de kade ziet liggen, weet meteen waar hij moet aanleggen.
+ * Het gebakken lijf en de wapperende vlag moeten het eens zijn over de plek van
+ * de mast, en die volgt uit het bastion. Eén helper dus, in plaats van dezelfde
+ * som op twee plekken.
  */
-export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
-  const natie = NATIES[stad.natie];
-  const stijl = STAD_STIJL[stad.natie] || STAD_STIJL.piraat;
-  // Dezelfde schaal als de schepen: een haven hoort groter te zijn dan de sloep
-  // die eraan ligt, en dat blijft alleen kloppen als beide uit één formule komen.
-  const s = wereldSchaal(cam.zoom);
-  const st = sierTijd(tijd);
-  const rng = makeRng((stad.id * 2246822519) >>> 0);
-
+function stadMaten(stad) {
   const r = 7 + stad.grootte * 2.4;
   const heeftFort = stad.soort === 'fort' || stad.soort === 'schatkamer' || stad.grootte >= 3;
   const heeftKerk = stad.grootte >= 4;
   const ommuurd = stad.soort === 'fort' || stad.soort === 'schatkamer';
-  // De straat wijst naar de rede. Alles hieronder is in die gedraaide ruimte:
-  // +x is zeewaarts, -x het achterland.
+  // De straat wijst naar de rede. Alles in het lijf staat in die gedraaide
+  // ruimte: +x is zeewaarts, -x het achterland.
   const naarZee =
     stad.ankerX == null ? 0 : Math.atan2(stad.ankerY - stad.y, stad.ankerX - stad.x);
+  const voetX = heeftFort ? r * 0.5 : 0;
+  const voetY = heeftFort ? -r * 0.52 : -r * 0.2;
+  const mastHoog = heeftFort ? r * 0.85 : r * 1.4;
+  // De vlag hangt rechtop in beeld en niet scheef mee met de kade, dus de voet
+  // van de mast wordt teruggerekend naar de ongedraaide ruimte.
+  const mx = Math.cos(naarZee) * voetX - Math.sin(naarZee) * voetY;
+  const my = Math.sin(naarZee) * voetX + Math.cos(naarZee) * voetY;
+  return { r, heeftFort, heeftKerk, ommuurd, naarZee, mx, my, mastTop: my - mastHoog };
+}
 
-  ctx.save();
-  ctx.translate(stad.x, stad.y);
-  ctx.scale(s, s);
+/**
+ * De bebouwing, in de ruimte waarin +x zeewaarts wijst.
+ *
+ * Deterministisch uit de stad-id, want een opslag bewaart alleen het zaad: na
+ * herladen moet dezelfde haven er tot de laatste hut hetzelfde bij liggen.
+ */
+function stadGebouwen(stad, r) {
+  const rng = makeRng((stad.id * 2246822519) >>> 0);
+  const uit = [];
 
-  // Slagschaduw en het ontgonnen grondvlak, licht onregelmatig zodat het geen
-  // getekende ellips is.
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  ctx.beginPath();
-  ctx.ellipse(1.5, 2, r * 1.05, r * 0.8, 0, 0, TAU);
-  ctx.fill();
-  ctx.fillStyle = '#cbb079';
-  ctx.beginPath();
-  for (let i = 0; i <= 20; i++) {
-    const a = (i / 20) * TAU;
-    const rr = r * (0.92 + 0.16 * Math.sin(a * 3 + stad.id));
-    const x = Math.cos(a) * rr,
-      y = Math.sin(a) * rr * 0.78;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.save();
-  ctx.rotate(naarZee);
-
-  // De kade: twee balken met dwarsliggers, en er ligt altijd wat aangemeerd.
-  const kade = r * (1.1 + stad.grootte * 0.07);
-  ctx.strokeStyle = '#7a5c34';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(r * 0.5, -r * 0.16);
-  ctx.lineTo(kade, -r * 0.16);
-  ctx.moveTo(r * 0.5, r * 0.16);
-  ctx.lineTo(kade, r * 0.16);
-  ctx.stroke();
-  ctx.lineWidth = 0.8;
-  for (let i = 0; i < 4; i++) {
-    const px = lerp(r * 0.6, kade, i / 3);
-    ctx.beginPath();
-    ctx.moveTo(px, -r * 0.2);
-    ctx.lineTo(px, r * 0.2);
-    ctx.stroke();
-  }
-  for (let i = 0; i < 2; i++) {
-    const px = lerp(r * 0.75, kade * 0.95, rng());
-    const py = (i ? 1 : -1) * r * 0.34;
-    ctx.fillStyle = '#5c4324';
-    ctx.beginPath();
-    ctx.ellipse(px, py, r * 0.16, r * 0.06, rng() * 0.6 - 0.3, 0, TAU);
-    ctx.fill();
-  }
-
-  // De straat van het achterland naar de kade.
-  ctx.strokeStyle = 'rgba(150,126,80,0.8)';
-  ctx.lineWidth = r * 0.16;
-  ctx.beginPath();
-  ctx.moveTo(-r * 0.85, 0);
-  ctx.lineTo(r * 0.55, 0);
-  ctx.stroke();
-
-  // De bebouwing: twee rijen langs de straat. Kleine plaatsen krijgen een losse
-  // hand vol hutten, grote een dicht opeengepakte rij.
+  // Hoofdstraat: twee rijen, van het achterland tot vlak voor de kade.
   const n = 3 + stad.grootte * 2;
   for (let i = 0; i < n; i++) {
     const zijde = i % 2 ? 1 : -1;
     const t = Math.floor(i / 2) / Math.max(1, Math.ceil(n / 2) - 1);
-    const hx = lerp(-r * 0.72, r * 0.42, t) + (rng() - 0.5) * r * 0.12;
-    const hy = zijde * (r * 0.3 + rng() * r * 0.22);
-    const bw = r * (0.2 + rng() * 0.12);
-    const bh = r * (0.16 + rng() * 0.1);
-    tekenHuis(ctx, hx, hy, bw, bh, stijl);
+    uit.push({
+      x: lerp(-r * 0.72, r * 0.42, t) + (rng() - 0.5) * r * 0.12,
+      y: zijde * (r * 0.3 + rng() * r * 0.22),
+      w: r * (0.2 + rng() * 0.12),
+      h: r * (0.16 + rng() * 0.1),
+      pannen: false,
+    });
   }
 
-  // Kerk aan het landeinde van de straat, met de toren van de eigen natie.
+  // Achterstraatje. Pas vanaf een plaats van formaat, en landinwaarts: een
+  // haven groeit van het water af, niet het water in.
+  if (stad.grootte >= 3) {
+    const m = stad.grootte - 1;
+    for (let i = 0; i < m; i++) {
+      const zijde = i % 2 ? 1 : -1;
+      uit.push({
+        x: lerp(-r * 0.6, r * 0.02, m === 1 ? 0.5 : i / (m - 1)) + (rng() - 0.5) * r * 0.1,
+        y: zijde * (r * 0.64 + rng() * r * 0.14),
+        w: r * (0.17 + rng() * 0.09),
+        h: r * (0.14 + rng() * 0.07),
+        pannen: false,
+      });
+    }
+  }
+
+  // Pakhuizen aan de kade: breder dan de woonhuizen, en groot genoeg om er
+  // panlagen op te zetten.
+  if (stad.grootte >= 2) {
+    for (let i = 0; i < 2; i++) {
+      uit.push({
+        x: r * (0.46 + rng() * 0.14),
+        y: (i ? 1 : -1) * (r * 0.36 + rng() * r * 0.1),
+        w: r * (0.27 + rng() * 0.1),
+        h: r * (0.19 + rng() * 0.05),
+        pannen: true,
+      });
+    }
+  }
+
+  return uit;
+}
+
+/** Afgeronde rechthoek als deelpad. */
+function rondInPad(pad, x, y, w, h, straal) {
+  const rr = Math.min(straal, w / 2, h / 2);
+  pad.moveTo(x + rr, y);
+  pad.arcTo(x + w, y, x + w, y + h, rr);
+  pad.arcTo(x + w, y + h, x, y + h, rr);
+  pad.arcTo(x, y + h, x, y, rr);
+  pad.arcTo(x, y, x + w, y, rr);
+  pad.closePath();
+}
+
+/**
+ * Het ontgonnen grondvlak van een nederzetting.
+ *
+ * Dit was een wiebelende ellips, en daarmee lag elke plaats van Havana tot het
+ * kleinste roversnest er als hetzelfde ronde vlekje bij. De omtrek volgt nu de
+ * bebouwing zélf.
+ *
+ * Niet als losse erven om ieder pand: dat werd een tros zeepbellen met schulpen
+ * op elke naad. In plaats daarvan meten we per richting hoe ver de verste
+ * bebouwing reikt — de steunfunctie van de panden — en leggen daar een gladde
+ * rand omheen. Het resultaat is één samenhangende vorm die vanzelf langgerekt
+ * is waar de straat loopt en breed waar de huizen staan: voor elke haven een
+ * ander silhouet, en telkens een silhouet dat klopt.
+ *
+ * De vloeigangen zijn nodig omdat de hoeken van rechthoekige panden anders als
+ * knikken in de rand blijven staan; de golf erna zorgt dat de omtrek er
+ * gegroeid uitziet in plaats van uitgesneden.
+ */
+function stadOmtrekPad(gebouwen, extra, r, marge, wiebel) {
+  const N = 48;
+  const straal = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * TAU;
+    const ca = Math.cos(a),
+      sa = Math.sin(a);
+    let m = r * 0.3; // de kern is altijd geruimd, ook zonder pand in die hoek
+    for (const g of gebouwen) {
+      const steun = g.x * ca + g.y * sa + Math.abs((g.w / 2) * ca) + Math.abs((g.h / 2) * sa);
+      if (steun > m) m = steun;
+    }
+    for (const g of extra) {
+      const steun = g.x * ca + g.y * sa + Math.abs((g.w / 2) * ca) + Math.abs((g.h / 2) * sa);
+      if (steun > m) m = steun;
+    }
+    straal[i] = m + marge;
+  }
+  for (let gang = 0; gang < 2; gang++) {
+    const kopie = Float64Array.from(straal);
+    for (let i = 0; i < N; i++) {
+      straal[i] = (kopie[(i - 1 + N) % N] + 2 * kopie[i] + kopie[(i + 1) % N]) / 4;
+    }
+  }
+
+  const px = new Float64Array(N),
+    py = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * TAU;
+    const rr =
+      straal[i] * (1 + 0.055 * Math.sin(a * 3 + wiebel) + 0.032 * Math.sin(a * 7 - wiebel * 1.7));
+    px[i] = Math.cos(a) * rr;
+    py[i] = Math.sin(a) * rr;
+  }
+  // Door de middens van de zijden, met de hoekpunten als stuurpunt: dat maakt
+  // van een hoekige veelhoek een vloeiende rand zonder extra bemonstering.
+  const pad = new Path2D();
+  pad.moveTo((px[N - 1] + px[0]) / 2, (py[N - 1] + py[0]) / 2);
+  for (let i = 0; i < N; i++) {
+    const j = (i + 1) % N;
+    pad.quadraticCurveTo(px[i], py[i], (px[i] + px[j]) / 2, (py[i] + py[j]) / 2);
+  }
+  pad.closePath();
+  return pad;
+}
+
+/**
+ * Alles aan een nederzetting dat vastligt: grondvlak, kade, straat, plein,
+ * bebouwing, kerk, bastion en wal.
+ *
+ * Wordt één keer per (stad, natie, resolutie) in een sprite gebakken, dus alles
+ * hier is gratis in het beeld. Dat is precies waarom er panlagen, erfschaduwen
+ * en een havenhoofd in passen die per beeld niet te betalen zouden zijn.
+ */
+function tekenStadLijf(ctx, stad, stijl) {
+  const { r, heeftFort, heeftKerk, ommuurd, naarZee } = stadMaten(stad);
+  const rng = makeRng((stad.id * 1274126177) >>> 0);
+  const kade = r * (1.1 + stad.grootte * 0.07);
+  const gebouwen = stadGebouwen(stad, r);
+  // De kerk staat buiten de rooilijn en moet het grondvlak meetrekken, anders
+  // steekt hij aan het landeinde het groen in.
+  const extra = heeftKerk ? [{ x: -r * 0.94, y: 0, w: r * 0.5, h: r * 0.36 }] : [];
+  const grond = stadOmtrekPad(gebouwen, extra, r, r * 0.2, stad.id * 1.7);
+
+  // De zon staat vast boven de wereld, niet boven de stad. Binnen deze gedraaide
+  // ruimte moet zijn richting dus terugdraaien, anders wijst de schaduw van een
+  // haven op een zuidkust de andere kant op dan die van een haven op een oostkust.
+  const cz = Math.cos(-naarZee),
+    sz = Math.sin(-naarZee);
+  const zonX = ZON_X * cz - ZON_Y * sz;
+  const zonY = ZON_X * sz + ZON_Y * cz;
+
+  ctx.save();
+  ctx.rotate(naarZee);
+
+  // Slagschaduw van het hele stadsvlak, en daaronder het geruimde land.
+  ctx.save();
+  ctx.translate(zonX * 0.55, zonY * 0.55);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fill(grond);
+  ctx.restore();
+  ctx.fillStyle = '#cbb079';
+  ctx.fill(grond);
+  ctx.strokeStyle = 'rgba(116,92,52,0.45)';
+  ctx.lineWidth = 0.7;
+  ctx.stroke(grond);
+
+  // Havenhoofd: een gemetselde arm die de rede uit de zeegang houdt. Alleen
+  // waar genoeg schepen liggen om hem te rechtvaardigen. Als gevulde vorm, want
+  // een lijn met ronde koppen leest op deze maat als een handvat.
+  // Hier stond een havenhoofd. Het is er weer uit: in elke variant — als lijn,
+  // als gevulde arm, aan weerszijden van de kade — bleef het lezen als een
+  // grijze staart aan het bastion of aan de steiger. Een detail dat op de
+  // speelmaat onzichtbaar is en op de maximale maat verwarring sticht, verdient
+  // geen plek, hoe goedkoop het gebakken ook is.
+
+  // De kade: een houten dek op palen, met wat aangemeerd. Twee rails met
+  // dwarsliggers werd op deze maat een ladder; een dek leest meteen als steiger.
+  const kadeVoet = r * 0.86;
+  ctx.fillStyle = '#8a6839';
+  ctx.beginPath();
+  ctx.rect(kadeVoet, -r * 0.17, kade - kadeVoet, r * 0.34);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(48,34,16,0.55)';
+  ctx.lineWidth = 0.45;
+  ctx.stroke();
+  // Plankennaden in de lengte, en de koppen van de palen langs de rand.
+  ctx.strokeStyle = 'rgba(58,42,22,0.3)';
+  ctx.lineWidth = 0.3;
+  for (const zij of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(kadeVoet + r * 0.03, zij * r * 0.06);
+    ctx.lineTo(kade - r * 0.02, zij * r * 0.06);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#5c4324';
+  for (let i = 0; i < 3; i++) {
+    const px = lerp(kadeVoet + r * 0.08, kade - r * 0.05, i / 2);
+    for (const zij of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(px, zij * r * 0.155, r * 0.026, 0, TAU);
+      ctx.fill();
+    }
+  }
+  // Twee sloepen langszij.
+  for (let i = 0; i < 2; i++) {
+    const px = lerp(kadeVoet + r * 0.1, kade * 0.94, rng());
+    const py = (i ? 1 : -1) * r * 0.29;
+    ctx.fillStyle = '#5c4324';
+    ctx.beginPath();
+    ctx.ellipse(px, py, r * 0.13, r * 0.05, rng() * 0.4 - 0.2, 0, TAU);
+    ctx.fill();
+  }
+
+  // De straat van het achterland naar de kade: aangestampte aarde, dus donkerder
+  // dan het geruimde land eromheen en niet lichter — als lichte baan las hij als
+  // een plank die over de stad heen lag.
+  // Taps en met een flauwe bocht: een rechte balk van gelijke dikte leest als
+  // een plank die over de stad heen ligt, niet als een weg die naar de kade
+  // loopt. Breed bij het water, smal het achterland in.
+  const weg = new Path2D();
+  weg.moveTo(-r * 0.72, -r * 0.028);
+  weg.quadraticCurveTo(-r * 0.1, -r * 0.075, kadeVoet, -r * 0.062);
+  weg.lineTo(kadeVoet, r * 0.062);
+  weg.quadraticCurveTo(-r * 0.1, r * 0.03, -r * 0.72, r * 0.028);
+  weg.closePath();
+  ctx.fillStyle = 'rgba(126,99,55,0.5)';
+  ctx.fill(weg);
+
+  // Erfschaduwen van alle panden in één pad: overlappende schaduwen mogen
+  // elkaar niet donkerder maken.
+  const schaduw = new Path2D();
+  for (const g of gebouwen) {
+    rondInPad(
+      schaduw,
+      g.x - g.w / 2 + zonX * 0.32,
+      g.y - g.h / 2 + zonY * 0.32,
+      g.w * 1.04,
+      g.h * 1.12,
+      r * 0.04
+    );
+  }
+  ctx.fillStyle = 'rgba(46,32,14,0.22)';
+  ctx.fill(schaduw);
+
+  for (const g of gebouwen) tekenHuis(ctx, g.x, g.y, g.w, g.h, stijl, g.pannen);
+
+  // Kerk aan het landeinde van de straat: een schip met een toren erbovenop, en
+  // de bekroning van de eigen natie op die toren. De oude opzet was één gevel
+  // met een koepel erop, en dat las van boven als een wit vlakje met een rode
+  // stip — geen kerk maar een knoop.
   if (heeftKerk && stijl.toren !== 'geen') {
-    const kx = -r * 0.92;
+    const kx = -r * 0.86;
+    tekenHuis(ctx, kx, 0, r * 0.3, r * 0.26, stijl, true);
+
+    const tx = kx - r * 0.2;
     ctx.fillStyle = stijl.gevel;
-    ctx.fillRect(kx - r * 0.16, -r * 0.2, r * 0.32, r * 0.4);
+    ctx.fillRect(tx - r * 0.085, -r * 0.105, r * 0.17, r * 0.21);
+    ctx.strokeStyle = 'rgba(40,28,16,0.45)';
+    ctx.lineWidth = 0.4;
+    ctx.strokeRect(tx - r * 0.085, -r * 0.105, r * 0.17, r * 0.21);
     ctx.fillStyle = stijl.dak;
     if (stijl.toren === 'koepel') {
+      // Een platte schijf leest als stip; met een lichtvanger aan de zonzijde
+      // en een donkere rand wordt het een koepel.
       ctx.beginPath();
-      ctx.arc(kx, -r * 0.02, r * 0.15, 0, TAU);
+      ctx.arc(tx, 0, r * 0.085, 0, TAU);
       ctx.fill();
+      ctx.fillStyle = 'rgba(255,232,190,0.45)';
+      ctx.beginPath();
+      ctx.arc(tx + LICHT_X * r * 0.03, LICHT_Y * r * 0.03, r * 0.04, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(70,40,22,0.5)';
+      ctx.lineWidth = 0.35;
+      ctx.beginPath();
+      ctx.arc(tx, 0, r * 0.085, 0, TAU);
+      ctx.stroke();
     } else if (stijl.toren === 'spits') {
       ctx.beginPath();
-      ctx.moveTo(kx - r * 0.16, -r * 0.02);
-      ctx.lineTo(kx, -r * 0.34);
-      ctx.lineTo(kx + r * 0.16, -r * 0.02);
+      ctx.moveTo(tx - r * 0.095, r * 0.05);
+      ctx.lineTo(tx, -r * 0.15);
+      ctx.lineTo(tx + r * 0.095, r * 0.05);
       ctx.closePath();
       ctx.fill();
     } else if (stijl.toren === 'trap') {
       // Trapgevel: drie treden, en daarmee is een Hollandse haven herkenbaar.
       for (let i = 0; i < 3; i++) {
-        const w = r * (0.3 - i * 0.08);
-        ctx.fillRect(kx - w / 2, -r * 0.2 - r * 0.09 * (i + 1), w, r * 0.09);
+        const w = r * (0.18 - i * 0.048);
+        ctx.fillRect(tx - w / 2, -r * 0.105 - r * 0.052 * (i + 1), w, r * 0.052);
       }
     } else {
-      ctx.fillRect(kx - r * 0.14, -r * 0.3, r * 0.28, r * 0.14);
+      ctx.fillRect(tx - r * 0.075, -r * 0.075, r * 0.15, r * 0.15);
     }
-    ctx.strokeStyle = 'rgba(40,28,16,0.6)';
-    ctx.lineWidth = 0.6;
+    // Kruis op de toren, niet erboven in de lucht.
+    ctx.strokeStyle = 'rgba(40,28,16,0.7)';
+    ctx.lineWidth = 0.45;
     ctx.beginPath();
-    ctx.moveTo(kx, -r * 0.36);
-    ctx.lineTo(kx, -r * 0.5);
-    ctx.moveTo(kx - r * 0.05, -r * 0.45);
-    ctx.lineTo(kx + r * 0.05, -r * 0.45);
+    ctx.moveTo(tx, -r * 0.15);
+    ctx.lineTo(tx, -r * 0.25);
+    ctx.moveTo(tx - r * 0.038, -r * 0.215);
+    ctx.lineTo(tx + r * 0.038, -r * 0.215);
     ctx.stroke();
   }
 
-  // Het bastion bewaakt de haveningang, dus het staat aan de zeezijde. De voet
-  // van de vlaggenmast onthouden we in deze gedraaide ruimte; hij wordt straks
-  // teruggerekend, want een vlag hangt rechtop in beeld en niet scheef mee met
-  // de kade.
-  let voetX = 0,
-    voetY = -r * 0.2,
-    mastHoog = r * 1.4;
+  // Het bastion bewaakt de haveningang, dus het staat aan de zeezijde.
   if (heeftFort) {
-    voetX = r * 0.5;
-    voetY = -r * 0.52;
     ctx.save();
-    ctx.translate(voetX, voetY);
+    ctx.translate(r * 0.5, -r * 0.52);
     const ster = bastionPad(r * 0.34, 5);
+    // Slagschaduw onder de wal: een bastion is het hoogste van de hele plaats.
+    ctx.save();
+    ctx.translate(zonX * 0.5, zonY * 0.5);
+    ctx.fillStyle = 'rgba(30,22,10,0.34)';
+    ctx.fill(ster);
+    ctx.restore();
     ctx.fillStyle = '#8d8375';
     ctx.fill(ster);
     ctx.strokeStyle = '#5f574a';
@@ -2465,15 +2850,73 @@ export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
       ctx.fillRect(r * 0.1 + i * r * 0.09, -r * 0.05, r * 0.05, r * 0.05);
     }
     ctx.restore();
-    mastHoog = r * 0.85;
+  }
+
+  // Een echte wal om de versterkte plaatsen. Hij volgt de omtrek van de stad in
+  // plaats van er als ellips omheen te liggen: een ronde muur om een langgerekte
+  // haven verraadt onmiddellijk dat de vorm getekend is en niet gegroeid.
+  if (ommuurd) {
+    ctx.strokeStyle = 'rgba(120,112,98,0.9)';
+    ctx.lineWidth = 1.6;
+    ctx.stroke(stadOmtrekPad(gebouwen, extra, r, r * 0.31, stad.id * 1.7));
+    ctx.strokeStyle = 'rgba(60,54,44,0.5)';
+    ctx.lineWidth = 0.6;
+    ctx.stroke(stadOmtrekPad(gebouwen, extra, r, r * 0.38, stad.id * 1.7));
   }
 
   ctx.restore(); // klaar met de draaiing naar zee
+}
+
+// Sprites per (stad, natie, resolutie). De natie zit in de sleutel, dus een
+// verovering vervangt de sprite vanzelf — daar is geen aparte opruiming voor
+// nodig.
+//
+// De begroting is gekozen op de zwaarste stand die werkelijk voorkomt: alle
+// vijfendertig havens tegelijk in het kaartoverzicht kost samen ruim honderdvijftig
+// duizend pixels, en de vier havens van een speelbeeld op de hoogste zoomstand
+// ongeveer driehonderdduizend. Anderhalf miljoen laat beide naast elkaar staan,
+// zodat heen en weer zoomen niets opnieuw hoeft te bakken.
+const stadBakkerij = maakBakkerij('steden', 1.5e6);
+
+function stadSprite(stad, dichtheid) {
+  const stijl = STAD_STIJL[stad.natie] || STAD_STIJL.piraat;
+  const { r } = stadMaten(stad);
+  // Ruim genoeg voor de kade, het havenhoofd en de buitenste wal.
+  const half = r * 1.75;
+  return stadBakkerij.haal(`${stad.id}|${stad.natie}`, half, half, bandVoor(dichtheid), (g) =>
+    tekenStadLijf(g, stad, stijl)
+  );
+}
+
+/**
+ * Een nederzetting van boven.
+ *
+ * De oude opzet zette de huisjes in een ring rond het middelpunt; zo ligt geen
+ * enkele echte stad erbij. Hier loopt er een straat van het achterland naar het
+ * water — de richting waarin de stad ook daadwerkelijk haar rede heeft — met de
+ * bebouwing eraan, de kerk aan het landeinde en het bastion bij de haven. Wie
+ * de kade ziet liggen, weet meteen waar hij moet aanleggen.
+ *
+ * Van dat alles beweegt niets, dus het wordt gebakken. Wat hier overblijft is
+ * wat wél leeft: de vlag in de wind, de markeerring als je in de buurt komt, en
+ * het naamplaatje — dat laatste omdat het tégen de zoom in schaalt en dus per
+ * definitie niet in een sprite past.
+ */
+export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
+  const natie = NATIES[stad.natie];
+  // Dezelfde schaal als de schepen: een haven hoort groter te zijn dan de sloep
+  // die eraan ligt, en dat blijft alleen kloppen als beide uit één formule komen.
+  const s = wereldSchaal(cam.zoom);
+  const st = sierTijd(tijd);
+  const { r, heeftFort, mx, my, mastTop } = stadMaten(stad);
+
+  ctx.save();
+  ctx.translate(stad.x, stad.y);
+  ctx.scale(s, s);
+
+  plaats(ctx, stadSprite(stad, transformSchaal(ctx)));
 
   // Mast en vlag in ongedraaide ruimte.
-  const mx = Math.cos(naarZee) * voetX - Math.sin(naarZee) * voetY;
-  const my = Math.sin(naarZee) * voetX + Math.cos(naarZee) * voetY;
-  const mastTop = my - mastHoog;
   ctx.strokeStyle = '#3a2a18';
   ctx.lineWidth = heeftFort ? 1.2 : 1;
   ctx.beginPath();
@@ -2500,20 +2943,6 @@ export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
     }
     ctx.closePath();
     ctx.fill();
-  }
-
-  // Een echte wal om de versterkte plaatsen, geen stippellijn.
-  if (ommuurd) {
-    ctx.strokeStyle = 'rgba(120,112,98,0.9)';
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, r * 1.12, r * 0.86, 0, 0, TAU);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(60,54,44,0.5)';
-    ctx.lineWidth = 0.6;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, r * 1.2, r * 0.93, 0, 0, TAU);
-    ctx.stroke();
   }
 
   if (gemarkeerd) {
@@ -2576,13 +3005,25 @@ function rookSprite(kleur) {
   return c;
 }
 
+/**
+ * Eén vervagende wolk. Kruitdamp bolt op, schuim doet dat niet.
+ *
+ * `p.groei` en `p.dekking` staan daarom per deeltje in te stellen. De
+ * standaardwaarden zijn die van kruitdamp: een geschutswolk hoort uit te dijen
+ * tot een veelvoud van zijn beginmaat. Schuim in het kielzog moet juist strak
+ * blijven — dat groeide met dezelfde factor mee tot ruim anderhalve
+ * scheepslengte breed, en dan ligt er geen spoor achter je maar een witte
+ * driehoek van rook.
+ */
 export function tekenRook(ctx, p) {
   const a = clamp(1 - p.t / p.duur, 0, 1);
   const sprite = rookSprite(p.kleur || '#e8e6e0');
+  const groei = p.groei == null ? 2.2 : p.groei;
+  const dekking = p.dekking == null ? 0.55 : p.dekking;
   // De wolk vervaagt naar de rand, dus hij mag wat ruimer dan de oude schijf.
-  const r = p.r * (1 + (1 - a) * 2.2) * 1.65;
+  const r = p.r * (1 + (1 - a) * groei) * 1.65;
   ctx.save();
-  ctx.globalAlpha = a * 0.55;
+  ctx.globalAlpha = a * dekking;
   ctx.drawImage(sprite, p.x - r, p.y - r, r * 2, r * 2);
   ctx.restore();
 }

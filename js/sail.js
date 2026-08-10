@@ -67,6 +67,29 @@ const OUDERDOM_MELDINGEN = [
   'De bottelier merkt op dat u de laatste tijd langer over de kaart gebogen zit.',
 ];
 
+/**
+ * Eén schuimvlok in het kielzog.
+ *
+ * Deze vlokken deelden hun tekenfunctie met de kruitdamp van het geschut, en
+ * dus ook diens uitdijing: een vlok groeide uit tot ruim anderhalve
+ * scheepslengte breed. Achter het schip stond daardoor geen spoor maar een
+ * witte rookdriehoek, breder dan het schip zelf en los van het eigenlijke
+ * kielzog dat `tekenSchip` al tekent. Schuim blijft strak en dooft snel; de
+ * damp van een breedzijde mag bollen.
+ */
+function nieuwSpoor(x, y) {
+  return {
+    x,
+    y,
+    t: 0,
+    duur: 1.7,
+    r: 1.6 + Math.random() * 1.4,
+    kleur: '#cfe9f2',
+    groei: 0.55,
+    dekking: 0.34,
+  };
+}
+
 export function maakZeilScene() {
   const cam = { x: 0, y: 0, zoom: STANDAARD_ZOOM };
   let doelZoom = STANDAARD_ZOOM;
@@ -174,9 +197,7 @@ export function maakZeilScene() {
           vertrek = null;
         } else {
           // Nog even extra schuim bij de kiel tijdens de aftocht.
-          if (Math.random() < dt * 10) {
-            sporen.push({ x: s.x, y: s.y, t: 0, duur: 1.6, r: 2 + Math.random() * 2 });
-          }
+          if (Math.random() < dt * 8) sporen.push(nieuwSpoor(s.x, s.y));
           return;
         }
       }
@@ -277,9 +298,7 @@ export function maakZeilScene() {
       s.y = clamp(s.y, 20, WORLD_H - 20);
 
       // Kielzogspoor.
-      if (s.snelheid > 8 && Math.random() < dt * 14) {
-        sporen.push({ x: s.x, y: s.y, t: 0, duur: 2.4, r: 2 + Math.random() * 2 });
-      }
+      if (s.snelheid > 8 && Math.random() < dt * 10) sporen.push(nieuwSpoor(s.x, s.y));
       for (let i = sporen.length - 1; i >= 0; i--) {
         sporen[i].t += dt;
         if (sporen[i].t > sporen[i].duur) sporen.splice(i, 1);
@@ -399,7 +418,7 @@ export function maakZeilScene() {
       R.tekenStormen(c, w, cam, vw, vh, Game.tijd);
       R.tekenKustEffecten(c, w, cam, vw, vh, Game.tijd);
 
-      for (const p of sporen) R.tekenRook(c, { ...p, kleur: '#cfe9f2' });
+      for (const p of sporen) R.tekenRook(c, p);
 
       for (const stad of w.steden) {
         if (Math.abs(stad.x - cam.x) * cam.zoom > vw / 2 + 140) continue;

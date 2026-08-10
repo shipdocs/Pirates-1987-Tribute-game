@@ -362,6 +362,51 @@ export function toonMenu() {
         },
       },
       {
+        // De scherpe band groter of kleiner maken. Onafhankelijk van de
+        // zachtheid daarnaast: dit knoppenpaar stuurt alleen hóeveel er scherp
+        // is, niet hóe zacht de overgang ernaartoe verloopt.
+        label: `Scherpte groter: ${Math.round(Game.miniatuurGrootte() * 100)}%`,
+        actie: () => {
+          Game.zetMiniatuurKeuze(
+            clamp(Game.miniatuurGrootte() + 0.04, 0.12, 0.6),
+            Game.miniatuurZacht()
+          );
+          sch.ververs();
+        },
+      },
+      {
+        label: `Scherpte kleiner: ${Math.round(Game.miniatuurGrootte() * 100)}%`,
+        actie: () => {
+          Game.zetMiniatuurKeuze(
+            clamp(Game.miniatuurGrootte() - 0.04, 0.12, 0.6),
+            Game.miniatuurZacht()
+          );
+          sch.ververs();
+        },
+      },
+      {
+        // De overgang donziger of strakker. Onafhankelijk van de grootte: dit
+        // knoppenpaar stuurt alleen de ring breedte van de zachte rand.
+        label: `Overgang zachter: ${Math.round(Game.miniatuurZacht() * 100)}%`,
+        actie: () => {
+          Game.zetMiniatuurKeuze(
+            Game.miniatuurGrootte(),
+            clamp(Game.miniatuurZacht() + 0.04, 0.08, 0.6)
+          );
+          sch.ververs();
+        },
+      },
+      {
+        label: `Overgang strakker: ${Math.round(Game.miniatuurZacht() * 100)}%`,
+        actie: () => {
+          Game.zetMiniatuurKeuze(
+            Game.miniatuurGrootte(),
+            clamp(Game.miniatuurZacht() - 0.04, 0.08, 0.6)
+          );
+          sch.ververs();
+        },
+      },
+      {
         label: 'Stoppen zonder bewaren',
         soort: 'gevaar',
         actie: async () => {

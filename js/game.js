@@ -1,5 +1,5 @@
 // Spelkern: toestand, scènebeheer, invoer en opslag.
-import { clamp, makeRng, yearOf, pick } from './util.js';
+import { clamp, makeRng, yearOf, pick, smooth } from './util.js';
 import {
   WAREN, SCHIP_INDEX, RANGEN, NATIE_IDS, MOEILIJKHEDEN, FAMILIE_ROLLEN, LEGENDES, itemBonus,
 } from './data.js';
@@ -12,16 +12,21 @@ import * as UI from './ui.js';
 
 export const OPSLAG_SLEUTEL = 'zeeroverij.opslag.v1';
 export const MINIATUUR_SLEUTEL = 'zeeroverij.miniatuur.v1';
+// Onafhankelijke knoppen voor het miniatuureffect: aparte grootte van de
+// scherpe band en zachtheid van de overgang, ook na herladen bewaard.
+export const MINIATUUR_KEUZE_SLEUTEL = 'zeeroverij.miniatuur.keuze.v1';
 
 // Miniatuureffect (tilt-shift). De blur staat in beeldpixels; kern en uitloop
 // zijn stralen, als fractie van de kórtste schermzijde — zo houdt de scherpe
-// plek dezelfde maat op een breed en op een smal scherm. `KERN` is de cirkel
-// van volle scherpte rond het schip, `UITLOOP` de ring daaromheen waarin het
-// naar vervaagd overgaat. Rond, niet als balk: scherpstellen doe je op een
-// plek, en dan hoort ook links en rechts van je schip af te vallen.
+// plek dezelfde maat op een breed en op een smal scherm. `GROOTTE` is de straal
+// van volle scherpte rond het schip, `ZACHT` de ring eromheen waarin het naar
+// vervaagd overgaat. Die twee zijn bewust losgekoppeld: grootte bepaalt hoevéél
+// er scherp is, zachtheid hóe natuurlijk de overgang verloopt. Rond, niet als
+// balk: we varen alle kanten op, dus scherpstellen doe je op een plek — het
+// schip — en rond die plek valt het beeld in alle richtingen even zacht af.
 const MINI_BLUR = 3.2;
-const MINI_KERN = 0.24;
-const MINI_UITLOOP = 0.22;
+const MINI_GROOTTE = 0.3;
+const MINI_ZACHT = 0.28;
 
 /**
  * Leest de voorkeur voor het miniatuureffect uit de browser. Los van de save:
@@ -34,6 +39,26 @@ export function leesMiniatuur() {
     // Privémodus of oudere browser: dan maar de standaard.
     return true;
   }
+}
+
+/**
+ * Leest de fijnafstelling van het miniatuureffect (grootte en zachtheid van de
+ * scherpe band) uit de browser. Twee losse knoppen, elk in een eigen bereik;
+ * ongeldige of ontbrekende waarden vallen terug op de standaardconstanten.
+ */
+function leesMiniatuurKeuze() {
+  try {
+    const r = JSON.parse(localStorage.getItem(MINIATUUR_KEUZE_SLEUTEL));
+    if (r && Number.isFinite(r.grootte) && Number.isFinite(r.zacht)) {
+      return {
+        grootte: clamp(r.grootte, 0.12, 0.6),
+        zacht: clamp(r.zacht, 0.08, 0.6),
+      };
+    }
+  } catch (fout) {
+    /* Beschadigde opslag: dan maar de standaard. */
+  }
+  return { grootte: MINI_GROOTTE, zacht: MINI_ZACHT };
 }
 
 export const Game = {
@@ -49,6 +74,10 @@ export const Game = {
   // rond het schip, daarboven en -onder vervaagt ze — maar de HUD blijft
   // altijd scherp. Presentatievoorkeur, geen saveveld; zie `leesMiniatuur`.
   miniatuur: leesMiniatuur(),
+  // Fijnafstelling van dat effect, gelezen uit de browser; zie
+  // `zetMiniatuurKeuze` om hem aan te passen. Onafhankelijke knoppen: de
+  // grootte van de scherpe band en de zachtheid van de overgang ernaast.
+  miniatuurKeuze: leesMiniatuurKeuze(),
   // Offscreen-lagen voor dat effect, hergebruikt per frame; zie `zorgMiniatuurLagen`.
   miniatuurLagen: null,
   // Canvasfilters ontbreken op oudere Safari's. Eén keer vaststellen, want een
@@ -297,15 +326,22 @@ export const Game = {
     //    is lang niet altijd het schip. Een scène die zich verslikt mag het
     //    beeld niet laten vallen: een niet-eindig getal maakt de gradient stuk
     //    en daarmee de hele tekenlus.
-    const kern = Math.min(W, H) * MINI_KERN;
-    const uitloop = Math.min(W, H) * MINI_UITLOOP;
+    // Rond de kern is een cirkel van volle scherpte rond het schip (`GROOTTE`),
+    // met daaromheen een zachte ring naar vervaagd (`ZACHT`). Twee losse
+    // knoppen: grootte voor hoeveel er scherp is, zachtheid voor hoe donzig
+    // de overgang naar vervaagd loopt. Rond in plaats van een balk, want we
+    // varen alle kanten op en het schip is de enige plek die vol moet blijven.
+    const kort = Math.min(W, H);
+    const k = this.miniatuurKeuze || { grootte: MINI_GROOTTE, zacht: MINI_ZACHT };
+    const kern = kort * k.grootte;
+    const uitloop = kort * k.zacht;
     const gevraagd = scene.miniatuurFocus() || {};
     const punt = (waarde, maat) => (Number.isFinite(waarde) ? waarde * this.dpr : maat / 2);
-    // De cirkel gaat pal op het schip staan, waar het ook in beeld hangt — dan
-    // is het altijd volledig scherp, ook in een hoek. Alleen tot het scherm
-    // klemmen, voor het geval een scène een punt buiten beeld aanwijst (in een
-    // gevecht ligt de camera tussen beide schepen); anders zou de scherpe plek
-    // helemaal wegvallen.
+    // De cirkel gaat pal op het schip staan, waar het ook in beeld hangt —
+    // dan is het schip altijd volledig scherp, ook in een hoek. Alleen tot het
+    // scherm klemmen, voor het geval een scène een punt buiten beeld aanwijst
+    // (in een gevecht ligt de camera tussen beide schepen); anders zou de
+    // scherpe plek helemaal wegvallen.
     const x = clamp(punt(gevraagd.x, W), 0, W);
     const y = clamp(punt(gevraagd.y, H), 0, H);
 
@@ -319,10 +355,10 @@ export const Game = {
     // met een smoothstep-verloop, zodat de overgang naar vervaagd nergens een
     // rand trekt. `destination-in` houdt alleen over wat de gradient dekt.
     const g = f.createRadialGradient(x, y, kern, x, y, kern + uitloop);
-    for (let i = 0; i <= 6; i++) {
-      const u = i / 6;
-      const a = (1 - u * u * (3 - 2 * u)).toFixed(3);
-      g.addColorStop(u, `rgba(0,0,0,${a})`);
+    for (let i = 0; i <= 8; i++) {
+      const u = i / 8;
+      const daar = smooth(clamp(1 - u, 0, 1));
+      g.addColorStop(u, `rgba(0,0,0,${daar.toFixed(3)})`);
     }
     f.globalCompositeOperation = 'destination-in';
     f.fillStyle = g;
@@ -346,6 +382,39 @@ export const Game = {
       /* Geen opslag: de keuze geldt dan alleen deze zitting. */
     }
     this.melding(this.miniatuur ? 'Miniatuureffect aan.' : 'Miniatuureffect uit.');
+  },
+
+  /**
+   * Grootte van de scherpe band, als fractie van de kortste schermzijde.
+   * Onafhankelijk van de zachtheid van de overgang.
+   */
+  miniatuurGrootte() {
+    return this.miniatuurKeuze.grootte;
+  },
+
+  /**
+   * Zachtheid van de overgang, als fractie van de kortste schermzijde. Hoe
+   * breder de ring, hoe donziger de bandrand en hoe natuurlijker de maquette.
+   */
+  miniatuurZacht() {
+    return this.miniatuurKeuze.zacht;
+  },
+
+  /**
+   * Stelt de fijnafstelling van het miniatuureffect in: de grootte van de
+   * scherpe band en de zachtheid van de overgang, elk in een eigen bereik.
+   * Bewaard in de browser, net als de aan/uit-keuze.
+   */
+  zetMiniatuurKeuze(grootte, zacht) {
+    this.miniatuurKeuze = {
+      grootte: clamp(grootte, 0.12, 0.6),
+      zacht: clamp(zacht, 0.08, 0.6),
+    };
+    try {
+      localStorage.setItem(MINIATUUR_KEUZE_SLEUTEL, JSON.stringify(this.miniatuurKeuze));
+    } catch (fout) {
+      /* Geen opslag: de fijnafstelling geldt dan alleen deze zitting. */
+    }
   },
 };
 

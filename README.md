@@ -204,6 +204,7 @@ js/
   data.js             naties, waren, scheepstypen, steden, rangen
   render.js           zee, kustlijnen, schepen, steden, windroos
   sail.js             overzichtsscène (varen)
+  zeil-schermen.js    zeekaart, vloot, bemanning en scheepsraad
   battle.js           zeeslag
   gevechtsmodel.js    ballistiek, schade en overgave — zonder canvas of DOM
   duel.js             degengevecht

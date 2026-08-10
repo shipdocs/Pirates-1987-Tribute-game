@@ -18,10 +18,12 @@ import { openHaven } from './town.js';
 import { toonKaart, toonScheepsstatus, toonBemanning, toonMenu } from './zeil-schermen.js';
 
 const VOEDSEL = WAAR_INDEX.voedsel;
-// De fysieke wereld is ruim tweemaal zo groot, maar de kalender loopt bewust
-// niet evenredig mee. Een lange reis kost circa 28% meer dagen dan voorheen,
-// niet ruim tweemaal zoveel proviand, moraal en jaren van de kapitein.
-const DAGEN_PER_SECONDE = 0.12;
+// De fysieke wereld is opnieuw groter geworden en de schepen varen langzamer,
+// maar de kalender loopt bewust niet evenredig mee: een overtocht duurt nu wel
+// langer kloktijd — de wereld moet groot voelen — maar kost evenveel dagen
+// proviand, moraal en kapiteinsjaren als vóór de schaalvergroting.
+// 0.044 = 0.12 (oud) × (196/350) (grotere kaart) × 0,65 (lagere snelheid).
+const DAGEN_PER_SECONDE = 0.044;
 
 // Stormbelasting per seconde: hoe snel de spanning in romp en want oploopt bij
 // volle last, en hoeveel het schip er vanzelf van herstelt. Met deze twee is de
@@ -43,7 +45,10 @@ const LEEG_STORMVELD = { nabij: 0, rug: 0, gevaar: 0, cel: null, richting: 0, kr
 // wereldeenheden, en bij een nauwere stand valt de kernrand buiten beeld —
 // precies de grens waarop je in een bui je besluit neemt.
 const STANDAARD_ZOOM = R.WARE_ZOOM;
-const MIN_ZOOM = 0.24;
+// De kleinste stand toont nagenoeg de hele Caraïben als kaartoverzicht. De
+// kaart is groter geworden, dus de overzichtsstand zoomt mee uit om evenveel
+// water in beeld te blijven tonen.
+const MIN_ZOOM = 0.24 * (196 / 350);
 const MAX_ZOOM = 4;
 
 // Hoeveel de boeg nog doordraait nadat je het roer loslaat, in radialen. Voor
@@ -701,7 +706,9 @@ export function maakZeilScene() {
     let waar = 'Ergens voor de boeg pakt zich iets samen.';
     if (dichtst) {
       const kant = compassName(Math.atan2(dichtst.y - s.y, dichtst.x - s.x));
-      const mijl = Math.round(dichtstD / 8);
+      // De geografische mijl volgt de kaartschaal: met de grotere PPD is de
+      //zelfde afstand in wereldeenheden nu meer zeemijlen.
+      const mijl = Math.round(dichtstD / 8 / 1.786);
       waar = `Een zwarte muur in het ${kant}, een mijl of ${mijl}.`;
       if (weer > 0) {
         waar += (dichtst.draaiing || 1) > 0
@@ -876,9 +883,10 @@ export function maakZeilScene() {
         if (rel > -25) s.relatie[vloot.natie] = clamp(s.relatie[vloot.natie] + 1, -100, 100);
       }
     } else {
-      // Wegvaren lukt niet altijd tegen een sneller schip.
+      // Wegvaren lukt niet altijd tegen een sneller schip. De deler volgt de
+      // kleinere snelheidsspreiding van de herschaalde schepen.
       const mijn = SCHIP_INDEX[vlaggenschip(s).type];
-      const kans = clamp(0.45 + (mijn.snelheid - type.snelheid) / 60, 0.1, 0.95);
+      const kans = clamp(0.45 + (mijn.snelheid - type.snelheid) / 39, 0.1, 0.95);
       if (vijandig && Math.random() > kans) {
         await UI.vraag(
           'Ze halen je in',

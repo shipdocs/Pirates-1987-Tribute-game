@@ -597,8 +597,9 @@ export function tekenZee(ctx, cam, vw, vh, t, wind) {
 // Wereldeenheden per pixel in de dieptekaart. Grof mag — het is een zachte
 // overgang — maar niet té grof: hoe kleiner de bron, hoe zwaarder de browser
 // moet interpoleren bij het uitvergroten, en dat is een schermvullende
-// bewerking die elk beeld terugkomt.
-const DIEPTE_SCHAAL = 4;
+// bewerking die elk beeld terugkomt. De schaal loopt mee met de grotere
+// kaart, zodat de cache niet drie keer zoveel pixels krijgt.
+const DIEPTE_SCHAAL = 7;
 
 // Van diep naar ondiep: breedte van de gordel in wereldeenheden, de kleur en
 // hoe zwaar de laag meetelt. De bankfactor van elk eiland schaalt de breedte,
@@ -835,6 +836,112 @@ function ruis(ix, iy, zaad) {
   let h = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263) ^ Math.imul(zaad | 0, 2246822519);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+// --- Kustsoorten ---------------------------------------------------------
+
+const KUST_SOORTEN = ['strand', 'rots', 'mangrove'];
+
+/** Kiest één kustsoort; brede banken zijn vaker zandig, steile eilanden rotsig. */
+function kiesKustsoort(land, toeval) {
+  let strand,
+    rots;
+  if (land.bank >= 1.6) {
+    strand = 0.74;
+    rots = 0.1;
+  } else if (land.bank <= 0.75) {
+    strand = 0.34;
+    rots = 0.49;
+  } else if (land.groot) {
+    strand = 0.45;
+    rots = 0.23;
+  } else {
+    strand = 0.48;
+    rots = 0.34;
+  }
+  if (toeval < strand) return 'strand';
+  if (toeval < strand + rots) return 'rots';
+  return 'mangrove';
+}
+
+/**
+ * Verdeelt één oever in lange, deterministische kustzones.
+ *
+ * We gebruiken een coördinaathash en niet `wereld.rng`: kustdecoratie mag de
+ * volgorde van steden, vloten of andere spelinhoud nooit veranderen. Kleine
+ * eilanden krijgen één gezicht; op grote eilanden wisselt het landschap pas
+ * na enkele honderden wereldeenheden, dus nooit om de paar kartelige punten.
+ */
+function kustPadenVan(wereld, land, index) {
+  if (land._kustPaden) return land._kustPaden;
+  const pts = land.kustPts || land.pts;
+  const segmenten = land.kustGesloten === false ? pts.length - 1 : pts.length;
+  const lengtes = [];
+  let totaal = 0;
+  for (let i = 0; i < segmenten; i++) {
+    const a = pts[i],
+      b = pts[(i + 1) % pts.length];
+    const lengte = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    lengtes.push(lengte);
+    totaal += lengte;
+  }
+
+  const zoneAantal = Math.max(1, Math.round(totaal / (land.groot ? 390 : 280)));
+  const zoneLengte = totaal / zoneAantal;
+  const soorten = [];
+  const zaad = (wereld.seed ^ 0x6d2b79f5 ^ Math.imul(index + 1, 1597334677)) >>> 0;
+  for (let zone = 0; zone < zoneAantal; zone++) {
+    let soort = kiesKustsoort(land, ruis(index + 17, zone + 31, zaad));
+    // Twee gelijke buurvakken worden één onbedoeld reuzenvak. Geef het tweede
+    // een ander karakter, maar laat de keuze nog steeds uit dezelfde hash komen.
+    if (zone > 0 && soort === soorten[zone - 1] && zoneAantal > 2) {
+      const stap = 1 + Math.floor(ruis(zone + 71, index + 43, zaad ^ 0x85ebca6b) * 2);
+      soort = KUST_SOORTEN[(KUST_SOORTEN.indexOf(soort) + stap) % KUST_SOORTEN.length];
+    }
+    soorten.push(soort);
+  }
+
+  const paden = {
+    strand: new Path2D(),
+    rots: new Path2D(),
+    mangrove: new Path2D(),
+    rotsen: new Path2D(),
+    soorten,
+  };
+  let afstand = 0,
+    vorige = null;
+  for (let i = 0; i < segmenten; i++) {
+    const a = pts[i],
+      b = pts[(i + 1) % pts.length];
+    const midden = afstand + lengtes[i] / 2;
+    const zone = Math.min(zoneAantal - 1, Math.floor(midden / zoneLengte));
+    const soort = soorten[zone];
+    const pad = paden[soort];
+    if (soort !== vorige) pad.moveTo(a[0], a[1]);
+    pad.lineTo(b[0], b[1]);
+
+    // Los gesteente versterkt het verschil ook zonder kleur. Mangrove krijgt
+    // juist géén reeks losse kronen: op afstand werd dat een kralenketting.
+    // De plaatsing blijft stabiel wanneer de buffer of zoom verandert.
+    const stap = 34;
+    const eerste = Math.ceil(afstand / stap) * stap;
+    if (soort === 'rots') {
+      for (let d = eerste; d < afstand + lengtes[i]; d += stap) {
+        const t = (d - afstand) / Math.max(1, lengtes[i]);
+        const x = lerp(a[0], b[0], t),
+          y = lerp(a[1], b[1], t);
+        const dobbel = ruis(Math.round(d), index * 53 + zone, zaad);
+        if (dobbel < 0.44) continue;
+        const r = 2 + ruis(Math.round(d) + 19, index + zone * 7, zaad) * 2.4;
+        paden.rotsen.moveTo(x + r, y);
+        paden.rotsen.arc(x, y, r, 0, TAU);
+      }
+    }
+    afstand += lengtes[i];
+    vorige = soort;
+  }
+  land._kustPaden = paden;
+  return paden;
 }
 
 /**
@@ -1284,13 +1391,42 @@ function tekenEilanden(ctx, wereld, vak, zoom) {
     ctx.restore();
   }
 
-  // Strand en kustlijn — alleen langs echte oevers.
-  ctx.lineWidth = 7;
-  ctx.strokeStyle = '#dcc691';
+  // Niet iedere oever is hetzelfde lint van zand. Lange zones geven grote
+  // eilanden afwisselend strand, rotskust en mangrove; kleine eilandjes houden
+  // één duidelijk karakter. Een donkere grondlijn voorkomt spleetjes op de
+  // afgeronde overgangen tussen twee typen.
+  ctx.lineWidth = 11;
+  ctx.strokeStyle = 'rgba(31,43,32,0.62)';
   for (const [l] of zichtbaar) ctx.stroke(l.kust);
-  ctx.lineWidth = 1.6;
-  ctx.strokeStyle = 'rgba(247,236,205,0.85)';
-  for (const [l] of zichtbaar) ctx.stroke(l.kust);
+  ctx.lineCap = 'butt';
+  for (const [soort, breedte, kleur] of [
+    ['strand', 10, '#d6bd7d'],
+    ['rots', 10.5, '#4b4d43'],
+    ['mangrove', 10, '#244a31'],
+  ]) {
+    ctx.lineWidth = breedte;
+    ctx.strokeStyle = kleur;
+    for (const [l, index] of zichtbaar) ctx.stroke(kustPadenVan(wereld, l, index)[soort]);
+  }
+  for (const [soort, breedte, kleur] of [
+    ['strand', 2.1, 'rgba(247,226,174,0.92)'],
+    ['rots', 2.8, 'rgba(145,139,116,0.82)'],
+    ['mangrove', 2.2, 'rgba(77,116,67,0.9)'],
+  ]) {
+    ctx.lineWidth = breedte;
+    ctx.strokeStyle = kleur;
+    for (const [l, index] of zichtbaar) ctx.stroke(kustPadenVan(wereld, l, index)[soort]);
+  }
+
+  // Losse stenen breken het rotssilhouet subtiel op. Het is één gevuld pad in
+  // plaats van duizenden afzonderlijke tekenaanroepen.
+  ctx.fillStyle = '#343a35';
+  for (const [l, index] of zichtbaar) ctx.fill(kustPadenVan(wereld, l, index).rotsen);
+  ctx.save();
+  ctx.translate(LICHT_X * 1.2, LICHT_Y * 1.2);
+  ctx.fillStyle = 'rgba(136,143,111,0.62)';
+  for (const [l, index] of zichtbaar) ctx.fill(kustPadenVan(wereld, l, index).rotsen);
+  ctx.restore();
 }
 
 /**
@@ -1353,10 +1489,11 @@ export function tekenKustEffecten(ctx, wereld, cam, vw, vh, tijd) {
     zy0 = cam.y - vh / 2 / cam.zoom,
     zy1 = cam.y + vh / 2 / cam.zoom;
   const zichtbaar = [];
-  for (const l of wereld.land) {
+  for (let i = 0; i < wereld.land.length; i++) {
+    const l = wereld.land[i];
     const b = bbox(l);
     if (b.x1 < zx0 || b.x0 > zx1 || b.y1 < zy0 || b.y0 > zy1) continue;
-    zichtbaar.push(l);
+    zichtbaar.push([l, i]);
   }
   if (!zichtbaar.length) return;
 
@@ -1365,38 +1502,60 @@ export function tekenKustEffecten(ctx, wereld, cam, vw, vh, tijd) {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  // Bewegende branding: twee brede banden schuimvlokken die tegen elkaar in
-  // schuiven — dat kruisen is wat de kust laat kolken in plaats van stromen —
-  // en daaronder één dunne lichte lijn die de oever zelf blijft markeren, ook
-  // als de vlokken op afstand vervagen.
+  // Bewegende branding: op een zandstrand loopt zij breed uit, op rots spat zij
+  // smaller en feller uiteen en voor mangrove blijft slechts wat gebroken
+  // kabbeling over. Zo verandert niet alleen de kleur, maar ook het gedrag van
+  // de waterkant.
   const kanSchuiven =
     schuimPatroon &&
     typeof schuimPatroon.setTransform === 'function' &&
     typeof DOMMatrix !== 'undefined';
   if (schuimPatroon) {
-    for (const [w, alfa, snel, fase] of [
-      [18, 0.46 + 0.16 * pulseren, 1, 0],
-      [8, 0.66 + 0.16 * pulseren, -0.62, 2.2],
-    ]) {
-      // Niet het canvas maar het patroon zelf verschuiven: de kustlijn mag geen
-      // millimeter bewegen, alleen het schuim erover.
-      if (kanSchuiven) {
-        const d = st * 6 * snel;
-        schuimPatroon.setTransform(new DOMMatrix().translate(d, d * 0.55 + fase * 11));
+    const lagen = {
+      strand: [
+        [18, 0.48 + 0.16 * pulseren, 1, 0],
+        [8, 0.68 + 0.15 * pulseren, -0.62, 2.2],
+      ],
+      rots: [
+        [8, 0.4 + 0.14 * pulseren, 1.18, 1.1],
+        [3.2, 0.56 + 0.12 * pulseren, -0.78, 3.4],
+      ],
+      mangrove: [[3, 0.1 + 0.05 * pulseren, 0.42, 4.6]],
+    };
+    for (const soort of KUST_SOORTEN) {
+      for (const [w, alfa, snel, fase] of lagen[soort]) {
+        // Niet het canvas maar het patroon zelf verschuiven: de kustlijn mag
+        // geen millimeter bewegen, alleen het schuim erover.
+        if (kanSchuiven) {
+          const d = st * 6 * snel;
+          schuimPatroon.setTransform(new DOMMatrix().translate(d, d * 0.55 + fase * 11));
+        }
+        ctx.save();
+        ctx.lineCap = 'butt';
+        ctx.globalAlpha = alfa;
+        ctx.lineWidth = w;
+        ctx.strokeStyle = schuimPatroon;
+        for (const [l, index] of zichtbaar) {
+          ctx.stroke(kustPadenVan(wereld, l, index)[soort]);
+        }
+        ctx.restore();
       }
-      ctx.save();
-      ctx.globalAlpha = alfa;
-      ctx.lineWidth = w;
-      ctx.strokeStyle = schuimPatroon;
-      for (const l of zichtbaar) ctx.stroke(l.kust);
-      ctx.restore();
     }
   }
-  ctx.save();
-  ctx.lineWidth = 2.2;
-  ctx.strokeStyle = `rgba(240,252,255,${0.34 + 0.16 * pulseren})`;
-  for (const l of zichtbaar) ctx.stroke(l.kust);
-  ctx.restore();
+  for (const [soort, breedte, alfa] of [
+    ['strand', 2.2, 0.36 + 0.16 * pulseren],
+    ['rots', 1.8, 0.29 + 0.13 * pulseren],
+    ['mangrove', 1, 0.07 + 0.04 * pulseren],
+  ]) {
+    ctx.save();
+    ctx.lineCap = 'butt';
+    ctx.lineWidth = breedte;
+    ctx.strokeStyle = `rgba(240,252,255,${alfa})`;
+    for (const [l, index] of zichtbaar) {
+      ctx.stroke(kustPadenVan(wereld, l, index)[soort]);
+    }
+    ctx.restore();
+  }
 
   // Zachte 'no-go'-gloed: de diepte-omtrek waar ook het grootste schip nog met
   // de hele romp kan varen. Dit is een navigatiehulp, geen decor — van dichtbij
@@ -1407,7 +1566,7 @@ export function tekenKustEffecten(ctx, wereld, cam, vw, vh, tijd) {
     ctx.save();
     ctx.lineWidth = GROOTSTE_ROMPSSTRAAL * 2;
     ctx.strokeStyle = `rgba(96,206,186,${(0.07 + 0.04 * pulseren) * hulp})`;
-    for (const l of zichtbaar) ctx.stroke(l.kust);
+    for (const [l] of zichtbaar) ctx.stroke(l.kust);
     ctx.restore();
   }
 }

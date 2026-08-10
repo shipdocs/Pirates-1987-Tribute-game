@@ -753,7 +753,8 @@ export function maakZeeslag(vloot, opts) {
     const snelheidV = mijnType.snelheid * mij.tuigage;
     const snelheidVijand = hunType.snelheid * vijand.tuigage;
     const kans = clamp(
-      0.3 + (afstand / 500) * 0.35 + (snelheidV - snelheidVijand) / 90,
+      // De deler volgt de kleinere snelheidsspreiding van de herschaalde schepen.
+      0.3 + (afstand / 500) * 0.35 + (snelheidV - snelheidVijand) / 59,
       0.12,
       0.95
     );

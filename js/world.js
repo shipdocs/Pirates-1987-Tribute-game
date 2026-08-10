@@ -8,14 +8,18 @@ import {
 // Kaartprojectie: rechttoe-rechtaan, met echte graden als basis. De ruime
 // schaal zorgt dat een overtocht een reis is, terwijl de camera maar één
 // eiland, doorgang of kuststrook tegelijk hoeft te tonen.
-export const PPD = 196; // wereldeenheden per graad
+export const PPD = 350; // wereldeenheden per graad
+// Oude kaartschaal: saves van vóór versie 8 liggen er in wereldeenheden in.
+export const PPD_VOORHEEN = 196;
 export const LON0 = -98,
   LON1 = -58,
   LAT0 = 7.6,
   LAT1 = 31;
 export const WORLD_W = (LON1 - LON0) * PPD;
 export const WORLD_H = (LAT1 - LAT0) * PPD;
-const DOEL_VLOTEN = 46;
+// De kaart is ruimer geworden; meer vloten houden de zee even druk, zodat een
+// overtocht niet vaker dan vroeger langs leeg water gaat.
+const DOEL_VLOTEN = 82;
 
 /**
  * Hoe dicht je langs de kust moet varen voordat de stuurman het perkament
@@ -171,6 +175,39 @@ function verruw(poly, rng, kracht, rondingen = 1, gesloten = true) {
   return pts;
 }
 
+/**
+ * Rondt de hoeken van een verruwde kust af met één Chaikin-doorgang.
+ *
+ * De nieuwe punten blijven altijd óp de bestaande lijnstukken. Daardoor kan
+ * de kust niet buiten zichzelf gaan slingeren of in een smalle zeestraat een
+ * lus maken, zoals een vrij interpolerende spline wel kan doen. Een open kust
+ * behoudt zijn twee eindpunten, zodat de kunstmatige sluiting van het
+ * vasteland nog steeds exact buiten beeld aansluit.
+ */
+function vervloeiKust(pts, gesloten = true, deel = 0.2) {
+  if (pts.length < 3) return pts.slice();
+  const uit = [];
+  const voegPaarToe = (a, b) => {
+    uit.push([
+      lerp(a[0], b[0], deel),
+      lerp(a[1], b[1], deel),
+    ]);
+    uit.push([
+      lerp(a[0], b[0], 1 - deel),
+      lerp(a[1], b[1], 1 - deel),
+    ]);
+  };
+
+  if (gesloten) {
+    for (let i = 0; i < pts.length; i++) voegPaarToe(pts[i], pts[(i + 1) % pts.length]);
+  } else {
+    uit.push(pts[0]);
+    for (let i = 0; i < pts.length - 1; i++) voegPaarToe(pts[i], pts[i + 1]);
+    uit.push(pts[pts.length - 1]);
+  }
+  return uit;
+}
+
 function maakEilandje(lon, lat, straal, rng) {
   const n = rndInt(rng, 11, 18);
   const pts = [];
@@ -205,15 +242,17 @@ export class Wereld {
     this.rng = rng;
 
     /**
-     * `path` is de gesloten landvorm (vullen, botsen); `kust` bevat alleen de
-     * échte oever, zodat strand en branding nooit op een kaartrand belanden.
-     * `bank` schaalt de breedte van het ondiepe water voor de kust.
-     * @type {{pts:number[][], path:Path2D, kust:Path2D, groot:boolean, bank:number}[]}
+     * `path` is de gesloten landvorm (vullen, botsen); `kust` en `kustPts`
+     * bevatten alleen de échte oever, zodat strand en branding nooit op een
+     * kaartrand belanden. `bank` schaalt de breedte van het ondiepe water.
+     * @type {{pts:number[][], kustPts:number[][], kustGesloten:boolean,
+     *   path:Path2D, kust:Path2D, groot:boolean, bank:number}[]}
      */
     this.land = [];
     const voegToe = (graden, ruw, groot, bank = 1, sluiting = null) => {
       const open = !!sluiting;
-      const kustGraden = verruw(graden, rng, ruw, groot ? 3 : 2, !open);
+      const grilligeKust = verruw(graden, rng, ruw, groot ? 3 : 2, !open);
+      const kustGraden = vervloeiKust(grilligeKust, !open);
       const kustPts = kustGraden.map(([lon, lat]) => P(lon, lat));
 
       const kust = new Path2D();
@@ -227,7 +266,7 @@ export class Wereld {
       for (let i = 1; i < pts.length; i++) path.lineTo(pts[i][0], pts[i][1]);
       path.closePath();
 
-      this.land.push({ pts, path, kust, groot, bank });
+      this.land.push({ pts, kustPts, kustGesloten: !open, path, kust, groot, bank });
       return pts;
     };
 
@@ -269,9 +308,10 @@ export class Wereld {
     // levenslijn (verjaart en sterft).
     this.stormen = [];
     const stormRng = makeRng(seed ^ 0x9e3779b9);
-    // De kaart is ruim tweemaal zo breed geworden. Met 6..9 cellen blijft de
-    // kans om onderweg werkelijk weer tegen te komen ongeveer gelijk.
-    const aantal = 6 + Math.floor(stormRng() * 4); // 6..9 stormen per wereld
+    // De kaart is opnieuw ruimer geworden; de telling schaalt mee met de
+    // oppervlakte, zodat de kans om onderweg werkelijk weer te treffen
+    // ongeveer gelijk blijft.
+    const aantal = 10 + Math.floor(stormRng() * 7); // 10..16 stormen per wereld
     for (let i = 0; i < aantal; i++) {
       this.stormen.push({
         x: rnd(stormRng, 60, WORLD_W - 60),

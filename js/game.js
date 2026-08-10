@@ -3,7 +3,7 @@ import { clamp, makeRng, yearOf, pick, smooth } from './util.js';
 import {
   WAREN, SCHIP_INDEX, RANGEN, NATIE_IDS, MOEILIJKHEDEN, FAMILIE_ROLLEN, LEGENDES, itemBonus,
 } from './data.js';
-import { Wereld } from './world.js';
+import { Wereld, PPD, PPD_VOORHEEN } from './world.js';
 // render.js leunt alleen op util, data en world, dus dit levert geen kringetje op.
 import * as R from './render.js';
 import * as audio from './audio.js';
@@ -598,7 +598,7 @@ export function bewaar() {
   if (!Game.speler || !Game.wereld) return false;
   const w = Game.wereld;
   const data = {
-    versie: 7,
+    versie: 8,
     seed: w.seed,
     speler: Game.speler,
     // De wereldpolitiek staat op de wereld, niet op de speler, en volgt dus
@@ -661,8 +661,37 @@ export function laad() {
   // Saves van vóór versie 3 kenden de stormen nog niet; die worden uit het
   // zaadje gezaaid.
   if (data.stormen && data.stormen.length) wereld.stormen = data.stormen;
+  // Saves van vóór versie 8 liggen in de oude, kleinere wereldeenheden (PPD
+  // 196). De kaart is opgerekt naar 350 per graad, dus alle wereldcoördinaten
+  // schalen mee zodat een oude save op dezelfde plek uitkomt. De stormstralen
+  // en SCHAT_ZICHT schalen níét mee: die zijn in wereldeenheden aan het scherm
+  // gekoppeld en horen bij de zoom, niet bij de kaartmaat.
+  if ((data.versie || 0) < 8) {
+    const schaal = PPD / PPD_VOORHEEN;
+    if (data.stormen) {
+      for (const s of data.stormen) {
+        s.x *= schaal;
+        s.y *= schaal;
+      }
+    }
+  }
   // Oude saves saneren: ontbrekende velden krijgen hun standaardwaarde.
   const sp = data.speler;
+  // Saves van vóór versie 8: de speler en de lopende schatjacht liggen in de
+  // oude wereldeenheden; ze worden mee opgerekt voordat iets ze gebruikt.
+  if ((data.versie || 0) < 8) {
+    const schaal = PPD / PPD_VOORHEEN;
+    sp.x = (sp.x || 0) * schaal;
+    sp.y = (sp.y || 0) * schaal;
+    if (sp.schat) {
+      sp.schat.x *= schaal;
+      sp.schat.y *= schaal;
+      for (const p of sp.schat.punten || []) {
+        p.x *= schaal;
+        p.y *= schaal;
+      }
+    }
+  }
   if (!sp.familie) sp.familie = { rol: pick(Math.random, FAMILIE_ROLLEN), spoor: false, gevonden: false, gevondenDag: null };
   // Saves van vóór de schurk: wie zijn familielid al gevonden had, houdt dat;
   // wie nog zocht, begint bij het spoor.

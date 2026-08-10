@@ -16,6 +16,7 @@ import * as audio from './audio.js';
 import { maakZeeslag } from './battle.js';
 import { openHaven } from './town.js';
 import { toonKaart, toonScheepsstatus, toonScheepsvolk, toonMenu } from './zeil-schermen.js';
+import { ankerDialoog, uitkijkRapport, startUitkijk, UITKIJK_VERTRAGING } from './anker.js';
 
 const PROVIAND = WAAR_INDEX.proviand;
 // De fysieke wereld is opnieuw groter geworden en de schepen varen langzamer,
@@ -115,6 +116,9 @@ export function maakZeilScene() {
   // Vertrek-animatie: het schip schuift bij het uitvaren van de kade het water
   // in (vanuit) -> (naar), in plaats van plotseling op open zee te staan.
   let vertrek = null;
+  // De uitkijk in het kraaiennest: na `UITKIJK_VERTRAGING` seconden rapporteert
+  // hij wat er in de verte vaart. 0 = er loopt geen uitkijk.
+  let uitkijkTimer = 0;
 
   /**
    * Houdt het beeld binnen de zeekaart. Zonder deze klem vaar je zo voorbij de
@@ -162,6 +166,16 @@ export function maakZeilScene() {
         toonScheepsstatus();
       } else if (code === 'KeyC') {
         toonScheepsvolk();
+      } else if (code === 'KeyU') {
+        // De uitkijk klimt naar het kraaiennest en rapporteert na een korte
+        // vertraging wat er aan de horizon te zien is.
+        if (uitkijkTimer <= 0) {
+          uitkijkTimer = UITKIJK_VERTRAGING;
+          startUitkijk();
+        }
+      } else if (code === 'KeyK') {
+        // "Kabel vieren": voor anker gaan opent het ankerscherm.
+        ankerDialoog();
       } else if (code === 'Escape') {
         toonMenu();
       } else if (code === 'Equal' || code === 'NumpadAdd') {
@@ -199,6 +213,16 @@ export function maakZeilScene() {
           // Nog even extra schuim bij de kiel tijdens de aftocht.
           if (Math.random() < dt * 8) sporen.push(nieuwSpoor(s.x, s.y));
           return;
+        }
+      }
+
+      // De uitkijk in het kraaiennest telt af zolang er geen scherm open is;
+      // zodra hij rapporteert, wordt een volgend bezoek weer opnieuw geteld.
+      if (uitkijkTimer > 0) {
+        uitkijkTimer -= dt;
+        if (uitkijkTimer <= 0) {
+          uitkijkTimer = 0;
+          uitkijkRapport();
         }
       }
 
@@ -1263,7 +1287,7 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
   c.font = '11px Georgia, serif';
   c.textAlign = 'left';
   c.textBaseline = 'middle';
-  const hulp = '← → roer · ↑ ↓ zeil · klik = koers · M kaart · S schip · C scheepsvolk · Esc raad';
+  const hulp = '← → roer · ↑ ↓ zeil · klik = koers · U uitkijk · K anker · M kaart · S schip · C scheepsvolk · Esc raad';
   const hw = c.measureText(hulp).width;
   R.hudPaneel(c, 16, vh - 104, hw + 24, 20, 4);
   c.fillStyle = R.HUD.inktZacht;

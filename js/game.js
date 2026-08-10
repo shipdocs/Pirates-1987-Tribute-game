@@ -729,6 +729,9 @@ export function laad() {
   // wie nog zocht, begint bij het spoor.
   if (sp.familie.spoor == null) sp.familie.spoor = !!sp.familie.gevonden;
   if (sp.opdracht === undefined) sp.opdracht = null;
+  // Saves van vóór het ankersysteem kenden het rustpunt niet; de reflectie
+  // telt dan vanaf de eerste ankerbeurt.
+  if (sp.ankerDag == null) sp.ankerDag = null;
   // Saves van vóór versie 4 kenden het verouderen nog niet. De leeftijd volgt
   // uit de verstreken dagen, dus die is altijd terug te rekenen.
   if (sp.startLeeftijd == null) sp.startLeeftijd = 18;

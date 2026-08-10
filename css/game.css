@@ -228,6 +228,14 @@ button.mini:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .verhaal small { color: var(--inkt-zacht); }
 
+/* Hulptekst in het ankerscherm: uitleg bij de bezigheden, zonder sfeer te breken. */
+.anker-hulp {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--inkt-zacht);
+}
+
 .kroeg-bericht {
   margin: 0 0 14px;
   padding: 11px 14px;

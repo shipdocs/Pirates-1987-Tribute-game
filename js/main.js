@@ -252,6 +252,8 @@ function toonHulp() {
           ['↑ ↓ / W', 'zeil bijzetten of reven'],
           ['klik', 'koers uitzetten naar dat punt'],
           ['scroll / + −', 'in- en uitzoomen'],
+          ['K', 'voor anker gaan (bezigheden, reflectie, bewaren)'],
+          ['U', 'uitkijk in het kraaiennest — meldt wat er in de verte vaart'],
           ['M', 'zeekaart'],
           ['S', 'vloot en ruim'],
           ['C', 'scheepsvolk en betrekkingen'],

@@ -34,9 +34,11 @@ havensteden, verdeeld over Spanje, Engeland, Frankrijk en Nederland.
 **Zeilen.** De wind is het hart van het spel. Het snelst loop je met de wind
 schuin van achteren — **ruime wind**, een streek of vier van pal achter. Pal
 voor de wind nemen de voorste zeilen de achterste de wind af, en te hoog aan de
-wind beginnen ze te killen: dan loopt het schip dood en moet je kruisen. Een
-sloep ligt veel hoger aan de wind dan een zwaar galjoen. Onderaan links staat in
-één woord en één kleur hoe je vaart; de windroos rechts wijst waarheen het waait.
+wind beginnen ze te killen: dan zak je naar een zevende van je vaart en kun je
+beter kruisen — met een slag over stuurboord en een over bakboord kom je ruim
+tweemaal zo snel naar loef als recht op je doel af. Een sloep ligt veel hoger
+aan de wind dan een zwaar galjoen. Onderaan links staat in één woord en één
+kleur hoe je vaart; de windroos rechts wijst waarheen het waait.
 
 De passaat komt uit het oosten, maar dat is het gemiddelde en niet de grens: de
 wind dwaalt er omheen, ademt in vlagen en draait een enkele keer werkelijk om.

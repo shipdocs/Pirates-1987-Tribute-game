@@ -29,6 +29,12 @@ const DAGEN_PER_SECONDE = 0.12;
 // spanning juist zakken — de gevarenzone is daarmee uitdagend én te keren.
 const STORM_OPBOUW = 0.14;
 const STORM_HERSTEL = 0.045;
+
+// Hoeveel de boeg nog doordraait nadat je het roer loslaat, in radialen. Voor
+// elk schip gelijk: het roer moet aanvoelen als een roer en niet als de
+// remweg van een vrachtschip. Ruim tien graden is genoeg om de draai zacht te
+// laten uitlopen zonder dat je een kwartslag te vroeg moet loslaten.
+const STUUR_UITZWAAI = 0.19;
 const LEEG_STORMVELD = { nabij: 0, rug: 0, gevaar: 0, cel: null, richting: 0, kracht: 1 };
 const STANDAARD_ZOOM = 1.28;
 const MIN_ZOOM = 0.24;
@@ -206,16 +212,18 @@ export function maakZeilScene() {
       // Het roer hakt de koers niet meteen om, maar draait de hoeksnelheid
       // `s.hoekSnelheid` geleidelijk bij: zolang het roer staat, loopt hij op
       // naar de maximale draaisnelheid `wend`, en zodra het roer wordt
-      // losgelaten dooft hij uit. Zo blijft de topdraai even snel als voorheen
-      // (responsief), maar komt de boeg zonder verspringen op gang en valt hij
-      // zonder rukken stil — nergens verandert de hoeksnelheid sprongsgewijs.
+      // losgelaten dooft hij uit. De topdraai blijft even snel als voorheen, en
+      // de boeg komt op gang en valt stil zonder te verspringen.
       const bonus = w.scheepsBonus ? w.scheepsBonus(s) : { zeil: 0, roer: 0, hoogte: 0 };
       const wend = type.wend * (0.55 + 0.45 * schip.zeilen) * (1 + bonus.roer);
       // Hoeksnelheid naar z'n doel dirigeren. Hoe hoger de ratio, des te
       // korter de aanloop en hoe pittiger het sturen; lager voelt zeileriger.
-      const stuurBijregel = 5;
-      // Uitdooftempo zodra het roer in het midden ligt.
-      const stuurRust = 3.4;
+      const stuurBijregel = 6;
+      // Het uitdooftempo hangt aan de wendbaarheid, zodat de uitzwaai voor elk
+      // schip even groot is. Met een vast tempo zwierde juist de handigste sloep
+      // het verst door — die haalt de hoogste draaisnelheid en had er dus de
+      // langste nasleep van, precies omgekeerd aan wat je van hem verwacht.
+      const stuurRust = wend / STUUR_UITZWAAI;
       const links = Game.toets('ArrowLeft') || Game.toets('KeyA');
       const rechts = Game.toets('ArrowRight') || Game.toets('KeyD');
       const stuur = (rechts ? 1 : 0) - (links ? 1 : 0);

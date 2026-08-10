@@ -599,9 +599,11 @@ export function laad() {
   if (sp.startLeeftijd == null) sp.startLeeftijd = 18;
   if (sp.leeftijd == null) sp.leeftijd = sp.startLeeftijd + (sp.dag || 0) / 365;
   if (sp.pensioenGevraagd == null) sp.pensioenGevraagd = 0;
-  // Saves van vóór versie 7 kenden de hoeksnelheid van het roer nog niet. Die
-  // begint stil: het schip hoeft alleen te draaien zolang er gestuurd wordt.
-  if (sp.hoekSnelheid == null) sp.hoekSnelheid = 0;
+  // Het roer ligt bij het hervatten altijd midscheeps. Niet alleen voor saves
+  // van vóór versie 7 die de hoeksnelheid nog niet kenden: wie tijdens een
+  // draai bewaart, zou anders terugkomen met de helmstok hard over en meteen
+  // wegzwaaien.
+  sp.hoekSnelheid = 0;
   // Saves van vóór versie 5 kenden de beruchte kapiteins nog niet. Nieuwe
   // legendes die later worden toegevoegd komen er langs deze weg ook bij.
   if (!Array.isArray(sp.items)) sp.items = [];

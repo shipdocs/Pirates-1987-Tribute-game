@@ -999,9 +999,9 @@ export class Wereld {
    * stilliggen, en dat is precies wat je van een levende zee niet wilt zien.
    */
   #kruisKoers(v, gewenst, type, dt) {
-    // Iets ruimer dan de dode hoek uit `zeilEfficiëntie`: op de rand zelf loopt
-    // een schip nog nauwelijks.
-    const grens = Math.PI - lerp(0.95, 0.5, clamp(type.hoogte, 0, 1)) * 0.9;
+    // Iets ruimer dan de dode hoek zelf: op de rand daarvan loopt een schip nog
+    // nauwelijks.
+    const grens = Math.PI - dodeHoek(type.hoogte) * 1.15;
     const a = normAngle(gewenst - this.windRichting);
     // De teller loopt alleen door terwijl er gekruist wordt, en wordt hier
     // bewust niet teruggezet: een doel dat precies op de grens van de dode hoek
@@ -1057,6 +1057,16 @@ const STORM_RUG_PIEK = 0.5;
 const STORM_RUG_BREEDTE = 0.26;
 export const STORM_KERN = 0.58;
 
+/**
+ * De dode hoek vanaf pal tegen de wind waarbinnen de zeilen gaan killen. Hoe
+ * beter een schip aan de wind ligt, hoe smaller die is. Eén plek, want zowel de
+ * zeilkromme als de kruiskoers van de vloten hangt eraan; die twee uit elkaar
+ * laten lopen zou vloten laten mikken op een hoek waar ze stilvallen.
+ */
+export function dodeHoek(hoogte) {
+  return lerp(0.78, 0.44, clamp(hoogte, 0, 1));
+}
+
 /** Hoe volgroeid een cel is (0..1): jong groeit nog, oud verlept alweer. */
 export function stormRijpheid(cel) {
   return cel.leeftijd < 0.5
@@ -1097,12 +1107,12 @@ export function zeilEfficiëntie(koers, windRichting, hoogte) {
   const ruim = 1 + 0.18 * Math.exp(-Math.pow((a - 0.95) / 0.75, 2));
   // Pal voor de wind vallen de achterste zeilen in de luwte van de voorste.
   const luwte = 1 - 0.1 * Math.exp(-Math.pow(a / 0.5, 2));
-  // Dode hoek: hoe beter het schip aan de wind ligt, hoe smaller die is. Nooit
-  // helemaal nul — anders kan een schip dat pal tegen de wind wordt gestuurd
-  // nergens meer heen, en dat is een val en geen keuze.
-  const dodeHoek = lerp(0.95, 0.5, clamp(hoogte, 0, 1));
-  const kil = smooth(clamp((Math.PI - a) / dodeHoek, 0, 1));
-  return clamp(basis * ruim * luwte * lerp(0.11, 1, kil), 0.06, 1.2);
+  const kil = smooth(clamp((Math.PI - a) / dodeHoek(hoogte), 0, 1));
+  // Kruisen moet lonen, maar pal tegen de wind mag geen stilstand zijn: wie zijn
+  // haven in de wind ziet liggen en het niet doorheeft, moet nog wél vooruit
+  // komen. Zes keer trager dan op zijn best is streng genoeg om je te laten
+  // afvallen, zonder dat het spel op slot gaat.
+  return clamp(basis * ruim * luwte * lerp(0.34, 1, kil), 0.15, 1.2);
 }
 
 export { SCHEPEN, SCHIP_INDEX };

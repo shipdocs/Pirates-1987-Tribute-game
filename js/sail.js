@@ -30,15 +30,18 @@ const DAGEN_PER_SECONDE = 0.12;
 const STORM_OPBOUW = 0.14;
 const STORM_HERSTEL = 0.045;
 
-// Hoeveel de boeg nog doordraait nadat je het roer loslaat, in radialen. Voor
-// elk schip gelijk: het roer moet aanvoelen als een roer en niet als de
-// remweg van een vrachtschip. Ruim tien graden is genoeg om de draai zacht te
-// laten uitlopen zonder dat je een kwartslag te vroeg moet loslaten.
-const STUUR_UITZWAAI = 0.19;
 const LEEG_STORMVELD = { nabij: 0, rug: 0, gevaar: 0, cel: null, richting: 0, kracht: 1 };
 const STANDAARD_ZOOM = 1.28;
 const MIN_ZOOM = 0.24;
 const MAX_ZOOM = 2.4;
+
+// Hoeveel de boeg nog doordraait nadat je het roer loslaat, in radialen. Voor
+// elk schip gelijk: een roer moet aanvoelen als een roer en niet als de remweg
+// van een vrachtschip. Het komt in de praktijk uit op een graad of negen — de
+// demping werkt per beeld, dus bij een lagere beeldsnelheid valt de draai iets
+// eerder stil. Genoeg om de draai zacht te laten uitlopen, weinig genoeg om
+// niet te hoeven mikken.
+const STUUR_UITZWAAI = 0.19;
 
 /**
  * Doodskopje op de zeekaart: waar een beruchte kapitein gezien is. Met een

@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // Alle geluid wordt in de browser zelf opgewekt; geen externe bestanden nodig.
 const state = {
   ctx: null,

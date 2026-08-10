@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // Opstart: titelscherm, het maken van een kapitein en de overgang naar zee.
 import { TAU, clamp, lerp, el, pick, makeRng, sierTijd, fmtGold } from './util.js';
 import { NATIES, NATIE_IDS, TALENTEN, MOEILIJKHEDEN } from './data.js';

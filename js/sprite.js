@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // Eén bakkerij voor alles wat niet elk beeld opnieuw getekend hoeft te worden.
 //
 // Het spel tekende zijn vaste onderdelen tot nu toe op drie plekken met de hand

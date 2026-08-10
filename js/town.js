@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // Alles wat er in een haven gebeurt: handel, kroeg, werf, gouverneur en plundering.
 import { clamp, lerp, fmtGold, fmtDate, el, pick, makeRng } from './util.js';
 import {

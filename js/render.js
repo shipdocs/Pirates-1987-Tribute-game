@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // Alles wat op het canvas getekend wordt: zee, land, steden en schepen.
 import { TAU, clamp, lerp, makeRng, normAngle, sierTijd, sierRustig } from './util.js';
 import { NATIES, SCHIP_INDEX, SCHEEP_MAAT } from './data.js';

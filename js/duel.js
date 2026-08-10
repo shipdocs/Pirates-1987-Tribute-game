@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // Degengevecht: hoog, midden of laag — pareren en meteen terugstoten.
 import { clamp, lerp, TAU, sierTijd } from './util.js';
 import { NATIES } from './data.js';

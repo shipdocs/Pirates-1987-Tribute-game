@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // Perkamenten schermen die over het canvas heen liggen (havens, dialogen, menu's).
 import { el } from './util.js';
 import * as audio from './audio.js';

@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // Ankersysteem: voor anker gaan, bezigheden aan de kluiverboom, reflectie op
 // de verstreken weken en de uitkijk in het kraaiennest.
 //

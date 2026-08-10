@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // De rekenkern van het zeegevecht: breedzijden, kogelbanen en schade.
 //
 // Dit bestand raakt bewust geen canvas, geluid of DOM aan. Daardoor kan het

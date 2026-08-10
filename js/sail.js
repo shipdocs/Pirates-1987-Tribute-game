@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // Overzichtsscène: varen over de Caribische Zee.
 import {
   clamp, lerp, normAngle, dist, TAU, fmtDate, fmtGold, compassName, pick,

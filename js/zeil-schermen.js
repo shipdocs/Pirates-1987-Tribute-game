@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // DOM-schermen die tijdens het zeilen geopend kunnen worden.
 import { clamp, TAU, fmtDate, fmtGold, el } from './util.js';
 import { WAREN, SCHIP_INDEX, NATIES, RANGEN, LEGENDES, ITEMS } from './data.js';

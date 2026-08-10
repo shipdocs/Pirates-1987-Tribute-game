@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // Opbouw van de Caribische wereldkaart: land, steden, economie, wind en vloten.
 import { makeRng, rnd, rndInt, pick, clamp, lerp, smooth, dist, TAU, normAngle } from './util.js';
 import {

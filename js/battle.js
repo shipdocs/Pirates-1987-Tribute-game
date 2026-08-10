@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // Zeeslag: laveren, de wind uitbuiten en de volle laag geven.
 import {
   clamp, lerp, normAngle, dist, TAU, turnToward, fmtGold, makeRng, rnd, rndInt,

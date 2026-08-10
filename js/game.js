@@ -1,3 +1,6 @@
+// © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+// voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
+
 // Spelkern: toestand, scènebeheer, invoer en opslag.
 import { clamp, makeRng, yearOf, pick, smooth } from './util.js';
 import {

@@ -628,8 +628,10 @@ export class Wereld {
     const menging = clamp(nabij * 1.35, 0, 1);
     const richting = normAngle(this.windRichting + normAngle(tangent - this.windRichting) * menging);
     // De vaartwinst zit in de band, niet in het hart: daar is de wind wel hard
-    // maar staat hij dwars op elke koers die je ergens brengt.
-    const kracht = this.windKracht * (1 + 0.55 * rug + 0.3 * nabij);
+    // maar staat hij dwars op elke koers die je ergens brengt. De winst is
+    // bewust gematigd — bovenop de gewone wind telt de cel nog eenderde extra
+    // in de beste band en vrijwel niets buiten de flank.
+    const kracht = this.windKracht * (1 + 0.38 * rug + 0.15 * nabij);
     return { nabij, rug, gevaar, cel, richting, kracht };
   }
 
@@ -1084,7 +1086,11 @@ export class Wereld {
  */
 const STORM_HALO = 150;
 const STORM_RUG_PIEK = 0.5;
-const STORM_RUG_BREEDTE = 0.26;
+// De rugband is bewust smal: de vaartwinst hoort een keuze op één flank te
+// zijn, geen permanente snelheidswind door de halve cel. Een brede band liet
+// je vrijwel overal aangewakkerd zeilen; met deze breedte is de winstzone
+// fysiek ruwweg een derde en de top flink lager.
+const STORM_RUG_BREEDTE = 0.17;
 export const STORM_KERN = 0.58;
 
 /**

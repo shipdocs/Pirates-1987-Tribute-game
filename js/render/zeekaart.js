@@ -278,6 +278,19 @@ export function tekenZeekaart(ctx, wereld, W, H, opts = {}) {
     ctx.fillText(opts.datum, cx + cw / 2, cy + 51);
   }
 
+  // Kaarslicht: een zachte, warme lichtplas alsof de kaart bij lantaarnlicht
+  // wordt bekeken. Excentrisch geplaatst — zoals een lamp naast de tafel
+  // staat, niet recht erboven — anders leest de gloed als een simpele filter
+  // in plaats van een lichtbron in de kajuit.
+  const kaars = ctx.createRadialGradient(
+    W * 0.27, H * 0.34, 0,
+    W * 0.27, H * 0.34, Math.max(W, H) * 0.62
+  );
+  kaars.addColorStop(0, 'rgba(255,214,140,0.15)');
+  kaars.addColorStop(1, 'rgba(255,214,140,0)');
+  ctx.fillStyle = kaars;
+  ctx.fillRect(0, 0, W, H);
+
   // Gebrande, donkere randen: het perkament ligt niet in een lijstje maar op tafel.
   const rand = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.34, W / 2, H / 2, Math.max(W, H) * 0.72);
   rand.addColorStop(0, 'rgba(120,90,45,0)');

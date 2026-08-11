@@ -73,11 +73,14 @@ function mengKleur(hex, zwart) {
 
 export function tekenZee(ctx, cam, vw, vh, t, wind) {
   const schemer = schemerFactor();
+  // Iets rijker en zachter dan een vlak marineblauw: de middentint trekt naar
+  // een dromerig turkoois, zodat het licht ook op klaarlichte dag lijkt te
+  // dragen in plaats van plat te staan.
   const g = ctx.createLinearGradient(0, 0, 0, vh);
-  g.addColorStop(0, mengKleur('#0a3a5e', schemer));
-  g.addColorStop(0.42, mengKleur('#14618c', schemer * 0.8));
-  g.addColorStop(0.72, mengKleur('#10527a', schemer * 0.72));
-  g.addColorStop(1, mengKleur('#092f4c', schemer * 0.65));
+  g.addColorStop(0, mengKleur('#0d3f68', schemer));
+  g.addColorStop(0.42, mengKleur('#1a6f94', schemer * 0.8));
+  g.addColorStop(0.72, mengKleur('#155b84', schemer * 0.72));
+  g.addColorStop(1, mengKleur('#0b3452', schemer * 0.65));
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, vw, vh);
 
@@ -113,21 +116,66 @@ export function tekenZee(ctx, cam, vw, vh, t, wind) {
     vulPatroon(ctx, patroon, vw, vh, maat, -camX + drift.x * 21, -camY + drift.y * 21, alfa, 'lighter');
   }
 
-  // Schemering: een goudoranje gloed op de kim en een blauwige nevel. Deze
-  // gaat óver het water heen, anders kleurt hij alleen de lege ondergrond.
+  // Schemering: een goudoranje gloed op de kim, een zachte roze zoom eromheen
+  // — zoals de lucht bij zonsondergang zelf ook twee kleuren tegelijk draagt —
+  // en een blauwige nevel. Deze gaat óver het water heen, anders kleurt hij
+  // alleen de lege ondergrond.
   if (schemer > 0.05) {
     const s = schemer;
-    const gloed = ctx.createRadialGradient(vw * 0.5, vh * 0.35, 0, vw * 0.5, vh * 0.35, vh * 0.7);
-    gloed.addColorStop(0, `rgba(255,180,80,${0.2 * s})`);
-    gloed.addColorStop(1, 'rgba(255,180,80,0)');
+    const gloed = ctx.createRadialGradient(vw * 0.5, vh * 0.35, 0, vw * 0.5, vh * 0.35, vh * 0.72);
+    gloed.addColorStop(0, `rgba(255,196,120,${0.22 * s})`);
+    gloed.addColorStop(0.5, `rgba(255,150,148,${0.11 * s})`);
+    gloed.addColorStop(1, 'rgba(255,150,148,0)');
     ctx.fillStyle = gloed;
     ctx.fillRect(0, 0, vw, vh);
     const nevel = ctx.createLinearGradient(0, 0, 0, vh);
-    nevel.addColorStop(0, `rgba(24,42,70,${0.42 * s})`);
+    nevel.addColorStop(0, `rgba(36,34,68,${0.4 * s})`);
     nevel.addColorStop(1, 'rgba(10,30,52,0)');
     ctx.fillStyle = nevel;
     ctx.fillRect(0, 0, vw, vh);
   }
+}
+
+/**
+ * Gouden-uurwas over de hele opgebouwde scène: bij schemering kregen alleen
+ * het water in `tekenZee` een warme ondertoon, terwijl land, wolken en
+ * schepen daar bovenop getekend worden en dus fletsig blauw bleven staan.
+ * Zachte `soft-light`-menging houdt het een sfeerwas in plaats van een platte
+ * kleurvlek: donkere partijen (rompen, bos) trekken iets warmer, felle
+ * lichtpartijen (zeildoek, schuim) blijven bijna ongemoeid.
+ */
+export function tekenGoudenUur(ctx, vw, vh) {
+  const schemer = schemerFactor();
+  if (schemer <= 0.05) return;
+  const s = schemer;
+  const g = ctx.createLinearGradient(0, 0, 0, vh);
+  g.addColorStop(0, `rgba(255,196,132,${0.5 * s})`);
+  g.addColorStop(0.55, `rgba(255,160,150,${0.28 * s})`);
+  g.addColorStop(1, `rgba(60,56,110,${0.34 * s})`);
+  ctx.save();
+  ctx.globalCompositeOperation = 'soft-light';
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, vw, vh);
+  ctx.restore();
+}
+
+/**
+ * Zachte vignet over het hele beeld: een lichte, altijd aanwezige donkerrand
+ * die het tafereel omlijst als een schilderij in plaats van een uitsnede.
+ * Wordt als laatste, in schermruimte, over de volledig opgebouwde scène gelegd
+ * — vóór de HUD, die zelf scherp en ongedimd moet blijven.
+ */
+export function tekenVignet(ctx, vw, vh) {
+  const schemer = schemerFactor();
+  const kort = Math.min(vw, vh);
+  const v = ctx.createRadialGradient(
+    vw * 0.5, vh * 0.47, kort * 0.38,
+    vw * 0.5, vh * 0.47, Math.max(vw, vh) * 0.75
+  );
+  v.addColorStop(0, 'rgba(3,10,20,0)');
+  v.addColorStop(1, `rgba(2,8,18,${0.15 + schemer * 0.1})`);
+  ctx.fillStyle = v;
+  ctx.fillRect(0, 0, vw, vh);
 }
 
 // --- Diepte ---------------------------------------------------------------

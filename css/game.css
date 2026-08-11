@@ -90,7 +90,7 @@ html, body {
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(circle at 20% 12%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(circle at 20% 12%, rgba(255, 246, 218, 0.55), transparent 60%),
     linear-gradient(160deg, var(--perkament), var(--perkament-diep));
   color: var(--inkt);
   border: 1px solid #8d7442;

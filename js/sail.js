@@ -518,6 +518,8 @@ export function maakZeilScene() {
       R.tekenMeeuwen(c, vw, vh, Game.tijd);
       const stormLokaal = w.stormWind ? w.stormWind(s.x, s.y) : { richting: w.windRichting, kracht: w.windKracht };
       R.tekenRegen(c, vw, vh, stormLokaal.richting, stormLokaal.kracht, Game.tijd);
+      R.tekenGoudenUur(c, vw, vh);
+      R.tekenVignet(c, vw, vh);
     },
 
     /**

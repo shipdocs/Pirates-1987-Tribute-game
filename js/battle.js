@@ -521,6 +521,8 @@ export function maakZeeslag(vloot, opts) {
       // harder.
       R.tekenMeeuwen(c, vw, vh, Game.tijd);
       R.tekenRegen(c, Game.breedte, Game.hoogte, storm.richting, storm.kracht, Game.tijd);
+      R.tekenGoudenUur(c, vw, vh);
+      R.tekenVignet(c, vw, vh);
     },
 
     /**

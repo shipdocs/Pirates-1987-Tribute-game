@@ -363,6 +363,15 @@ function tekenZeil(ctx, zl, zb, tuigage, m) {
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+  // Zachte lichtzoom op het doek: zonder deze rand is het zeil een plat lapje
+  // verf, terwijl canvas juist het licht vangt en een beetje na-gloeit.
+  // Gebakken, dus dit kost niets tijdens het varen.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = 'rgba(255,250,232,0.4)';
+  ctx.lineWidth = 0.6;
+  ctx.stroke();
+  ctx.restore();
 
   ctx.save();
   ctx.clip();

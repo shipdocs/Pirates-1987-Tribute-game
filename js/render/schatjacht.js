@@ -199,5 +199,14 @@ export function tekenSchatkaart(ctx, wereld, schat, w, h, kwadranten, venster = 
     ctx.strokeRect(qx + 1, qy + 1, w / 2 - 2, h / 2 - 2);
     ctx.setLineDash([]);
   }
+
+  // Dezelfde kaarslicht-gloed als op de zeekaart: één lichtbron in de kajuit,
+  // niet een gladde filter over het hele blad.
+  const kaars = ctx.createRadialGradient(w * 0.27, h * 0.3, 0, w * 0.27, h * 0.3, Math.max(w, h) * 0.65);
+  kaars.addColorStop(0, 'rgba(255,214,140,0.16)');
+  kaars.addColorStop(1, 'rgba(255,214,140,0)');
+  ctx.fillStyle = kaars;
+  ctx.fillRect(0, 0, w, h);
+
   ctx.restore();
 }

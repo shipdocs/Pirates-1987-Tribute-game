@@ -2,12 +2,13 @@
 // voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
 
 // Afgesplitst van render.js: steden en hun gebouwen.
-import { TAU, lerp, makeRng, sierTijd } from '../util.js';
+import { TAU, clamp, lerp, makeRng, sierTijd } from '../util.js';
 import { NATIES } from '../data.js';
 import { bandVoor, maakBakkerij, plaats } from '../sprite.js';
 import { transformSchaal, ZON_X, ZON_Y } from './hulpjes.js';
 import { LICHT_X, LICHT_Y } from './patronen.js';
 import { wereldSchaal } from './schepen.js';
+import { schemerFactor } from './zee.js';
 
 // --- Steden ---------------------------------------------------------------
 
@@ -490,6 +491,51 @@ function tekenStadLijf(ctx, stad, stijl) {
   ctx.restore(); // klaar met de draaiing naar zee
 }
 
+/**
+ * Vensters die bij schemer aangaan: een paar willekeurige ramen per pand, warm
+ * puntlicht met een zachte gloed erover. Apart gebakken van het stadslijf —
+ * dat nooit verandert — zodat alleen de dekking van déze laag per beeld hoeft
+ * te schuiven met de schemerstand, net zoals de vlag en het naamplaatje al
+ * buiten de sprite staan omdat die wél veranderen.
+ */
+function tekenStadVensters(ctx, stad) {
+  const { r, naarZee } = stadMaten(stad);
+  const gebouwen = stadGebouwen(stad, r);
+  const rng = makeRng((stad.id * 950213) >>> 0);
+  ctx.save();
+  ctx.rotate(naarZee);
+  for (const g of gebouwen) {
+    const n = 1 + Math.floor(rng() * 2);
+    for (let i = 0; i < n; i++) {
+      // Niet elk venster brandt — dat oogt als een bakstenen blok met stippen
+      // in plaats van een bewoond dorp.
+      if (rng() < 0.4) continue;
+      const wx = g.x + (rng() - 0.5) * g.w * 0.6;
+      const wy = g.y + (rng() - 0.5) * g.h * 0.5;
+      const rr = Math.min(g.w, g.h) * 0.16;
+      const gloed = ctx.createRadialGradient(wx, wy, 0, wx, wy, rr * 2.6);
+      gloed.addColorStop(0, 'rgba(255,214,140,0.95)');
+      gloed.addColorStop(0.4, 'rgba(255,190,110,0.5)');
+      gloed.addColorStop(1, 'rgba(255,190,110,0)');
+      ctx.fillStyle = gloed;
+      ctx.beginPath();
+      ctx.arc(wx, wy, rr * 2.6, 0, TAU);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+const stadVensterBakkerij = maakBakkerij('stad-vensters', 0.6e6);
+
+function stadVensterSprite(stad, dichtheid) {
+  const { r } = stadMaten(stad);
+  const half = r * 1.75;
+  return stadVensterBakkerij.haal(`${stad.id}`, half, half, bandVoor(dichtheid), (g) =>
+    tekenStadVensters(g, stad)
+  );
+}
+
 // Sprites per (stad, natie, resolutie). De natie zit in de sleutel, dus een
 // verovering vervangt de sprite vanzelf — daar is geen aparte opruiming voor
 // nodig.
@@ -538,6 +584,16 @@ export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
   ctx.scale(s, s);
 
   plaats(ctx, stadSprite(stad, transformSchaal(ctx)));
+
+  // Bij schemer gaan de ramen aan. Onder klaarlichte dag blijft de dekking op
+  // nul, dus dan wordt er niets extra's getekend.
+  const raamGloed = clamp((schemerFactor() - 0.12) / 0.25, 0, 1);
+  if (raamGloed > 0.02) {
+    ctx.save();
+    ctx.globalAlpha = raamGloed;
+    plaats(ctx, stadVensterSprite(stad, transformSchaal(ctx)));
+    ctx.restore();
+  }
 
   // Mast en vlag in ongedraaide ruimte.
   ctx.strokeStyle = '#3a2a18';

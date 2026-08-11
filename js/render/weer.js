@@ -419,18 +419,24 @@ export function tekenRegen(ctx, vw, vh, windRichting, kracht, tijd) {
 export function tekenMeeuwen(ctx, vw, vh, tijd) {
   const st = sierTijd(tijd);
   ctx.save();
-  ctx.strokeStyle = 'rgba(232,230,224,0.5)';
-  ctx.lineWidth = 1.1;
-  const n = 5;
+  const n = 6;
   for (let i = 0; i < n; i++) {
-    // Elke meeuw heeft een andere baan; de voorbeelden cirkelen over het beeld.
-    const sx = vw * (0.12 + 0.24 * i) + Math.sin(st * 0.11 + i * 2.1) * vw * 0.1;
-    const sy = vh * (0.16 + 0.05 * i) + Math.cos(st * 0.09 + i * 1.7) * 22;
-    const flap = Math.sin(st * 5 + i * 1.3) * 3;
+    // Elke meeuw heeft een andere baan én een eigen "afstand": dichterbij
+    // groter, feller en met een trager fladderende slag, verder weg kleiner
+    // en vager. Dat geeft de vlucht dieperte in plaats van een rijtje
+    // identieke vogeltjes op precies dezelfde hoogte.
+    const diepte = 0.5 + 0.5 * Math.sin(i * 2.3 + 1);
+    const maat = 0.7 + diepte * 0.8;
+    const sx = vw * (0.1 + 0.16 * i) + Math.sin(st * 0.11 + i * 2.1) * vw * 0.1;
+    const sy = vh * (0.14 + 0.045 * i) + Math.cos(st * 0.09 + i * 1.7) * 22;
+    const flap = Math.sin(st * 5 + i * 1.3) * 3 * maat;
+    ctx.globalAlpha = 0.32 + diepte * 0.38;
+    ctx.strokeStyle = 'rgba(232,230,224,1)';
+    ctx.lineWidth = 0.8 + diepte * 0.6;
     ctx.beginPath();
-    ctx.moveTo(sx - 4, sy);
-    ctx.quadraticCurveTo(sx - 2, sy - 0.8 + flap, sx, sy + 0.6);
-    ctx.quadraticCurveTo(sx + 2, sy - 0.8 + flap, sx + 4, sy);
+    ctx.moveTo(sx - 4 * maat, sy);
+    ctx.quadraticCurveTo(sx - 2 * maat, sy - 0.8 + flap, sx, sy + 0.6);
+    ctx.quadraticCurveTo(sx + 2 * maat, sy - 0.8 + flap, sx + 4 * maat, sy);
     ctx.stroke();
   }
   ctx.restore();

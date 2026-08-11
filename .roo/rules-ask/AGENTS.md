@@ -7,5 +7,5 @@
 - **Save architecture**: `localStorage` key `zeeroverij.opslag.v1` holds seed + deltas (politics, towns, player); world is rebuilt from seed. The hall-of-fame (erelijst) is a separate key (`zeeroverij.erelijst.v1`) that deliberately survives save wipes.
 - **Data files use id→index maps**: arrays like `WAREN`/`SCHEPEN` pair with `WAAR_INDEX`/`SCHIP_INDEX`; cargo is an array indexed by `WAAR_INDEX`. Any string/object-keyed cargo is a bug.
 - **Canvas vs DOM split**: rendering/gameplay is canvas (`#spel`), all UI overlays are DOM (`#ui`) built exclusively through `UI.toonScherm(...)`.
-- **Analysis documents**: `ANALYSE-*.md` files at repo root are the written design discussions (e.g. online/multiplayer feasibility) — reference them for project-history context.
-- **Units**: positions/speeds are "wereldeenheden" (`PPD = 92` per degree lat/lon, projected); angles in radians with 0 = east (see [`world.js`](../../js/world.js:6)).
+- **Current design document**: [`PLAN-multiplayer.md`](../../PLAN-multiplayer.md) records the active online multiplayer direction; completed plans and snapshot analyses live in Git history.
+- **Units**: positions/speeds are "wereldeenheden" (`PPD = 350` per degree lat/lon, projected); angles in radians with 0 = east (see [`world.js`](../../js/world.js:14)).

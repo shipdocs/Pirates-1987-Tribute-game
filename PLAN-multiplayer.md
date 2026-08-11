@@ -2,9 +2,9 @@
 
 *Hoe we van een lokaal, solitair spel naar een online spel met andere kapiteins
 komen — op de meest eenvoudige manier, met meerdere mogelijkheden, en met een
-duidelijk aanbevolen pad. Dit plan gaat alleen over **multiplayer**; voor
-"online zetten op GitHub Pages" en "betaald model" staat er al een eigen
-analyse: [`ANALYSE-online-betaald-multiplayer.md`](ANALYSE-online-betaald-multiplayer.md).*
+duidelijk aanbevolen pad. Dit plan gaat alleen over **multiplayer**; de huidige
+site blijft statisch via GitHub Pages en concrete commerciële of juridische
+keuzes vallen buiten dit technische plan.*
 
 ---
 
@@ -397,10 +397,6 @@ de slimme truc voor het duel zónder server.
 De **huidige versie** valt onder de eigen licentie: proprietary / alle rechten
 voorbehouden ([`LICENSE`](LICENSE)). Eerdere, al gepubliceerde versies stonden
 onder GPL v3 en behouden voor precies die versies de toen verleende rechten.
-De bestaande
-[`ANALYSE-online-betaald-multiplayer.md`](ANALYSE-online-betaald-multiplayer.md)
-beschrijft nog die eerdere GPL-situatie en is voor de huidige code dus geen
-leidende licentiebron meer.
 
 - De rechthebbende kan de huidige client en een eigen multiplayer-server zelf
   hosten, wijzigen en commercieel aanbieden. Derden krijgen door de zichtbare

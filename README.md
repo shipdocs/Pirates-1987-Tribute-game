@@ -65,6 +65,18 @@ naderende bui de goede is.
 Onderweg eten je mannen proviand op en zakt de moraal — te lang wachten met de
 buit verdelen levert deserteurs of muiterij op.
 
+**Voor anker.** Het anker laten vallen is geen pauzeknop maar een keuze: je
+ruilt tijd en proviand in voor een van vier bezigheden — de kuil schrobben of
+de kooi induiken (geest herstellen), het want opkalefateren (de romp
+herstellen) of op stroom liggen en loeren, wat kans geeft op een beladen
+koopvaarder in de buurt. Een levende klok telt de bezigheid af op speelsnelheid:
+de datum loopt door, het volk eet zijn rantsoen en de wereld — wind, economie,
+politiek, vloten — tikt gewoon door, precies als onder zeil. Je kunt meerdere
+bezigheden na elkaar doen voor je het anker weer licht; hetzelfde scherm dient
+ook als het handmatige bewaarpunt. De uitkijk in het kraaiennest — los van het
+anker, ook gewoon onder zeil te gebruiken — klimt omhoog en meldt na een paar
+tellen welke schepen er in de buurt varen.
+
 **Zeegevechten.** Het geschut staat in rijen langs de zijkant en vuurt dus
 alleen dwarsuit, nooit over de boeg of de spiegel — je richt met het roer.
 De helft van je stukken staat aan elk boord, en hoe meer stukken, hoe breder
@@ -148,11 +160,12 @@ vlootscherm, dus daar mindert alleen ↓ het zeil.
 |---|---|
 | **Op zee** | ← → of `A` `D` sturen · ↑ ↓ zeil bij- of minderen · klik = koers uitzetten |
 | | `M` zeekaart · `S` vloot en ruim · `C` bemanning · `Esc` scheepsraad |
+| | `U` uitkijk in het kraaiennest · `K` voor anker gaan |
 | | scrollen of `+` `-` = in- en uitzoomen |
 | **Zeegevecht** | ← → of `A` `D` sturen — hiermee richt je · ↑ ↓ of `W` `S` zeil |
 | | `spatie` vuren · `1` `2` `3` rondkogel, kettingkogel, schroot · `Tab` volgende soort |
 | | `B` enteren (binnen 95 m) · `Esc` proberen te vluchten |
-| **Duel** | ↑ hoog · → midden · ↓ laag — pareer op de hoogte waarop hij uithaalt |
+| **Duel** | ↑ of `W` hoog · → `D` of `spatie` midden · ↓ of `S` laag — pareer op de hoogte waarop hij uithaalt |
 | **Overal** | `F` miniatuureffect aan of uit |
 | **In een scherm** | `Esc` sluiten · `Tab` langs de knoppen · `Enter` indrukken |
 
@@ -188,14 +201,22 @@ js/
   main.js             opstart, titelscherm, kapitein maken
   game.js             spelkern: toestand, scènes, invoer, opslag
   world.js            kaartgeometrie, steden, economie, wind, vloten
-  data.js             naties, waren, scheepstypen, steden, rangen
-  render.js           zee, kustlijnen, schepen, steden, windroos
+  data.js             naties, waren, scheepstypen, steden, rangen, legendes
+  sprite.js           bakkerij voor vast tekenwerk (rompen, steden, windroos)
+  render.js           doorgeefmodule; het tekenwerk zelf staat in js/render/
+  render/             zee, land, schepen, steden, weer, HUD, zeekaart,
+                      rookdeeltjes, schatkaart en gedeelde tekenhulpjes,
+                      elk in een eigen bestand
   sail.js             overzichtsscène (varen)
+  anker.js            voor anker gaan: bezigheden, levende klok, uitkijk
   zeil-schermen.js    zeekaart, vloot, bemanning en scheepsraad
   battle.js           zeeslag
   gevechtsmodel.js    ballistiek, schade en overgave — zonder canvas of DOM
   duel.js             degengevecht
-  town.js             havenschermen
+  town.js             doorgeefmodule; de havenschermen staan in js/town/
+  town/               haveningang, kroeg, koopman, werf, gouverneur,
+                      bestorming, familie, opdrachten en aftreden,
+                      elk in een eigen bestand
   ui.js               perkamentpanelen en dialogen
   util.js             wiskunde- en opmaakhulpjes
   audio.js            opgenomen zeemuziek, synthese, ambiance en geluidseffecten

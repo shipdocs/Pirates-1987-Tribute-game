@@ -3,7 +3,7 @@
 - **Write in Dutch**: all identifiers, comments and JSDoc are Dutch (`maakZeilScene`, `werkBij`, `toonScherm`, `vijand`). Read [AGENTS.md](../../AGENTS.md) first for the full conventions.
 - **Never break the headless contract** of [`js/gevechtsmodel.js`](../../js/gevechtsmodel.js): no canvas/DOM/audio imports there — it must stay runnable outside the browser (combat balance is computed server-side/headless).
 - **Deterministic world**: anything derived from the world `seed` must go through `makeRng(seed)` from [`js/util.js`](../../js/util.js); never `Math.random` for world layout.
-- **Save format** ([`bewaar()`/`laad()`](../../js/game.js:278)): save = seed + changed state only. When adding new player/world fields, bump `version` and wire migration into `laad()` — it sanitizes missing fields with defaults.
+- **Save format** ([`bewaar()`/`laad()`](../../js/game.js:600)): save = seed + changed state only. When adding new player/world fields, bump `versie` and wire migration into `laad()` — it sanitizes missing fields with defaults.
 - **Fleet state belongs on `Game.speler`/`Game.wereld`**, never in scene closures. Scenes (`maak…Scene()`) hold transient/camera state only and follow the optional-methods scene protocol (`betreed`/`werkBij`/`teken`/`toets`/`scroll`/`verlaat`/`maatVeranderd`).
 - **Keyboard**: use `e.code` (physical keys), not `e.key`; arrow keys/Space/Tab must be `preventDefault`-ed unless `UI.ietsOpen()`.
 - **UI**: build overlays with `UI.toonScherm(...)` (returns screen with `sluit()`, `ververs()`, `escKnop`), not raw DOM. `UI.vraag()` returns a Promise.

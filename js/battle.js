@@ -23,6 +23,22 @@ import {
 
 const ARENA_X = 1150;
 const ARENA_Y = 820;
+const KAART_NAAR_SLAG = 10;
+const MIN_STARTAFSTAND = 300;
+
+// De oude, veilige opstelling waarop het slagterrein is gebouwd. We gebruiken
+// hem alleen nog als lokale basis: de hele opstelling draait straks mee met de
+// werkelijke ligging van de schepen op de kaart.
+const BASIS_MIJ = { x: -230, y: 70 };
+const BASIS_VIJAND = { x: 250, y: -110 };
+const BASIS_MIDDEN = {
+  x: (BASIS_MIJ.x + BASIS_VIJAND.x) / 2,
+  y: (BASIS_MIJ.y + BASIS_VIJAND.y) / 2,
+};
+const BASIS_DX = BASIS_VIJAND.x - BASIS_MIJ.x;
+const BASIS_DY = BASIS_VIJAND.y - BASIS_MIJ.y;
+const BASIS_AFSTAND = Math.hypot(BASIS_DX, BASIS_DY);
+const BASIS_HOEK = Math.atan2(BASIS_DY, BASIS_DX);
 
 // --- Slagterrein ---------------------------------------------------------
 
@@ -82,6 +98,68 @@ function maakSlagTerrein(wereld, speler, vloot) {
     rotsen.push({ x, y, r, draai: rnd(rng, 0, TAU), rand });
   }
   return { kust, rotsen };
+}
+
+/**
+ * Zet kaartpositie, koers en vaart om naar een lokale gevechtsopstelling.
+ *
+ * De kaartafstand wordt uitvergroot om niet meteen binnen enterafstand te
+ * beginnen. De onderlinge richting en beide koersen blijven wel exact gelijk,
+ * zodat een achtervolging, tegemoetkomende koers of dwarse onderschepping in
+ * de zeeslag begint zoals die er op de kaart uitzag.
+ */
+function maakSlagStart(speler, vloot, eigenSchip) {
+  const kaartDx = vloot.x - speler.x;
+  const kaartDy = vloot.y - speler.y;
+  const kaartAfstand = Math.hypot(kaartDx, kaartDy);
+  const kaartHoek = kaartAfstand > 0.01
+    ? Math.atan2(kaartDy, kaartDx)
+    : Number.isFinite(speler.koers) ? speler.koers : 0;
+  const draai = normAngle(kaartHoek - BASIS_HOEK);
+  const afstand = clamp(kaartAfstand * KAART_NAAR_SLAG, MIN_STARTAFSTAND, BASIS_AFSTAND);
+  const schaal = afstand / BASIS_AFSTAND;
+  const cos = Math.cos(draai),
+    sin = Math.sin(draai);
+  const zetOm = (punt) => {
+    const x = (punt.x - BASIS_MIDDEN.x) * schaal;
+    const y = (punt.y - BASIS_MIDDEN.y) * schaal;
+    return {
+      x: x * cos - y * sin,
+      y: x * sin + y * cos,
+    };
+  };
+
+  return {
+    mij: {
+      ...zetOm(BASIS_MIJ),
+      koers: Number.isFinite(speler.koers) ? speler.koers : 0,
+      snelheid: Number.isFinite(speler.snelheid) ? speler.snelheid : 30,
+      zeilstand: Number.isFinite(eigenSchip.zeilen) ? eigenSchip.zeilen : 0.8,
+    },
+    vijand: {
+      ...zetOm(BASIS_VIJAND),
+      koers: Number.isFinite(vloot.koers) ? vloot.koers : normAngle(kaartHoek + Math.PI),
+      snelheid: Number.isFinite(vloot.snelheid) ? vloot.snelheid : 30,
+      zeilstand: 1,
+    },
+    draai,
+    kaartAfstand,
+  };
+}
+
+/** Draait het veilige, deterministische terrein mee met de kaartopstelling. */
+function draaiSlagTerrein(terrein, draai) {
+  const cos = Math.cos(draai),
+    sin = Math.sin(draai);
+  const zetOm = (punt) => {
+    const x = punt.x - BASIS_MIDDEN.x;
+    const y = punt.y - BASIS_MIDDEN.y;
+    punt.x = x * cos - y * sin;
+    punt.y = x * sin + y * cos;
+    punt.draai = normAngle(punt.draai + draai);
+  };
+  zetOm(terrein.kust);
+  for (const rots of terrein.rotsen) zetOm(rots);
 }
 
 /** Raakt een middelpunt met veiligheidsmarge de kust of een rotspunt? */
@@ -188,6 +266,7 @@ export function maakZeeslag(vloot, opts) {
   const wereld = Game.wereld;
   const speler = Game.speler;
   const eigenSchip = vlaggenschip(speler);
+  const slagStart = maakSlagStart(speler, vloot, eigenSchip);
 
   // Moeilijkheid schaalt alleen de vijand (niet de eigen romp), zodat een
   // hogere stand meer tegenstand betekent zonder dat de speler fragieler is.
@@ -202,9 +281,11 @@ export function maakZeeslag(vloot, opts) {
     maxRomp: eigenSchip.maxRomp,
     geschut: eigenSchip.geschut,
     scheepsvolk: speler.scheepsvolk,
-    x: -230,
-    y: 70,
-    koers: 0,
+    x: slagStart.mij.x,
+    y: slagStart.mij.y,
+    koers: slagStart.mij.koers,
+    snelheid: slagStart.mij.snelheid,
+    zeilstand: slagStart.mij.zeilstand,
     speler: true,
     // Uitrusting van de werf én buitstukken van verslagen legendes tellen mee.
     upgradeZeil: (eigenUp.zeilen || 0) * 0.04 + itemBonus(speler, 'snelheid'),
@@ -223,9 +304,11 @@ export function maakZeeslag(vloot, opts) {
     geschut: startGeschut,
     // Moeilijkheid geeft de vijand meer (of minder) scheepsvolk.
     scheepsvolk: Math.round(startScheepsvolk * Math.sqrt(vijandKracht)),
-    x: 250,
-    y: -110,
-    koers: Math.PI,
+    x: slagStart.vijand.x,
+    y: slagStart.vijand.y,
+    koers: slagStart.vijand.koers,
+    snelheid: slagStart.vijand.snelheid,
+    zeilstand: slagStart.vijand.zeilstand,
   });
   // Streepjes voor overgave: hoe zwaarder de vijand, hoe meer je moet slopen.
   vijand.startScheepsvolk = Math.round(startScheepsvolk * Math.sqrt(vijandKracht));
@@ -233,6 +316,7 @@ export function maakZeeslag(vloot, opts) {
   mij.startGeschut = mij.geschut;
 
   const terrein = maakSlagTerrein(wereld, speler, vloot);
+  draaiSlagTerrein(terrein, slagStart.draai);
   let kogels = [];
   let deeltjes = [];
   let munitie = 0;
@@ -255,6 +339,7 @@ export function maakZeeslag(vloot, opts) {
       mij,
       vijand,
       terrein,
+      slagStart,
       kogels,
       raaktTerrein: (x, y, marge = 0) => raaktSlagTerrein(terrein, x, y, marge),
     },
@@ -1134,26 +1219,9 @@ export function maakZeeslag(vloot, opts) {
   }
 
   function tekenStrijder(c, s, wind, zeegang) {
-    // Heldere V aan de boeg: de zee kan van richting veranderen, deze golf
-    // hoort altijd zichtbaar bij de vaarrichting van het schip zelf.
-    const [schipL, schipB] = R.scheepMaat(s.type);
-    const golf = clamp(s.snelheid / 70, 0, 1);
-    if (golf > 0.08) {
-      c.save();
-      c.translate(s.x, s.y);
-      c.rotate(s.koers);
-      c.scale(2, 2);
-      c.strokeStyle = `rgba(232,249,250,${0.28 + golf * 0.42})`;
-      c.lineWidth = 1.15;
-      c.beginPath();
-      c.moveTo(schipL * 0.5, 0);
-      c.quadraticCurveTo(schipL * 0.7, -schipB * 0.25, schipL * 0.46, -schipB * 1.2);
-      c.moveTo(schipL * 0.5, 0);
-      c.quadraticCurveTo(schipL * 0.7, schipB * 0.25, schipL * 0.46, schipB * 1.2);
-      c.stroke();
-      c.restore();
-    }
-
+    // `tekenSchip` tekent zelf een korte, snelheidsafhankelijke boeggolf die
+    // met romp en zeegang meewerkt. De vroegere extra V hier lag daar dubbel
+    // bovenop en werd op gevechtsschaal twee stijve haken naast de boeg.
     R.tekenSchip(c, s.x, s.y, s.koers, s.type, s.natie, wind, {
       vaart: s.snelheid / 90,
       tijd: Game.tijd,
@@ -1333,8 +1401,8 @@ function maakStrijder(o) {
     x: o.x,
     y: o.y,
     koers: o.koers,
-    snelheid: 30,
-    zeilstand: 0.8,
+    snelheid: o.snelheid ?? 30,
+    zeilstand: o.zeilstand ?? 0.8,
     tuigage: 1,
     herlaad: 1.2,
     herlaadVol: 3.4,

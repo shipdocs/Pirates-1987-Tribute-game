@@ -243,13 +243,26 @@ function eetDag(s) {
  * krijgen — het resultaat is dezelfde wereld als waarin werkelijk zoveel
  * etmalen zijn verstreken.
  */
-function werkWereldTijd(dagen, seconden) {
+export function werkWereldTijd(dagen, seconden) {
   const w = Game.wereld;
   const s = Game.speler;
   w.windTik(seconden);
   w.economieTik(dagen);
   w.relatieTik(dagen, s);
   w.vlotenTik(seconden, s);
+}
+
+/**
+ * Voor bezigheden die de datum in één klap laten opschieten (zonder de
+ * levende klok van het ankerscherm) — de datum en leeftijd zelf worden hier,
+ * anders dan bij `werkWereldTijd`, dus wél meegenomen. Gebruikt door
+ * gevangenschap (battle.js) en de bestormingskeuzes (town/bestorming.js).
+ */
+export function verstrijkDagen(dagen) {
+  const s = Game.speler;
+  s.dag += dagen;
+  s.leeftijd = s.startLeeftijd + s.dag / 365;
+  werkWereldTijd(dagen, dagen / DAGEN_PER_SECONDE);
 }
 
 /**

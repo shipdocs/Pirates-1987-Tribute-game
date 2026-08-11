@@ -1,14 +1,116 @@
 // Afgesplitst van town.js: de stadsbestorming, van de aanval tot de verovering.
-import { Game } from '../game.js';
+import { Game, vlaggenschip } from '../game.js';
 import { MOEILIJKHEDEN, NATIES, NATIE_IDS, KAPITEIN_NAMEN } from '../data.js';
 import * as UI from '../ui.js';
 import * as audio from '../audio.js';
 import { clamp, lerp, fmtGold, pick } from '../util.js';
 import { maakDuel } from '../duel.js';
+import { verstrijkDagen } from '../anker.js';
 
 const rng = Math.random;
 
+/**
+ * Eerste keuze bij een aanval: rechtstreeks bestormen (het oude, ongewijzigde
+ * gedrag), eerst het garnizoen vanaf zee verzwakken, of belegeren. Beide
+ * nieuwe wegen verzwakken alleen `stad.garnizoen` — dat voedt zowel de
+ * kansworp als de duel-parameters in `voerBestorming()` toch al, dus geen
+ * dubbele bedrading nodig. Geen tweede gevechtsengine: de bestaande
+ * bestorming + duel blijft de kern, dit voegt er alleen keuzes vóór aan toe.
+ */
 async function bestormStad(stad, opVertrek) {
+  const s = Game.speler;
+  const garnizoen = Math.round(stad.garnizoen);
+  const totaalGeschut = s.schepen.reduce((a, sc) => a + sc.geschut, 0);
+  const drempel = Math.ceil(garnizoen * 0.35);
+
+  const keuze = await UI.vraag(
+    `${stad.naam} aanpakken`,
+    `Het garnizoen wordt geschat op ongeveer ${garnizoen} man. Hoe wil je te werk gaan?`,
+    [
+      { label: 'Rechtstreeks bestormen', waarde: 'storm' },
+      {
+        label: `Eerst beschieten vanaf zee (minstens ${drempel} stukken)`,
+        waarde: 'beschiet',
+        uit: totaalGeschut < drempel,
+      },
+      { label: 'Belegeren (5 dagen)', waarde: 'beleg' },
+      { label: 'Terug aan boord', waarde: 'terug', esc: true },
+    ],
+    { figuur: 'zeeman' }
+  );
+
+  if (keuze === 'beschiet') return beschietStad(stad, opVertrek, totaalGeschut);
+  if (keuze === 'beleg') return belegerStad(stad, opVertrek);
+  if (keuze === 'storm') return voerBestorming(stad, opVertrek);
+  opVertrek();
+}
+
+/**
+ * Beschieten vanaf zee: kost weinig tijd, verzwakt het garnizoen naar rato
+ * van de eigen vloot-vuurkracht, met een kans op tegenvuurschade aan het
+ * vlaggenschip.
+ */
+async function beschietStad(stad, opVertrek, totaalGeschut) {
+  const s = Game.speler;
+  // Vóór de tijdsprong vastleggen: economieTik (via verstrijkDagen) laat elk
+  // garnizoen ondertussen ook weer aangroeien, en die aangroei mag de
+  // beschieting niet tenietdoen — de reductie geldt t.o.v. het garnizoen zoals
+  // het was toen de lading werd afgevuurd.
+  const garnizoen = Math.round(stad.garnizoen);
+  const factor = clamp(totaalGeschut / (garnizoen * 1.6), 0.15, 1);
+  const nieuwGarnizoen = Math.max(6, Math.round(garnizoen * lerp(0.85, 0.5, factor)));
+
+  verstrijkDagen(0.4);
+  stad.garnizoen = nieuwGarnizoen;
+
+  let schadeTekst = '';
+  if (Math.random() < 0.4) {
+    const eigen = vlaggenschip(s);
+    const schade = Math.max(1, Math.round(eigen.maxRomp * (0.05 + Math.random() * 0.07)));
+    eigen.romp = Math.max(10, eigen.romp - schade);
+    schadeTekst = ' De wal schiet terug — je vlaggenschip loopt schade op.';
+  }
+
+  await UI.vraag(
+    'Beschieting',
+    `Je haalt de kust binnen dracht en geeft er een aantal lagen van langs. ` +
+      `Het garnizoen is geslonken tot ongeveer <b>${Math.round(stad.garnizoen)}</b> man.${schadeTekst}`,
+    [{ label: 'Aan land gaan', waarde: 'ok', soort: 'gevaar' }],
+    { figuur: 'zeeman' }
+  );
+
+  return bestormStad(stad, opVertrek);
+}
+
+/**
+ * Belegeren: traag maar veilig — geen scheepsschade, wel geest-tol voor de
+ * verveling van een blokkade. Een verzwakt-maar-niet-veroverd garnizoen heelt
+ * vanzelf via de bestaande `economieTik`-aangroei, dus een beleg dat je niet
+ * afmaakt is geen verspilde moeite als je later terugkeert.
+ */
+async function belegerStad(stad, opVertrek) {
+  const s = Game.speler;
+  // Zelfde reden als bij beschietStad: reken de verzwakking uit vóór
+  // verstrijkDagen() dit garnizoen ook weer laat aangroeien.
+  const nieuwGarnizoen = Math.max(6, Math.round(stad.garnizoen * 0.82));
+
+  verstrijkDagen(5);
+  stad.garnizoen = nieuwGarnizoen;
+  s.geest = clamp(s.geest - 10, 0, 100);
+
+  await UI.vraag(
+    'Beleg',
+    `Vijf dagen voor de kust snijdt de aanvoer af. Het garnizoen is geslonken tot ` +
+      `ongeveer <b>${Math.round(stad.garnizoen)}</b> man, maar het wachten hangt het scheepsvolk de keel uit.`,
+    [{ label: 'Aan land gaan', waarde: 'ok', soort: 'gevaar' }],
+    { figuur: 'zeeman' }
+  );
+
+  return bestormStad(stad, opVertrek);
+}
+
+/** De oorspronkelijke bestorming: kansworp, aanval, duel tegen de bevelhebber. */
+async function voerBestorming(stad, opVertrek) {
   const s = Game.speler;
   const garnizoen = Math.round(stad.garnizoen);
   const kans = clamp(

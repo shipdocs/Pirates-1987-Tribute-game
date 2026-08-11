@@ -34,6 +34,14 @@ const STORM_OPBOUW = 0.14;
 const STORM_HERSTEL = 0.045;
 
 const LEEG_STORMVELD = { nabij: 0, rug: 0, gevaar: 0, cel: null, richting: 0, kracht: 1 };
+
+// Kustvuur: hoe ver een vijandig fort nog raak schiet, en hoe snel de
+// dreiging op- en afbouwt. Dezelfde drempel (-50) als de aanmeerweigering in
+// town/haven.js, zodat een stad die je weigert ook echt op je vuurt.
+const KUSTVUUR_BEREIK = 260; // wereldeenheden — tussen aanmeren (46) en jachtbereik (420)
+const KUSTVUUR_DREMPEL = -50;
+const KUSTVUUR_OPBOUW = 0.09;
+const KUSTVUUR_HERSTEL = 0.25;
 // Zoomstanden. De standaardstand is de maat waarop de schepen op ware grootte
 // worden getekend (zie `scheepSchaal` hieronder); hij is bewust niet hoger
 // gezet, want een stormcel meet zeshonderd tot twaalfhonderd wereldeenheden en
@@ -108,6 +116,10 @@ export function maakZeilScene() {
   let stormBelasting = 0;
   let stormFase = 'buiten'; // buiten · band · kern — voor de overgangsmelding
   let stormWaarschuwing = 0; // welke drempel al gemeld is (0, 1 of 2)
+  // Kustvuur: dezelfde opbouw/afbouw-vorm als stormBelasting, maar gevoed door
+  // de relatie met een nabije vijandige stad in plaats van het windveld.
+  let kustvuurBelasting = 0;
+  let kustvuurGewaarschuwd = false;
   // Laatst gemelde weerbeeld. Zonder deze twee draait de wind ongemerkt: hij
   // kruipt te traag om te zien en het enige spoor is een cijfer in de balk.
   let gemeldeWindhoek = null;
@@ -232,6 +244,7 @@ export function maakZeilScene() {
 
       stormVeld = w.stormVeld ? w.stormVeld(s.x, s.y) : LEEG_STORMVELD;
       werkStormBij(s, stormVeld, dt);
+      werkKustvuurBij(s, w, dt);
 
       // --- Sturen ---------------------------------------------------------
       // Het roer hakt de koers niet meteen om, maar draait de hoeksnelheid
@@ -622,6 +635,45 @@ export function maakZeilScene() {
     }
   }
 
+  /**
+   * Kustvuur: een stad die je weigert (dezelfde -50-drempel als de
+   * aanmeerweigering in town/haven.js) schiet ook echt als je binnen bereik
+   * blijft — geen sfeertekst zonder gevolg. Zelfde opbouw/afbouw-vorm als
+   * `werkStormBij`: de dreiging loopt zichtbaar op en is te ontlopen door
+   * afstand te houden, en breekt pas na een gewaarschuwde drempel.
+   */
+  function werkKustvuurBij(s, w, dt) {
+    const stad = w.stadOp(s.x, s.y, KUSTVUUR_BEREIK);
+    const vijandig = !!stad && stad.natie !== 'piraat' && (s.relatie[stad.natie] || 0) <= KUSTVUUR_DREMPEL;
+
+    if (vijandig) {
+      const zwaarte = (stad.soort === 'fort' ? 1.4 : 1) * (stad.grootte / 3);
+      kustvuurBelasting = clamp(kustvuurBelasting + dt * KUSTVUUR_OPBOUW * zwaarte, 0, 1);
+    } else {
+      kustvuurBelasting = clamp(kustvuurBelasting - dt * KUSTVUUR_HERSTEL, 0, 1);
+      if (kustvuurBelasting < 0.3) kustvuurGewaarschuwd = false;
+      return;
+    }
+
+    if (kustvuurBelasting > 0.4 && !kustvuurGewaarschuwd) {
+      kustvuurGewaarschuwd = true;
+      Game.melding(`Het geschut van ${stad.naam} vindt de afstand — kom niet dichterbij!`, 'goud');
+    }
+
+    if (kustvuurBelasting >= 1) {
+      const moe = MOEILIJKHEDEN.find((m) => m.id === s.moeilijkheid) || MOEILIJKHEDEN[1];
+      const schip = vlaggenschip(s);
+      kustvuurBelasting = 0.5;
+      schip.romp = Math.max(
+        10,
+        schip.romp - Math.round(schip.maxRomp * (0.05 + Math.random() * 0.06) * (moe.storm || 1))
+      );
+      s.scheepsvolk = Math.max(6, s.scheepsvolk - Math.max(1, Math.round(s.scheepsvolk * 0.02)));
+      Game.melding(`Een voltreffer uit het fort van ${stad.naam}!`, 'rood');
+      audio.sfx.kanon();
+    }
+  }
+
   // --- Weer ----------------------------------------------------------------
 
   /**
@@ -969,6 +1021,16 @@ export function maakZeilScene() {
           if (uitslag.overgegeven) {
             vloot.jaagt = false;
             vloot.aggroKoeling = 22;
+          }
+          // Een harde nederlaag heeft de speler al aan land gezet bij de
+          // gevangenhoudende natie (zie verwerkGevangenschap in battle.js) —
+          // de nieuwe positie kan ver over de kaart liggen, dus de camera
+          // springt mee in plaats van er heen te pannen.
+          if (uitslag.verloren) {
+            vloot.jaagt = false;
+            vloot.aggroKoeling = 24;
+            cam.x = Game.speler.x;
+            cam.y = Game.speler.y;
           }
           ontmoetingKoeling = 6;
         },

@@ -15,6 +15,7 @@ import * as R from './render.js';
 import * as UI from './ui.js';
 import * as audio from './audio.js';
 import { maakDuel } from './duel.js';
+import { verstrijkDagen } from './anker.js';
 import {
   MUNITIE, KOGEL_SNELHEID, ENTERAFSTAND, KANS_GESCHUT, SCHROOT_KOPPEN, KETTING_TUIGAGE,
   salvoStukken, spreiding, schootsafstand, voorhoudpunt, salvoRichting, inSchootsveld,
@@ -1173,7 +1174,101 @@ export function maakZeeslag(vloot, opts) {
       [{ label: 'Het is nog niet voorbij', waarde: 'ok' }],
       { figuur: 'zeeman' }
     );
+    await verwerkGevangenschap(vloot);
     beëindig({ verloren: true });
+  }
+
+  /**
+   * Het klassieke gevangenmoment: `nederlaag()` belóófde al dat je aan land
+   * werd gezet, maar liet het daarbij — de speler bleef gewoon liggen naast
+   * de vloot die hem net versloeg. Dit maakt die belofte waar met een echte
+   * keuze (ontsnappen, omkopen, uitzitten), tikt de datum en de wereld door
+   * met `verstrijkDagen()` uit het ankersysteem — precies zoals bij een
+   * ankerbezigheid loopt de wereld door terwijl de speler vastzit — en zet de
+   * speler daadwerkelijk aan wal bij de gevangenhoudende natie.
+   */
+  async function verwerkGevangenschap(vangerVloot) {
+    const s = speler;
+    const piraat = vangerVloot.natie === 'piraat';
+    let magOntsnappen = true;
+    let tekst = piraat
+      ? 'De piraten zetten je met een handjevol getrouwen op een kaal stuk kust — genoeg om je te verkopen aan wie het meeste biedt.'
+      : `Je wordt geboeid overgebracht naar het garnizoen van ${NATIES[vangerVloot.natie].naam}.`;
+    let uitkomst = null;
+
+    while (!uitkomst) {
+      const keuzes = [];
+      if (magOntsnappen) {
+        keuzes.push({ label: 'Wachten op een kans om te ontsnappen', waarde: 'ontsnap' });
+      }
+      keuzes.push({ label: 'Het losgeld betalen', waarde: 'omkopen', uit: s.goud < 50 });
+      keuzes.push({ label: 'Wachten tot ze je vrijlaten', waarde: 'uitzitten' });
+
+      const keuze = await UI.vraag('Gevangengenomen', tekst, keuzes, { figuur: 'zeeman' });
+
+      if (keuze === 'ontsnap') {
+        const kans = clamp(
+          0.3 + (s.geest - 50) / 300 +
+            talentBonus(s, 'gladde_tong') * 0.18 + talentBonus(s, 'stuurmanskunst') * 0.08,
+          0.1,
+          0.7
+        );
+        const dagen = 2 + Math.random() * 3;
+        verstrijkDagen(dagen);
+        if (Math.random() < kans) {
+          s.geest = clamp(s.geest - 8, 0, 100);
+          uitkomst = { tekst: 'Je grijpt je kans en glipt weg in de nacht — de kust is vrij.', klasse: 'goed' };
+        } else {
+          s.geest = clamp(s.geest - 15, 0, 100);
+          s.scheepsvolk = Math.max(1, Math.round(s.scheepsvolk * 0.9));
+          verstrijkDagen(2 + Math.random() * 2);
+          magOntsnappen = false;
+          tekst = 'De poging mislukt — je wordt betrapt en voortaan strenger bewaakt. Er blijven twee wegen open.';
+        }
+      } else if (keuze === 'omkopen') {
+        const prijs = clamp(Math.round(s.goud * 0.4 + 250), 300, 6000);
+        const betaald = Math.min(prijs, s.goud);
+        s.goud -= betaald;
+        s.geest = clamp(s.geest - 8, 0, 100);
+        s.relatie[vangerVloot.natie] = clamp((s.relatie[vangerVloot.natie] || 0) + 4, -100, 100);
+        verstrijkDagen(1);
+        uitkomst = {
+          tekst: `Goud wisselt van hand en de poort gaat open — <b>${fmtGold(betaald)}</b> lichter.`,
+          klasse: 'goed',
+        };
+      } else {
+        const dagen = Math.round((6 + Math.random() * 8) * (vangerVloot.marine ? 1.3 : 1));
+        s.geest = clamp(s.geest - 10, 0, 100);
+        s.scheepsvolk = Math.max(1, Math.round(s.scheepsvolk * 0.94));
+        verstrijkDagen(dagen);
+        uitkomst = { tekst: `Na ${dagen} dagen laten ze je gaan.`, klasse: 'risico' };
+      }
+    }
+
+    await UI.vraag('Weer op vrije voeten', uitkomst.tekst, [{ label: 'Terug aan dek', waarde: 'ok' }], {
+      figuur: 'zeeman',
+    });
+
+    // Daadwerkelijk aan land gezet: dichtstbijzijnde stad van de
+    // gevangenhoudende natie, met terugval op de dichtstbijzijnde stad van
+    // welke natie dan ook (een 'piraat'-vloot heeft doorgaans geen eigen
+    // havens tenzij ooit veroverd).
+    const havens = wereld.stedenVanNatie(vangerVloot.natie);
+    const kandidaten = havens.length ? havens : wereld.steden;
+    const doelStad = kandidaten.reduce((a, b) =>
+      dist(a.x, a.y, s.x, s.y) < dist(b.x, b.y, s.x, s.y) ? a : b
+    );
+    const eigenSchip = vlaggenschip(s);
+    const hoek = Math.random() * TAU;
+    const [wx, wy] = wereld.dichtstbijVaren(
+      doelStad.ankerX + Math.cos(hoek) * 80,
+      doelStad.ankerY + Math.sin(hoek) * 80,
+      eigenSchip.type
+    );
+    s.x = wx;
+    s.y = wy;
+    s.snelheid = 0;
+    s.hoekSnelheid = 0;
   }
 
   function slaSchadeOp() {

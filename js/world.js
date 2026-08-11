@@ -1046,6 +1046,11 @@ export class Wereld {
       if (rel <= -25) kans = 0.45;
       else if (rel < 15) kans = 0.08;
       else kans = 0; // Vriendelijke naties laten je met rust.
+      // Een bekende naam trekt ook premiejagers van neutrale en vriendelijke
+      // naties aan — reputatie alleen is al reden om te jagen. Geankerd aan
+      // de bestaande legende-roemschaal (60-400+), niet aan een los bereik.
+      const premieFactor = clamp(((speler.roem || 0) - 100) / 1400, 0, 0.22);
+      kans = clamp(kans + premieFactor, 0, 1);
     }
     // Sterkteverschil is doorslaggevend: zwakke schepen jagen zelden op een sterkere.
     if (sterkteV < sterkteS * 0.65) kans *= 0.15;

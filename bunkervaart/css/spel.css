@@ -290,9 +290,15 @@ html, body {
 
 .schuifwaarde { margin-top: 9px; font-size: 14px; line-height: 1.5; }
 
+/* De ARA-regio is hoger dan breed (159 bij 134 km). Op breedte schalen maakt
+   het doek hoger dan het paneel en snijdt Antwerpen eraf; hij wordt daarom op
+   hoogte begrensd en horizontaal gecentreerd. */
 .kaartvlak {
   display: block;
-  width: 100%;
+  max-height: 58vh;
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto;
   border-radius: 6px;
   border: 1px solid var(--paneel-rand);
 }

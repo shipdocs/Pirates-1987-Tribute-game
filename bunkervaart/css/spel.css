@@ -1,0 +1,319 @@
+/* © 2026 Martin Splinter (Bargeflow / Shipdocs). Proprietair — alle rechten
+   voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE. */
+
+/* De tokens hieronder spiegelen `HUD` in js/render/hud.js. Twee systemen die
+   dezelfde kleur moeten kennen, halen hem uit één bron — anders lopen ze uit
+   elkaar zodra iemand er één aanpast. */
+:root {
+  --paneel: #101821;
+  --paneel-rand: rgba(126, 163, 190, 0.28);
+  --paneel-kop: #16222d;
+  --tekst: #dbe8f2;
+  --tekst-zacht: rgba(219, 232, 242, 0.58);
+  --goed: #5fbf8a;
+  --let: #e0b45c;
+  --slecht: #d9694f;
+  --accent: #6fb0d8;
+  --knop: #1c2c39;
+  --knop-rand: rgba(126, 163, 190, 0.4);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #070d12;
+  color: var(--tekst);
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+}
+
+#spel {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#laden {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #070d12;
+  color: var(--tekst-zacht);
+  z-index: 50;
+}
+
+.geen-js {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #070d12;
+  color: var(--tekst);
+}
+
+/* --- Overlays ----------------------------------------------------------- */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 8, 12, 0.62);
+  backdrop-filter: blur(3px);
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+  padding: 24px;
+}
+
+.overlay.zichtbaar { opacity: 1; }
+
+.paneel {
+  width: min(560px, 100%);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paneel);
+  border: 1px solid var(--paneel-rand);
+  border-radius: 8px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.paneel-breed { width: min(940px, 100%); }
+.overlay-smal .paneel { width: min(470px, 100%); }
+
+.paneel-kop {
+  padding: 16px 22px 12px;
+  background: var(--paneel-kop);
+  border-bottom: 1px solid var(--paneel-rand);
+}
+
+.paneel-kop h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.paneel-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--tekst-zacht);
+}
+
+.paneel-body {
+  padding: 18px 22px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.paneel-body h3 {
+  margin: 20px 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--tekst-zacht);
+  font-weight: 600;
+}
+
+.paneel-body h3:first-child { margin-top: 0; }
+
+.paneel-voet {
+  padding: 12px 22px 16px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  border-top: 1px solid var(--paneel-rand);
+}
+
+/* --- Knoppen ------------------------------------------------------------ */
+
+.knop {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tekst);
+  background: var(--knop);
+  border: 1px solid var(--knop-rand);
+  border-radius: 5px;
+  padding: 9px 15px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.knop:hover:not(:disabled) { background: #263949; border-color: var(--accent); }
+.knop:disabled { opacity: 0.35; cursor: default; }
+.knop-klein { padding: 5px 10px; font-size: 12px; }
+.knop-gevaar { border-color: rgba(217, 105, 79, 0.6); color: #f0a893; }
+.knop-gevaar:hover:not(:disabled) { background: #3a2119; border-color: var(--slecht); }
+.knop-sleutel {
+  display: inline-block;
+  margin-right: 7px;
+  opacity: 0.55;
+  font-weight: 700;
+}
+
+.knoprij { display: flex; gap: 5px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* --- Tekst -------------------------------------------------------------- */
+
+.verhaal {
+  margin: 0 0 14px;
+  line-height: 1.55;
+  font-size: 14px;
+}
+
+.verhaal.goed { color: #a8dfc0; }
+.verhaal.slecht { color: #f0a893; }
+
+.zacht { color: var(--tekst-zacht); font-size: 12px; }
+.goed { color: var(--goed); }
+.let { color: var(--let); }
+.slecht { color: var(--slecht); }
+.waarschuwing { color: var(--let); }
+
+/* --- Tabellen ----------------------------------------------------------- */
+
+.tabel {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0 14px;
+  font-size: 13px;
+}
+
+.tabel th {
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--tekst-zacht);
+  font-weight: 600;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--paneel-rand);
+}
+
+.tabel td {
+  padding: 8px;
+  border-bottom: 1px solid rgba(126, 163, 190, 0.12);
+  vertical-align: middle;
+  line-height: 1.35;
+}
+
+.tabel th.rechts, .tabel td.rechts { text-align: right; }
+.tabel tr.nadruk td { background: rgba(111, 176, 216, 0.09); }
+.tabel tr.slecht td { background: rgba(217, 105, 79, 0.11); }
+.tabel tr:last-child td { border-bottom: none; }
+
+/* --- Formulieren -------------------------------------------------------- */
+
+.veldgroep { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+
+.veld { display: flex; flex-direction: column; gap: 5px; flex: 1 1 200px; }
+
+.veld span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--tekst-zacht);
+  font-weight: 600;
+}
+
+.veld input {
+  font: inherit;
+  font-size: 14px;
+  color: var(--tekst);
+  background: #0b1219;
+  border: 1px solid var(--paneel-rand);
+  border-radius: 5px;
+  padding: 8px 10px;
+}
+
+.veld input:focus { outline: none; border-color: var(--accent); }
+
+.keuzelijst { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+
+.keuze {
+  font: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--tekst);
+  background: var(--knop);
+  border: 1px solid var(--knop-rand);
+  border-radius: 6px;
+  padding: 11px 13px;
+  cursor: pointer;
+}
+
+.keuze:hover { border-color: var(--accent); }
+.keuze.gekozen { border-color: var(--accent); background: #21384a; }
+.keuze b { font-size: 13px; }
+
+/* De schuif waarmee je je retentiedoel zet. Hij is bewust groot en centraal:
+   het is de belangrijkste knop van het spel. */
+.schuifgroep {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: #0b1219;
+  border: 1px solid var(--paneel-rand);
+  border-radius: 6px;
+}
+
+.schuifgroep label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--tekst-zacht);
+  font-weight: 600;
+  margin-bottom: 9px;
+}
+
+.schuifgroep input[type="range"] { width: 100%; accent-color: var(--let); }
+
+.schuifwaarde { margin-top: 9px; font-size: 14px; line-height: 1.5; }
+
+.kaartvlak {
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--paneel-rand);
+}
+
+/* --- Iconen ------------------------------------------------------------- */
+
+.ikoon { width: 15px; height: 15px; vertical-align: -2px; }
+.ikoon-groot { width: 44px; height: 44px; }
+
+.figuur {
+  display: grid;
+  place-items: center;
+  margin-bottom: 12px;
+  color: var(--accent);
+}
+
+.figuur-gevaar { color: var(--slecht); }
+.figuur-chief { color: var(--let); }
+
+/* --- Terughoudende beweging --------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay { transition: none; }
+}

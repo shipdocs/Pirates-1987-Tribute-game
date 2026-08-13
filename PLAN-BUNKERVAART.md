@@ -14,6 +14,15 @@ stroom die je meenemen of tegenwerken, en verkeer dat voorrang heeft.
 *Dit plan gaat over **ontwerp en fasering**. Het bevat geen code; het wijst per
 bestand aan wat meeverhuist, wat wordt vervangen en in welke volgorde je bouwt.*
 
+> **Stand van zaken.** Fase 0 tot en met 4 staan er, in [`bunkervaart/`](bunkervaart/) —
+> zie [`bunkervaart/README.md`](bunkervaart/README.md). Speelbaar van orderbord
+> tot handtekening. Afwijking van §5.1: het staat als zelfstandige map in deze
+> repo in plaats van in een eigen repository, zodat de twee spellen samen te
+> bekijken zijn; de map is verder volledig op zichzelf staand en zonder
+> aanpassing los te trekken. Fase 5 (vetting, inspecties, incidentafhandeling,
+> de fraudeverhaallijn) en fase 6 (concurrenten, contracten, brandstoftransitie,
+> afmonsteren) staan nog open.
+
 ---
 
 ## TL;DR — lees dit als je haast hebt

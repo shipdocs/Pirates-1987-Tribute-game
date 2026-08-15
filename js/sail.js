@@ -361,7 +361,7 @@ export function maakZeilScene() {
       s.leeftijd = s.startLeeftijd + s.dag / 365;
       if (Math.floor(s.dag) !== vorigeDag) dagWisseling(s, w);
 
-      w.economieTik(dagen);
+      w.economieTik(dagen, s);
       w.relatieTik(dagen, s);
       w.vlotenTik(dt, s);
 
@@ -425,9 +425,30 @@ export function maakZeilScene() {
           // van een hele havenronde als hij het tabblad sluit.
           if (bewaar()) Game.melding('Het logboek is bijgewerkt bij het uitvaren.');
         });
-      } else if (w.kapersnest && dist(s.x, s.y, w.kapersnest.ankerX, w.kapersnest.ankerY) < 46 && !UI.ietsOpen()) {
+      } else if (
+        w.kapersnest &&
+        dist(s.x, s.y, w.kapersnest.ankerX, w.kapersnest.ankerY) < 46 &&
+        !UI.ietsOpen()
+      ) {
         ontmoetingKoeling = 3;
-        toonKapersnest();
+        toonKapersnest(() => {
+          const nest = Game.wereld.kapersnest;
+          const koers = Game.wereld.koersOpenZee(
+            nest.ankerX,
+            nest.ankerY,
+            schip.type,
+            s.koers
+          );
+          const doelX = nest.ankerX + Math.cos(koers) * 90;
+          const doelY = nest.ankerY + Math.sin(koers) * 90;
+          const [wx, wy] = Game.wereld.isVaren(doelX, doelY, schip.type)
+            ? [doelX, doelY]
+            : Game.wereld.dichtstbijVaren(doelX, doelY, schip.type);
+          vertrek = { vx: s.x, vy: s.y, tx: wx, ty: wy, t: 0, duur: 1.1 };
+          s.koers = Game.wereld.koersOpenZee(wx, wy, schip.type, koers);
+          s.hoekSnelheid = 0;
+          if (bewaar()) Game.melding('De buit in de Kapersbaai en het logboek zijn veiliggesteld.');
+        });
       }
     },
 
@@ -1337,6 +1358,16 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
     }
     for (const stad of w.steden) {
       R.natieStip(c, mx + stad.x * sc, my + stad.y * sc, stad.natie, 2.4);
+    }
+    if (w.kapersnest) {
+      R.natieStip(
+        c,
+        mx + w.kapersnest.x * sc,
+        my + w.kapersnest.y * sc,
+        'piraat',
+        2.8,
+        'rgba(255,226,138,0.9)'
+      );
     }
     c.fillStyle = '#ffe28a';
     c.strokeStyle = '#3a2a18';

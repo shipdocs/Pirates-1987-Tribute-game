@@ -1,9 +1,12 @@
 // Tests voor js/game.js (opslag, laden, migraties & erelijst)
-import './setup.js';
+import '../test-support/browserglobals.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Game, bewaar, laad, OPSLAG_SLEUTEL, leesErelijst, bewaarInErelijst } from '../js/game.js';
+import {
+  Game, bewaar, laad, OPSLAG_SLEUTEL, OPSLAG_VERSIE, leesErelijst,
+  bewaarInErelijst,
+} from '../js/game.js';
 import { Wereld } from '../js/world.js';
 
 test('bewaar en laad herstellen speler- en wereldtoestand', () => {
@@ -32,6 +35,7 @@ test('bewaar en laad herstellen speler- en wereldtoestand', () => {
 
   const bewaard = bewaar();
   assert.equal(bewaard, true, 'bewaar() moet true retourneren bij succes');
+  assert.equal(JSON.parse(localStorage.getItem(OPSLAG_SLEUTEL)).versie, OPSLAG_VERSIE);
 
   const geladen = laad();
   assert.ok(geladen !== null, 'Laden mag niet null retourneren');
@@ -42,7 +46,7 @@ test('bewaar en laad herstellen speler- en wereldtoestand', () => {
   assert.equal(geladen.wereld.seed, seed);
 });
 
-test('laad migreert v8 saves naar v9 formaat', () => {
+test('laad migreert v8 saves naar het huidige formaat', () => {
   localStorage.clear();
   const oudeSave = {
     versie: 8,
@@ -68,6 +72,9 @@ test('laad migreert v8 saves naar v9 formaat', () => {
   assert.equal(geladen.speler.moeilijkheid, 'bevaren_kapitein');
   assert.equal(geladen.speler.items[0], 'gekalktehuid');
   assert.equal(geladen.speler.schepen[0].geschut, 18);
+  assert.deepEqual(geladen.speler.investeringen, {});
+  assert.equal(geladen.speler.kapersnest.goud, 0);
+  assert.equal(geladen.speler.dividendRest, 0);
 });
 
 test('erelijst bewaart en sorteert topscores', () => {

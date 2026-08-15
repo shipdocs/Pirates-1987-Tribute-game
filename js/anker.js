@@ -247,7 +247,7 @@ export function werkWereldTijd(dagen, seconden) {
   const w = Game.wereld;
   const s = Game.speler;
   w.windTik(seconden);
-  w.economieTik(dagen);
+  w.economieTik(dagen, s);
   w.relatieTik(dagen, s);
   w.vlotenTik(seconden, s);
 }

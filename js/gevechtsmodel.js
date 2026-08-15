@@ -71,6 +71,13 @@ export function spreiding(stukken) {
   return 0.055 + 0.0055 * stukken;
 }
 
+/** Kanonspreiding bij de plaatselijke windkracht; harde wind maakt richten lastiger. */
+export function spreidingMetWind(stukken, windKracht = 1) {
+  const kracht = Number.isFinite(windKracht) ? windKracht : 1;
+  const windFactor = kracht > 1.15 ? 1 + (kracht - 1) * 0.5 : 1;
+  return spreiding(stukken) * windFactor;
+}
+
 /** Maximale dracht, per schipstype en munitiesoort. */
 export function schootsafstand(type, munitie) {
   return (360 + type.geschut * 2) * (munitie ? munitie.bereik : 1);

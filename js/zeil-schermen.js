@@ -75,6 +75,15 @@ export function toonKaart() {
       // Merktekens die vóór de plaatsnamen op de kaart moeten, zodat een naam
       // er nooit onder verdwijnt.
       const merken = [];
+      // De kronen kennen de schuilplaats niet, maar de kapitein uiteraard wel:
+      // zonder dit kruis is een baai met een aanmeerstraal van 46 eenheden op
+      // de hele Caraïbische kaart in de praktijk niet terug te vinden.
+      const nest = Game.wereld.kapersnest;
+      if (nest) {
+        merken.push((c, sc) => {
+          R.natieStip(c, nest.x * sc, nest.y * sc, 'piraat', 5, 'rgba(58,42,24,0.9)');
+        });
+      }
       // Het zoekgebied van de schatkaart: hoe meer stukken, hoe krapper de
       // cirkel. Het kruis zelf komt er nooit op — dat moet je aan land zoeken.
       if (s.schat && s.schat.kwadranten.some(Boolean)) {
@@ -119,6 +128,11 @@ export function toonKaart() {
         sp.innerHTML = `<i class="merk merk-${n.merk}" style="background:${n.kleur}"></i>${n.naam}`;
         legenda.appendChild(sp);
       }
+      const kapersbaai = document.createElement('span');
+      kapersbaai.innerHTML =
+        `<i class="merk merk-${NATIES.piraat.merk}" ` +
+        `style="background:${NATIES.piraat.kleur}"></i>Kapersbaai`;
+      legenda.appendChild(kapersbaai);
       body.appendChild(legenda);
     },
     knoppen: (sch) => [{ label: 'Sluiten', esc: true, actie: () => sch.sluit() }],
@@ -451,25 +465,34 @@ function relatieWoord(v) {
   return 'Bondgenoot';
 }
 
-/** Toont het Kapersnest (verborgen schuilplaats). */
-export function toonKapersnest() {
+/** Toont het Kapersnest en roept `opVertrek` aan zodra de speler terug naar zee gaat. */
+export function toonKapersnest(opVertrek = null) {
   const s = Game.speler;
-  if (!s.kapersnest) s.kapersnest = { goud: 0, vracht: [], schepen: [] };
+  if (!s.kapersnest) {
+    s.kapersnest = { goud: 0, vracht: new Array(WAREN.length).fill(0), schepen: [] };
+  }
 
-  UI.toonScherm({
+  return UI.toonScherm({
     titel: 'Kapersbaai — Verborgen schuilplaats',
     onder: 'Een beschutte baai buiten het zicht van alle kronen',
+    opSluiten: () => opVertrek && opVertrek(),
     bouw(body, sch) {
       body.appendChild(UI.maakFiguur('piraat'));
       const p = el('p', 'verhaal');
       p.innerHTML = sch._bericht || 'Hier in de Kapersbaai is jouw buit veilig voor meuterij of vijandelijke vloten. De scheepstimmerlieden staan klaar om de vloot gratis op te lappen.';
       body.appendChild(p);
 
+      const vlootconditie = s.schepen.length
+        ? Math.round(
+          (s.schepen.reduce((som, schip) => som + schip.romp / schip.maxRomp, 0) /
+            s.schepen.length) * 100
+        )
+        : 0;
       const st = el('div', 'haven-info');
       st.innerHTML =
         `<span>Schatkist in de baai</span><b>${fmtGold(s.kapersnest.goud)} goud</b>` +
         `<span>Buit in je ruim</span><b>${fmtGold(s.goud)} goud</b>` +
-        `<span>Vlootconditie</span><b>${Math.round(s.schepen[0].romp)}%</b>`;
+        `<span>Vlootconditie</span><b>${vlootconditie}%</b>`;
       body.appendChild(st);
     },
     knoppen: (sch) => [
@@ -508,4 +531,3 @@ export function toonKapersnest() {
     ],
   });
 }
-

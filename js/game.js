@@ -14,6 +14,7 @@ import * as audio from './audio.js';
 import * as UI from './ui.js';
 
 export const OPSLAG_SLEUTEL = 'zeeroverij.opslag.v1';
+export const OPSLAG_VERSIE = 10;
 export const MINIATUUR_SLEUTEL = 'zeeroverij.miniatuur.v1';
 // Onafhankelijke knoppen voor het miniatuureffect: aparte grootte van de
 // scherpe band en zachtheid van de overgang, ook na herladen bewaard.
@@ -473,6 +474,9 @@ export function maakSpeler(opties) {
     leeftijd: 18,
     goud: 600,
     gespaard: 0,
+    kapersnest: { goud: 0, vracht: nieuweLading(), schepen: [] },
+    investeringen: {},
+    dividendRest: 0,
     scheepsvolk: 40,
     geest: 70,
     relatie,
@@ -601,7 +605,7 @@ export function bewaar() {
   if (!Game.speler || !Game.wereld) return false;
   const w = Game.wereld;
   const data = {
-    versie: 9,
+    versie: OPSLAG_VERSIE,
     seed: w.seed,
     speler: Game.speler,
     // De wereldpolitiek staat op de wereld, niet op de speler, en volgt dus
@@ -762,8 +766,11 @@ export function laad() {
   for (const l of LEGENDES) {
     if (!sp.legendes[l.id]) sp.legendes[l.id] = { verslagen: false, getipt: false, bij: null };
   }
-  if (!sp.kapersnest) sp.kapersnest = { goud: 0, vracht: new Array(WAREN.length).fill(0), schepen: [] };
-  if (!sp.investeringen) sp.investeringen = {};
+  // Versie 10 voegt de Kapersbaai en aandelen toe. De fractierest voorkomt dat
+  // dividend afhangt van hoe vaak de spelklok in kleine stappen is bijgewerkt.
+  if (!sp.kapersnest) sp.kapersnest = { goud: 0, vracht: nieuweLading(), schepen: [] };
+  if (!sp.investeringen || typeof sp.investeringen !== 'object') sp.investeringen = {};
+  if (!Number.isFinite(sp.dividendRest) || sp.dividendRest < 0) sp.dividendRest = 0;
   for (const schip of sp.schepen || []) {
     if (!schip.upgrades) schip.upgrades = { zeilen: 0, romp: 0, roer: 0 };
     if (schip.upgrades.weer === undefined) schip.upgrades.weer = 0;

@@ -1,4 +1,4 @@
-// Tests voor js/gevechtsmodel.js (headless gevechtsmodel)
+// Tests voor js/gevechtsmodel.js (headless gevechtsmodel).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

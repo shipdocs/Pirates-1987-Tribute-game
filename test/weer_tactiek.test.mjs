@@ -1,15 +1,14 @@
 // Tests voor tactische wind- en weerdynamiek
-import './setup.js';
+import '../test-support/browserglobals.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { zeilEfficiëntie, dodeHoek } from '../js/world.js';
-import { spreiding } from '../js/gevechtsmodel.js';
+import { zeilEfficiëntie } from '../js/world.js';
+import { spreiding, spreidingMetWind } from '../js/gevechtsmodel.js';
 
 test('Windvlagen en stormkracht vergroten kanonsspreiding', () => {
   const basisSpreiding = spreiding(10);
-  const stormFactor = 1.4; // Zware storm
-  const stormSpreiding = basisSpreiding * (1 + (stormFactor - 1) * 0.5);
+  const stormSpreiding = spreidingMetWind(10, 1.4);
 
   assert.ok(stormSpreiding > basisSpreiding, 'Kanonsspreiding moet toenemen bij storm');
   assert.equal(Math.round(stormSpreiding * 1000), Math.round(basisSpreiding * 1.2 * 1000));

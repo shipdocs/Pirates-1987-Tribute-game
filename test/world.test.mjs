@@ -1,5 +1,5 @@
 // Tests voor js/world.js (wereldschalen, deterministische RNG, steden & economie)
-import './setup.js';
+import '../test-support/browserglobals.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

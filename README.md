@@ -104,6 +104,16 @@ wat jij koopt en verkoopt), scheepswerf (herstellen, kanonnen, schepen kopen en
 verkopen, vlaggenschip wisselen) en de gouverneur (bevorderingen, landgoed,
 kaperbrieven, gratie, de dochter van de gouverneur en uiteindelijk je aftreden).
 
+**Kapersbaai.** Het zwarte kruis op de zee- en minikaart wijst naar je verborgen
+schuilplaats. Daar kun je goud buiten bereik van muiters en vijandelijke vloten
+in een schatkist leggen en je hele vloot gratis laten kalefateren. Bij vertrek
+worden de kist en het logboek automatisch veiliggesteld.
+
+**Investeringen.** Bij een welgezinde gouverneur kun je voor 5.000 goud een
+aandeel in de plaatselijke plantages en handelscompagnie kopen. Het dividend
+loopt met de verstreken tijd op en komt in je eigen kist terecht, zowel tijdens
+het varen als tijdens langere bezigheden voor anker.
+
 **Muziek.** Op zee klinkt *Island Gold Chase*: een lokaal meegeleverde,
 opgewekte Caribische opname van ruim drie minuten. Het stille slot wordt niet
 afgespeeld; twee exemplaren lopen kort over elkaar heen zodat de muziek zonder
@@ -190,6 +200,15 @@ gewist. Een afgetreden kapitein vaart niet meer uit.
 
 De erelijst staat los van het opgeslagen spel en blijft dus staan wanneer je het
 logboek wist (titelscherm → *Het logboek wissen*).
+
+## Testen
+
+De headless tests gebruiken alleen de ingebouwde Node-testrunner en hebben geen
+installatie of afhankelijkheden nodig. `npm test` voert dezelfde opdracht uit:
+
+```bash
+node --test
+```
 
 ## Opbouw van de code
 

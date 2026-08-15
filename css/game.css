@@ -763,6 +763,19 @@ button.mini:disabled { opacity: 0.35; cursor: not-allowed; }
 .legenda i.merk-cirkel { border-radius: 50%; }
 .legenda i.merk-ruit { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); border: none; }
 .legenda i.merk-driehoek { clip-path: polygon(50% 0, 100% 100%, 0 100%); border: none; }
+.legenda i.merk-kruis {
+  position: relative;
+  border: none;
+  background: transparent !important;
+}
+.legenda i.merk-kruis::before,
+.legenda i.merk-kruis::after {
+  content: '';
+  position: absolute;
+  background: #2b2b31;
+}
+.legenda i.merk-kruis::before { inset: 4px 0; }
+.legenda i.merk-kruis::after { inset: 0 4px; }
 
 /* --- Hulp --------------------------------------------------------------- */
 

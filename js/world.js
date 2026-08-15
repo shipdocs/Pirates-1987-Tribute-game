@@ -525,19 +525,32 @@ export class Wereld {
 
   #bouwKapersnest() {
     const rng = makeRng(this.seed * 31337 + 42);
-    let x = projX(-72.5), y = projY(15.2);
+    let plek = null;
     for (let poging = 0; poging < 500; poging++) {
-      const px = rnd(rng, 100, WORLD_W - 100);
-      const py = rnd(rng, 100, WORLD_H - 100);
-      if (this.isLand(px, py)) {
-        const [wx, wy] = this.dichtstbijVaren(px, py, 'sloep', 180);
-        if (dist(wx, wy, px, py) <= 150) {
-          x = wx;
-          y = wy;
-          break;
+      const land = this.land[Math.floor(rng() * this.land.length)];
+      const [px, py] = land.kustPts[Math.floor(rng() * land.kustPts.length)];
+      const [wx, wy] = this.dichtstbijVaren(px, py, 'sloep', 220);
+      if (!this.isVaren(wx, wy, 'sloep')) continue;
+      if (dist(wx, wy, px, py) > 180) continue;
+      if (this.stadOp(wx, wy, 120)) continue;
+      plek = [wx, wy];
+      break;
+    }
+    // De willekeurige route hoort praktisch altijd een plek te vinden. De
+    // uitputtende kustgang maakt het contract ook voor vreemde zaden hard: een
+    // Kapersbaai mag nooit stilletjes op land of onder een haven terechtkomen.
+    if (!plek) {
+      buiten: for (const land of this.land) {
+        for (const [px, py] of land.kustPts) {
+          const [wx, wy] = this.dichtstbijVaren(px, py, 'sloep', 220);
+          if (!this.isVaren(wx, wy, 'sloep') || this.stadOp(wx, wy, 120)) continue;
+          plek = [wx, wy];
+          break buiten;
         }
       }
     }
+    if (!plek) throw new Error('Geen bevaarbare plek voor Kapersbaai gevonden');
+    const [x, y] = plek;
     this.kapersnest = {
       naam: 'Kapersbaai',
       x,
@@ -582,15 +595,15 @@ export class Wereld {
       stad.garnizoen = Math.min(stad.garnizoen + dagen * 0.35 * stad.grootte, 60 + stad.grootte * 60);
     }
     if (speler && speler.investeringen) {
-      let totaalDividend = 0;
-      for (const [stadId, aantal] of Object.entries(speler.investeringen)) {
-        if (aantal > 0) {
-          totaalDividend += aantal * 12 * dagen;
-        }
+      let opgebouwd = 0;
+      for (const aantal of Object.values(speler.investeringen)) {
+        const aandelen = Number(aantal);
+        if (Number.isFinite(aandelen) && aandelen > 0) opgebouwd += aandelen * 12 * dagen;
       }
-      if (totaalDividend > 0) {
-        speler.gespaard = (speler.gespaard || 0) + Math.round(totaalDividend);
-      }
+      const saldo = (Number.isFinite(speler.dividendRest) ? speler.dividendRest : 0) + opgebouwd;
+      const uitbetaling = Math.floor(saldo + 1e-9);
+      if (uitbetaling > 0) speler.gespaard = (speler.gespaard || 0) + uitbetaling;
+      speler.dividendRest = Math.max(0, saldo - uitbetaling);
     }
   }
 

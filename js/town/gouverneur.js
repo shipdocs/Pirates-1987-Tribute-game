@@ -44,6 +44,7 @@ function gouverneur(stad, ouder) {
             label: `${UI.ikoon('opdracht')}Van de opdracht verslag doen`,
             actie: () => rapporteerOpdracht(stad, sch),
           });
+        }
         if (!s.opdracht) {
           knoppen.push({ label: `${UI.ikoon('opdracht')}Naar een opdracht vragen`, actie: () => vraagOpdracht(stad, sch) });
         }
@@ -207,4 +208,3 @@ async function investeer(stad, sch) {
 }
 
 export { gouverneur, begroeting, verdienstePunten, bevordering, dochter, kaperbrief, gratie, investeer };
-

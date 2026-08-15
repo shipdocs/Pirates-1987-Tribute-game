@@ -300,6 +300,7 @@ export class Wereld {
 
     this.#bouwMasker();
     this.#bouwSteden();
+    this.#bouwKapersnest();
 
     // Wind: passaat uit het oosten, dus waaiend richting het westen. Dat is het
     // gemiddelde, niet de grens — zie `windTik`.
@@ -522,6 +523,43 @@ export class Wereld {
     });
   }
 
+  #bouwKapersnest() {
+    const rng = makeRng(this.seed * 31337 + 42);
+    let plek = null;
+    for (let poging = 0; poging < 500; poging++) {
+      const land = this.land[Math.floor(rng() * this.land.length)];
+      const [px, py] = land.kustPts[Math.floor(rng() * land.kustPts.length)];
+      const [wx, wy] = this.dichtstbijVaren(px, py, 'sloep', 220);
+      if (!this.isVaren(wx, wy, 'sloep')) continue;
+      if (dist(wx, wy, px, py) > 180) continue;
+      if (this.stadOp(wx, wy, 120)) continue;
+      plek = [wx, wy];
+      break;
+    }
+    // De willekeurige route hoort praktisch altijd een plek te vinden. De
+    // uitputtende kustgang maakt het contract ook voor vreemde zaden hard: een
+    // Kapersbaai mag nooit stilletjes op land of onder een haven terechtkomen.
+    if (!plek) {
+      buiten: for (const land of this.land) {
+        for (const [px, py] of land.kustPts) {
+          const [wx, wy] = this.dichtstbijVaren(px, py, 'sloep', 220);
+          if (!this.isVaren(wx, wy, 'sloep') || this.stadOp(wx, wy, 120)) continue;
+          plek = [wx, wy];
+          break buiten;
+        }
+      }
+    }
+    if (!plek) throw new Error('Geen bevaarbare plek voor Kapersbaai gevonden');
+    const [x, y] = plek;
+    this.kapersnest = {
+      naam: 'Kapersbaai',
+      x,
+      y,
+      ankerX: x,
+      ankerY: y,
+    };
+  }
+
   #hersteldeEconomie(stad, rng) {
     const ec = SOORT_ECONOMIE[stad.soort] || { produceert: [], vraagt: [] };
     for (let i = 0; i < WAREN.length; i++) {
@@ -538,7 +576,7 @@ export class Wereld {
   }
 
   /** Prijzen kruipen langzaam terug naar hun natuurlijke niveau. */
-  economieTik(dagen) {
+  economieTik(dagen, speler = null) {
     const rng = this.rng;
     for (const stad of this.steden) {
       const ec = SOORT_ECONOMIE[stad.soort] || { produceert: [], vraagt: [] };
@@ -555,6 +593,17 @@ export class Wereld {
       }
       stad.bevolking = Math.round(stad.bevolking * (1 + 0.0004 * dagen));
       stad.garnizoen = Math.min(stad.garnizoen + dagen * 0.35 * stad.grootte, 60 + stad.grootte * 60);
+    }
+    if (speler && speler.investeringen) {
+      let opgebouwd = 0;
+      for (const aantal of Object.values(speler.investeringen)) {
+        const aandelen = Number(aantal);
+        if (Number.isFinite(aandelen) && aandelen > 0) opgebouwd += aandelen * 12 * dagen;
+      }
+      const saldo = (Number.isFinite(speler.dividendRest) ? speler.dividendRest : 0) + opgebouwd;
+      const uitbetaling = Math.floor(saldo + 1e-9);
+      if (uitbetaling > 0) speler.gespaard = (speler.gespaard || 0) + uitbetaling;
+      speler.dividendRest = Math.max(0, saldo - uitbetaling);
     }
   }
 

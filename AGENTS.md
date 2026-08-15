@@ -4,11 +4,12 @@ This file provides guidance to agents when working with code in this repository.
 
 ## Project
 
-"Zeeroverij" — a Sid Meier's Pirates! tribute, pure browser game: vanilla HTML/CSS/ES-modules, canvas 2D rendering, Web Audio API. **No build step, no package.json, no dependencies, no tests/lint.**
+"Zeeroverij" — a Sid Meier's Pirates! tribute, pure browser game: vanilla HTML/CSS/ES-modules, canvas 2D rendering, Web Audio API. **No build step or dependencies.** `package.json` only declares ESM and the built-in Node test command; there is no lint setup.
 
 ## Run
 
 - Must be served over HTTP (ES modules fail on `file://` due to CORS): `python3 -m http.server 8000` → `http://localhost:8000/`
+- Headless tests: `node --test` (or `npm test`); no install step is required.
 - GH Pages deploys from `main` via `.github/workflows/pages.yml` (uploads repo root as-is).
 
 ## Critical non-obvious facts

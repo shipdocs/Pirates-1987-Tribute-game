@@ -18,8 +18,9 @@ import { maakDuel } from './duel.js';
 import { verstrijkDagen } from './anker.js';
 import {
   MUNITIE, KOGEL_SNELHEID, ENTERAFSTAND, KANS_GESCHUT, SCHROOT_KOPPEN, KETTING_TUIGAGE,
-  salvoStukken, spreiding, schootsafstand, voorhoudpunt, salvoRichting, inSchootsveld,
-  raaktRomp, herlaadTijd, schadePerTreffer, strijdlust, geschutVerlies, geeftOp,
+  salvoStukken, spreidingMetWind, schootsafstand, voorhoudpunt, salvoRichting,
+  inSchootsveld, raaktRomp, herlaadTijd, schadePerTreffer, strijdlust,
+  geschutVerlies, geeftOp,
 } from './gevechtsmodel.js';
 
 const ARENA_X = 1150;
@@ -709,7 +710,10 @@ export function maakZeeslag(vloot, opts) {
       (schutter.speler ? 1 - 0.4 * konstabel : clamp(1.5 - 0.4 * vijandKracht, 0.6, 1.5));
     const richting = salvoRichting(schutter, veld.kant, mik.x, mik.y) + richtfout;
 
-    const sp = spreiding(stukken);
+    const storm = wereld.stormWind
+      ? wereld.stormWind(schutter.x, schutter.y)
+      : { kracht: wereld.windKracht };
+    const sp = spreidingMetWind(stukken, storm.kracht);
     const [hl, hb] = rompMaat(schutter.type);
     const dwarsHoek = schutter.koers + (veld.kant * Math.PI) / 2;
     audio.sfx.kanon();

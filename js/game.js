@@ -762,6 +762,8 @@ export function laad() {
   for (const l of LEGENDES) {
     if (!sp.legendes[l.id]) sp.legendes[l.id] = { verslagen: false, getipt: false, bij: null };
   }
+  if (!sp.kapersnest) sp.kapersnest = { goud: 0, vracht: new Array(WAREN.length).fill(0), schepen: [] };
+  if (!sp.investeringen) sp.investeringen = {};
   for (const schip of sp.schepen || []) {
     if (!schip.upgrades) schip.upgrades = { zeilen: 0, romp: 0, roer: 0 };
     if (schip.upgrades.weer === undefined) schip.upgrades.weer = 0;

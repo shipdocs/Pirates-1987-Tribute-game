@@ -44,9 +44,15 @@ function gouverneur(stad, ouder) {
             label: `${UI.ikoon('opdracht')}Van de opdracht verslag doen`,
             actie: () => rapporteerOpdracht(stad, sch),
           });
-        } else if (!s.opdracht) {
+        if (!s.opdracht) {
           knoppen.push({ label: `${UI.ikoon('opdracht')}Naar een opdracht vragen`, actie: () => vraagOpdracht(stad, sch) });
         }
+        const aandelen = (s.investeringen && s.investeringen[stad.id]) || 0;
+        knoppen.push({
+          label: `Investeren in handelscompagnie (5.000 goud) [Bezit: ${aandelen}]`,
+          uit: s.goud < 5000,
+          actie: () => investeer(stad, sch),
+        });
       }
       if (s.natie !== stad.natie && rel > -10) {
         knoppen.push({ label: `In dienst treden van ${natie.naam}`, actie: () => kaperbrief(stad, sch) });
@@ -189,4 +195,16 @@ async function gratie(stad, sch) {
   sch.ververs();
 }
 
-export { gouverneur, begroeting, verdienstePunten, bevordering, dochter, kaperbrief, gratie };
+async function investeer(stad, sch) {
+  const s = Game.speler;
+  if (s.goud < 5000) return;
+  s.goud -= 5000;
+  if (!s.investeringen) s.investeringen = {};
+  s.investeringen[stad.id] = (s.investeringen[stad.id] || 0) + 1;
+  audio.sfx.munt();
+  sch._bericht = `Je hebt een aandeel gekocht in de plantages en handelscompagnie van ${stad.naam}. (Totaal: ${s.investeringen[stad.id]})`;
+  sch.ververs();
+}
+
+export { gouverneur, begroeting, verdienstePunten, bevordering, dochter, kaperbrief, gratie, investeer };
+

@@ -18,7 +18,7 @@ import * as UI from './ui.js';
 import * as audio from './audio.js';
 import { maakZeeslag } from './battle.js';
 import { openHaven } from './town.js';
-import { toonKaart, toonScheepsstatus, toonScheepsvolk, toonMenu } from './zeil-schermen.js';
+import { toonKaart, toonScheepsstatus, toonScheepsvolk, toonMenu, toonKapersnest } from './zeil-schermen.js';
 import { ankerDialoog, uitkijkRapport, startUitkijk, UITKIJK_VERTRAGING } from './anker.js';
 
 const PROVIAND = WAAR_INDEX.proviand;
@@ -425,6 +425,9 @@ export function maakZeilScene() {
           // van een hele havenronde als hij het tabblad sluit.
           if (bewaar()) Game.melding('Het logboek is bijgewerkt bij het uitvaren.');
         });
+      } else if (w.kapersnest && dist(s.x, s.y, w.kapersnest.ankerX, w.kapersnest.ankerY) < 46 && !UI.ietsOpen()) {
+        ontmoetingKoeling = 3;
+        toonKapersnest();
       }
     },
 

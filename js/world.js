@@ -300,6 +300,7 @@ export class Wereld {
 
     this.#bouwMasker();
     this.#bouwSteden();
+    this.#bouwKapersnest();
 
     // Wind: passaat uit het oosten, dus waaiend richting het westen. Dat is het
     // gemiddelde, niet de grens — zie `windTik`.
@@ -522,6 +523,30 @@ export class Wereld {
     });
   }
 
+  #bouwKapersnest() {
+    const rng = makeRng(this.seed * 31337 + 42);
+    let x = projX(-72.5), y = projY(15.2);
+    for (let poging = 0; poging < 500; poging++) {
+      const px = rnd(rng, 100, WORLD_W - 100);
+      const py = rnd(rng, 100, WORLD_H - 100);
+      if (this.isLand(px, py)) {
+        const [wx, wy] = this.dichtstbijVaren(px, py, 'sloep', 180);
+        if (dist(wx, wy, px, py) <= 150) {
+          x = wx;
+          y = wy;
+          break;
+        }
+      }
+    }
+    this.kapersnest = {
+      naam: 'Kapersbaai',
+      x,
+      y,
+      ankerX: x,
+      ankerY: y,
+    };
+  }
+
   #hersteldeEconomie(stad, rng) {
     const ec = SOORT_ECONOMIE[stad.soort] || { produceert: [], vraagt: [] };
     for (let i = 0; i < WAREN.length; i++) {
@@ -538,7 +563,7 @@ export class Wereld {
   }
 
   /** Prijzen kruipen langzaam terug naar hun natuurlijke niveau. */
-  economieTik(dagen) {
+  economieTik(dagen, speler = null) {
     const rng = this.rng;
     for (const stad of this.steden) {
       const ec = SOORT_ECONOMIE[stad.soort] || { produceert: [], vraagt: [] };
@@ -555,6 +580,17 @@ export class Wereld {
       }
       stad.bevolking = Math.round(stad.bevolking * (1 + 0.0004 * dagen));
       stad.garnizoen = Math.min(stad.garnizoen + dagen * 0.35 * stad.grootte, 60 + stad.grootte * 60);
+    }
+    if (speler && speler.investeringen) {
+      let totaalDividend = 0;
+      for (const [stadId, aantal] of Object.entries(speler.investeringen)) {
+        if (aantal > 0) {
+          totaalDividend += aantal * 12 * dagen;
+        }
+      }
+      if (totaalDividend > 0) {
+        speler.gespaard = (speler.gespaard || 0) + Math.round(totaalDividend);
+      }
     }
   }
 

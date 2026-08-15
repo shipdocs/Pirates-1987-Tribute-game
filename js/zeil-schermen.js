@@ -450,3 +450,62 @@ function relatieWoord(v) {
   if (v < 50) return 'Vriendelijk';
   return 'Bondgenoot';
 }
+
+/** Toont het Kapersnest (verborgen schuilplaats). */
+export function toonKapersnest() {
+  const s = Game.speler;
+  if (!s.kapersnest) s.kapersnest = { goud: 0, vracht: [], schepen: [] };
+
+  UI.toonScherm({
+    titel: 'Kapersbaai — Verborgen schuilplaats',
+    onder: 'Een beschutte baai buiten het zicht van alle kronen',
+    bouw(body, sch) {
+      body.appendChild(UI.maakFiguur('piraat'));
+      const p = el('p', 'verhaal');
+      p.innerHTML = sch._bericht || 'Hier in de Kapersbaai is jouw buit veilig voor meuterij of vijandelijke vloten. De scheepstimmerlieden staan klaar om de vloot gratis op te lappen.';
+      body.appendChild(p);
+
+      const st = el('div', 'haven-info');
+      st.innerHTML =
+        `<span>Schatkist in de baai</span><b>${fmtGold(s.kapersnest.goud)} goud</b>` +
+        `<span>Buit in je ruim</span><b>${fmtGold(s.goud)} goud</b>` +
+        `<span>Vlootconditie</span><b>${Math.round(s.schepen[0].romp)}%</b>`;
+      body.appendChild(st);
+    },
+    knoppen: (sch) => [
+      {
+        label: '5.000 goud in de schatkist storten',
+        uit: s.goud < 5000,
+        actie: () => {
+          s.goud -= 5000;
+          s.kapersnest.goud += 5000;
+          audio.sfx.munt();
+          sch._bericht = 'Je hebt 5.000 goudstukken in de verborgen kist gestort.';
+          sch.ververs();
+        },
+      },
+      {
+        label: '5.000 goud uit de schatkist opnemen',
+        uit: s.kapersnest.goud < 5000,
+        actie: () => {
+          s.kapersnest.goud -= 5000;
+          s.goud += 5000;
+          audio.sfx.munt();
+          sch._bericht = 'Je hebt 5.000 goudstukken uit de schatkist gehaald.';
+          sch.ververs();
+        },
+      },
+      {
+        label: 'Vloot gratis laten repareren op het strand',
+        actie: () => {
+          for (const sh of s.schepen) sh.romp = sh.maxRomp;
+          audio.sfx.fanfare();
+          sch._bericht = 'De scheepstimmerlieden hebben alle spanten en planken van de vloot vernieuwd!';
+          sch.ververs();
+        },
+      },
+      { label: 'Terug naar zee', esc: true, actie: () => sch.sluit() },
+    ],
+  });
+}
+

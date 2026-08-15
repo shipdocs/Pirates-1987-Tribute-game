@@ -709,7 +709,9 @@ export function maakZeeslag(vloot, opts) {
       (schutter.speler ? 1 - 0.4 * konstabel : clamp(1.5 - 0.4 * vijandKracht, 0.6, 1.5));
     const richting = salvoRichting(schutter, veld.kant, mik.x, mik.y) + richtfout;
 
-    const sp = spreiding(stukken);
+    const storm = wereld.stormWind ? wereld.stormWind(schutter.x, schutter.y) : { kracht: wereld.windKracht };
+    const stormModificator = (storm.kracht || 1) > 1.15 ? 1 + ((storm.kracht || 1) - 1) * 0.5 : 1;
+    const sp = spreiding(stukken) * stormModificator;
     const [hl, hb] = rompMaat(schutter.type);
     const dwarsHoek = schutter.koers + (veld.kant * Math.PI) / 2;
     audio.sfx.kanon();

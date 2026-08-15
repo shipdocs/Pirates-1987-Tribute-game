@@ -42,23 +42,42 @@ function zeeDriftBij(t, richting, kracht) {
   return zeeDrift;
 }
 
+function huidigeDag() {
+  try {
+    return (globalThis.__G && __G.speler && __G.speler.dag) || 0;
+  } catch (e) {
+    return null;
+  }
+}
+
 /**
- * Tekent de open zee. `cam` = {x, y, zoom}, `vw/vh` = grootte van het beeld,
- * `wind` = {richting, kracht} zodat de deining met de wind meeloopt.
- */
-/**
- * Schemertoestand van de dag (0..1): 0 = helder middaglicht, 1 = diepe schemer.
- * De fases lopen langzaam mee met de speeldatum — een natuurlijke
- * jaargetijde-schommeling zonder klok- of weersysteem.
+ * Duisternis van het etmaal (0..1): 0 = klaarlichte middag, 1 = het holst van
+ * de nacht. Volgt dezelfde dagfractie (`dag % 1`) als de wijzer van de
+ * ankerklok, met een lichte jaargetijde-wissel erdoorheen die de nachten in
+ * het ene seizoen een tikkeltje dieper maakt dan in het andere.
  */
 export function schemerFactor() {
-  try {
-    const dag = (globalThis.__G && __G.speler && __G.speler.dag) || 0;
-    const cyclus = Math.sin((dag / 365) * TAU + 0.6);
-    return clamp(cyclus * 0.32 + 0.12, 0, 1);
-  } catch (e) {
-    return 0.12;
-  }
+  const dag = huidigeDag();
+  if (dag == null) return 0.12;
+  const fractie = ((dag % 1) + 1) % 1;
+  const etmaal = 0.5 - 0.5 * Math.cos((fractie - 0.5) * TAU); // 0 op de middag, 1 om middernacht
+  const seizoen = Math.sin((dag / 365) * TAU + 0.6) * 0.08;
+  return clamp(etmaal * 0.92 + seizoen, 0, 1);
+}
+
+/**
+ * Gouden uur (0..1): piekt kort rond zonsopgang en zonsondergang en ligt
+ * zowel op klaarlichte dag als diep in de nacht nagenoeg stil. Losstaand van
+ * `schemerFactor`, die juist doorloopt tot volle nachtduisternis — anders
+ * bleef middernacht hangen in een permanente oranje gloed.
+ */
+function goudenUurFactor() {
+  const dag = huidigeDag();
+  if (dag == null) return 0.12;
+  const fractie = ((dag % 1) + 1) % 1;
+  const afstandTot = (doel) => Math.min(Math.abs(fractie - doel), 1 - Math.abs(fractie - doel));
+  const dichtstbij = Math.min(afstandTot(0.25), afstandTot(0.75));
+  return clamp(1 - dichtstbij / 0.1, 0, 1);
 }
 
 function mengKleur(hex, zwart) {
@@ -71,16 +90,23 @@ function mengKleur(hex, zwart) {
   return `rgb(${f(r)},${f(g)},${f(b)})`;
 }
 
+/**
+ * Tekent de open zee. `cam` = {x, y, zoom}, `vw/vh` = grootte van het beeld,
+ * `wind` = {richting, kracht} zodat de deining met de wind meeloopt.
+ */
 export function tekenZee(ctx, cam, vw, vh, t, wind) {
   const schemer = schemerFactor();
+  // Middernacht mag donker aanvoelen, maar niet zo zwart dat je geen water
+  // meer van land kunt onderscheiden — vandaar de kap op de menging.
+  const nachtDonker = Math.min(schemer, 0.78);
   // Iets rijker en zachter dan een vlak marineblauw: de middentint trekt naar
   // een dromerig turkoois, zodat het licht ook op klaarlichte dag lijkt te
   // dragen in plaats van plat te staan.
   const g = ctx.createLinearGradient(0, 0, 0, vh);
-  g.addColorStop(0, mengKleur('#0d3f68', schemer));
-  g.addColorStop(0.42, mengKleur('#1a6f94', schemer * 0.8));
-  g.addColorStop(0.72, mengKleur('#155b84', schemer * 0.72));
-  g.addColorStop(1, mengKleur('#0b3452', schemer * 0.65));
+  g.addColorStop(0, mengKleur('#0d3f68', nachtDonker));
+  g.addColorStop(0.42, mengKleur('#1a6f94', nachtDonker * 0.8));
+  g.addColorStop(0.72, mengKleur('#155b84', nachtDonker * 0.72));
+  g.addColorStop(1, mengKleur('#0b3452', nachtDonker * 0.65));
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, vw, vh);
 
@@ -116,38 +142,46 @@ export function tekenZee(ctx, cam, vw, vh, t, wind) {
     vulPatroon(ctx, patroon, vw, vh, maat, -camX + drift.x * 21, -camY + drift.y * 21, alfa, 'lighter');
   }
 
-  // Schemering: een goudoranje gloed op de kim, een zachte roze zoom eromheen
-  // — zoals de lucht bij zonsondergang zelf ook twee kleuren tegelijk draagt —
-  // en een blauwige nevel. Deze gaat óver het water heen, anders kleurt hij
-  // alleen de lege ondergrond.
+  // Blauwige nevel: dooft nooit helemaal uit zolang het niet klaarlichte dag
+  // is, en wint gestaag aan kracht tot diep in de nacht. Gaat óver het water
+  // heen, anders kleurt hij alleen de lege ondergrond.
   if (schemer > 0.05) {
-    const s = schemer;
+    const nevel = ctx.createLinearGradient(0, 0, 0, vh);
+    nevel.addColorStop(0, `rgba(36,34,68,${0.4 * schemer})`);
+    nevel.addColorStop(1, 'rgba(10,30,52,0)');
+    ctx.fillStyle = nevel;
+    ctx.fillRect(0, 0, vw, vh);
+  }
+
+  // Zonsopgang/zonsondergang: een goudoranje gloed op de kim met een zachte
+  // roze zoom eromheen — zoals de lucht bij zonsondergang zelf ook twee
+  // kleuren tegelijk draagt. Piekt kort en is 's nachts alweer gedoofd, zodat
+  // middernacht niet in een permanente oranje gloed blijft hangen.
+  const goudenUur = goudenUurFactor();
+  if (goudenUur > 0.05) {
+    const s = goudenUur;
     const gloed = ctx.createRadialGradient(vw * 0.5, vh * 0.35, 0, vw * 0.5, vh * 0.35, vh * 0.72);
     gloed.addColorStop(0, `rgba(255,196,120,${0.22 * s})`);
     gloed.addColorStop(0.5, `rgba(255,150,148,${0.11 * s})`);
     gloed.addColorStop(1, 'rgba(255,150,148,0)');
     ctx.fillStyle = gloed;
     ctx.fillRect(0, 0, vw, vh);
-    const nevel = ctx.createLinearGradient(0, 0, 0, vh);
-    nevel.addColorStop(0, `rgba(36,34,68,${0.4 * s})`);
-    nevel.addColorStop(1, 'rgba(10,30,52,0)');
-    ctx.fillStyle = nevel;
-    ctx.fillRect(0, 0, vw, vh);
   }
 }
 
 /**
- * Gouden-uurwas over de hele opgebouwde scène: bij schemering kregen alleen
- * het water in `tekenZee` een warme ondertoon, terwijl land, wolken en
- * schepen daar bovenop getekend worden en dus fletsig blauw bleven staan.
- * Zachte `soft-light`-menging houdt het een sfeerwas in plaats van een platte
- * kleurvlek: donkere partijen (rompen, bos) trekken iets warmer, felle
- * lichtpartijen (zeildoek, schuim) blijven bijna ongemoeid.
+ * Gouden-uurwas over de hele opgebouwde scène: bij zonsopgang/-ondergang
+ * kreeg alleen het water in `tekenZee` een warme ondertoon, terwijl land,
+ * wolken en schepen daar bovenop getekend worden en dus fletsig blauw bleven
+ * staan. Zachte `soft-light`-menging houdt het een sfeerwas in plaats van een
+ * platte kleurvlek: donkere partijen (rompen, bos) trekken iets warmer, felle
+ * lichtpartijen (zeildoek, schuim) blijven bijna ongemoeid. Volgt hetzelfde
+ * korte piekje als de gloed in `tekenZee`, niet de volle nachtduisternis.
  */
 export function tekenGoudenUur(ctx, vw, vh) {
-  const schemer = schemerFactor();
-  if (schemer <= 0.05) return;
-  const s = schemer;
+  const goudenUur = goudenUurFactor();
+  if (goudenUur <= 0.05) return;
+  const s = goudenUur;
   const g = ctx.createLinearGradient(0, 0, 0, vh);
   g.addColorStop(0, `rgba(255,196,132,${0.5 * s})`);
   g.addColorStop(0.55, `rgba(255,160,150,${0.28 * s})`);

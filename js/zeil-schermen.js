@@ -113,7 +113,7 @@ export function toonKaart() {
       }
       R.tekenZeekaart(g, Game.wereld, cv.width, cv.height, {
         datum: fmtDate(s.dag),
-        speler: { x: s.x, y: s.y },
+        speler: { x: s.x, y: s.y, koers: s.koers },
         merken,
       });
       body.appendChild(cv);

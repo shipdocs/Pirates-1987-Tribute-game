@@ -142,6 +142,63 @@ export function natieStip(ctx, x, y, natieId, r, omranding) {
   ctx.restore();
 }
 
+/**
+ * Het eigen schip op een kaart: een stralende achtpuntige ster in een zachte
+ * gloed, met een koerspijltje eraan vast.
+ *
+ * Vóór dit teken was de speler een vlakke stip in dezelfde kleurfamilie als
+ * Spanje — op de drukke Zeekaart ging hij straal tussen de stadssymbolen
+ * verloren. Geen enkele natie of de Kapersbaai gebruikt een ster, dus dit
+ * symbool is nu op het eerste gezicht "ik", niet "een plaats". `koers` is
+ * optioneel (radialen); `puls` (0..1) laat de gloed ademen op kaarten die elk
+ * beeld opnieuw tekenen — laat hem weg op een kaart die maar één keer
+ * getekend wordt.
+ */
+export function spelerMerk(ctx, x, y, r, koers = null, puls = 0) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  const gloedR = r * (3.4 + puls * 0.6);
+  const gloed = ctx.createRadialGradient(0, 0, 0, 0, 0, gloedR);
+  gloed.addColorStop(0, `rgba(255,232,150,${0.55 + puls * 0.15})`);
+  gloed.addColorStop(1, 'rgba(255,232,150,0)');
+  ctx.fillStyle = gloed;
+  ctx.beginPath();
+  ctx.arc(0, 0, gloedR, 0, TAU);
+  ctx.fill();
+
+  if (koers != null) {
+    ctx.save();
+    ctx.rotate(koers);
+    ctx.fillStyle = '#2b1d12';
+    ctx.beginPath();
+    ctx.moveTo(r * 2.5, 0);
+    ctx.lineTo(r * 1.15, r * 0.62);
+    ctx.lineTo(r * 1.15, -r * 0.62);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * TAU - Math.PI / 2;
+    const rr = i % 2 === 0 ? r * 1.5 : r * 0.55;
+    const px = Math.cos(a) * rr,
+      py = Math.sin(a) * rr;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#fff3d6';
+  ctx.fill();
+  ctx.strokeStyle = '#2b1d12';
+  ctx.lineWidth = Math.max(0.8, r * 0.22);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
 // --- Iconen ---------------------------------------------------------------
 
 /**

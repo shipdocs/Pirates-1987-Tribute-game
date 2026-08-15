@@ -7,7 +7,7 @@ import { WORLD_W } from '../world.js';
 import { plaats } from '../sprite.js';
 import { landTegel } from './patronen.js';
 import { roundRechthoek } from './steden.js';
-import { natieStip } from './hud.js';
+import { natieStip, spelerMerk } from './hud.js';
 
 // --- Zeekaart -------------------------------------------------------------
 
@@ -239,17 +239,10 @@ export function tekenZeekaart(ctx, wereld, W, H, opts = {}) {
     ctx.fillText(p.stad.naam, p.label[0], p.label[1]);
   }
 
-  // Het eigen schip.
+  // Het eigen schip: als laatste getekend, ruim boven de stadssymbolen en
+  // labels, zodat hij nooit onder een plaatsnaam wegvalt.
   if (opts.speler) {
-    const px = opts.speler.x * sc,
-      py = opts.speler.y * sc;
-    ctx.fillStyle = '#ffdf8a';
-    ctx.strokeStyle = '#2b1d12';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(px, py, 5, 0, TAU);
-    ctx.fill();
-    ctx.stroke();
+    spelerMerk(ctx, opts.speler.x * sc, opts.speler.y * sc, 7, opts.speler.koers);
   }
 
   // Cartouche in de lege hoek rechtsboven: titel, datum en een lijstje.

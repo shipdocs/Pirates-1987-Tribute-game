@@ -3,7 +3,7 @@
 
 // Overzichtsscène: varen over de Caribische Zee.
 import {
-  clamp, lerp, normAngle, dist, TAU, fmtDate, fmtGold, compassName, pick,
+  clamp, lerp, normAngle, dist, TAU, fmtDate, fmtGold, compassName, pick, sierTijd,
 } from './util.js';
 import {
   WAREN, WAAR_INDEX, SCHIP_INDEX, scheepsAanduiding, MOEILIJKHEDEN,
@@ -1369,13 +1369,10 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
         'rgba(255,226,138,0.9)'
       );
     }
-    c.fillStyle = '#ffe28a';
-    c.strokeStyle = '#3a2a18';
-    c.lineWidth = 0.8;
-    c.beginPath();
-    c.arc(mx + s.x * sc, my + s.y * sc, 3.4, 0, TAU);
-    c.fill();
-    c.stroke();
+    // Eigen ster met koerspijltje, net als op de grote Zeekaart — en hier mag
+    // hij ademen, want de minikaart tekent toch al elk beeld opnieuw.
+    const puls = 0.5 + 0.5 * Math.sin(sierTijd(Game.tijd) * 2.4);
+    R.spelerMerk(c, mx + s.x * sc, my + s.y * sc, 4.4, s.koers, puls);
     c.restore();
   }
 

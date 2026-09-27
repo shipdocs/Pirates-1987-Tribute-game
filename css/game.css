@@ -73,6 +73,9 @@ html, body {
   position: absolute;
   inset: 0;
   display: grid;
+  /* Zonder minmax(0, …) groeit de kolom mee met de breedste tabel en loopt
+     het paneel op een telefoon het scherm uit. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 24px;
   background: rgba(4, 14, 24, 0.55);
@@ -86,6 +89,7 @@ html, body {
 
 .paneel {
   width: min(680px, 100%);
+  min-width: 0;
   max-height: min(88vh, 900px);
   display: flex;
   flex-direction: column;
@@ -142,12 +146,20 @@ html, body {
 .paneel-body {
   padding: 18px 26px;
   overflow-y: auto;
+  overflow-x: auto;
   flex: 1 1 auto;
   scrollbar-width: thin;
   scrollbar-color: #a08a5c transparent;
 }
 
 .paneel-body::-webkit-scrollbar { width: 10px; }
+
+/* Staat er nog iets onder de vouw, dan vervaagt de onderrand: anders lijkt
+   het scherm af terwijl de keuze waar het om draait er nog onder zit. */
+.paneel-body.meer-onder {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 42px), rgba(0, 0, 0, 0.18));
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 42px), rgba(0, 0, 0, 0.18));
+}
 .paneel-body::-webkit-scrollbar-thumb { background: #a08a5c; border-radius: 5px; }
 
 .paneel-voet {
@@ -180,7 +192,15 @@ html, body {
 
 .knop:hover:not(:disabled) { filter: brightness(1.16); transform: translateY(-1px); }
 .knop:active:not(:disabled) { transform: translateY(1px); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45); }
-.knop:disabled { opacity: 0.42; cursor: not-allowed; }
+.knop:disabled {
+  /* Geen doorzichtigheid: dan zakt het contrast tot onleesbaar. Wel vlak en
+     vaal, zodat hij duidelijk niet in te drukken is. */
+  color: #efe6d0;
+  background: linear-gradient(180deg, #8b7d62, #75684f);
+  border-color: #5e533f;
+  box-shadow: none;
+  cursor: not-allowed;
+}
 
 .knop-gevaar { background: linear-gradient(180deg, #8e3a2a, #5f2418); }
 .knop-start { background: linear-gradient(180deg, #4f7a3f, #33532a); }
@@ -218,7 +238,12 @@ button.mini {
 
 button.mini.rood { background: linear-gradient(180deg, #8e4a3a, #5f2c1e); border-color: #43211a; }
 button.mini:hover:not(:disabled) { filter: brightness(1.18); }
-button.mini:disabled { opacity: 0.35; cursor: not-allowed; }
+button.mini:disabled {
+  color: #4d412c;
+  background: #c3b699;
+  border-color: #a39574;
+  cursor: not-allowed;
+}
 
 /* --- Inhoud ------------------------------------------------------------- */
 
@@ -405,6 +430,7 @@ button.mini:disabled { opacity: 0.35; cursor: not-allowed; }
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.12));
   border: 1px solid rgba(120, 96, 52, 0.45);
   border-radius: 4px;
+  font-family: inherit;
   cursor: pointer;
   transition: transform 0.08s ease, filter 0.12s ease, border-color 0.12s ease;
 }
@@ -414,7 +440,8 @@ button.mini:disabled { opacity: 0.35; cursor: not-allowed; }
   border-color: rgba(140, 110, 60, 0.8);
 }
 .anker-bezigheid:disabled {
-  opacity: 0.45;
+  opacity: 0.72;
+  filter: grayscale(0.85);
   cursor: not-allowed;
 }
 .anker-bezigheid-kleur {
@@ -546,7 +573,8 @@ button.mini:disabled { opacity: 0.35; cursor: not-allowed; }
 }
 
 .tabel tr:hover td { background: rgba(255, 255, 255, 0.22); }
-.rechts { text-align: right; }
+.rechts,
+.tabel th.rechts { text-align: right; }
 
 .goedkoop { color: #2f6a2c; font-weight: 700; }
 .duur { color: #9c3a2c; font-weight: 700; }

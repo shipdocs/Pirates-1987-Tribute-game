@@ -101,6 +101,9 @@ export function maakDuel(opts) {
       // en dan moet daarna de zeeslag weer klinken en niet de open zee.
       vorigThema = audio.huidigThema();
       audio.startMuziek('gevecht');
+      // Het duel heeft zijn eigen berichtregel; geroep uit de zeeslag ("te ver
+      // voor rondkogel") hangt anders nog seconden boven het dek.
+      Game.meldingen.length = 0;
     },
 
     verlaat() {

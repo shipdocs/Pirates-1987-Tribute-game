@@ -30,6 +30,7 @@ if (typeof globalThis.document === 'undefined') {
         add: (...namen) => namen.forEach((n) => klassen.add(n)),
         remove: (...namen) => namen.forEach((n) => klassen.delete(n)),
         contains: (n) => klassen.has(n),
+        toggle: (n, aan = !klassen.has(n)) => (aan ? klassen.add(n) : klassen.delete(n), aan),
       },
       appendChild(kind) {
         kind.parentNode = element;

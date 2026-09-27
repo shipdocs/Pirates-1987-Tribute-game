@@ -463,14 +463,16 @@ export class Wereld {
 
   /**
    * Kiest een koers vanaf (x, y) waarlangs het schip van `typeId` het verst
-   * onbelemmerd vooruit kan — de richting van de open zee. De meegegeven
-   * vertrekkoers `valkoers` krijgt de voorkeur zolang hij vrij uitloopt;
-   * anders wijst de boeg de vrijste doorgang.
+   * onbelemmerd vooruit kan — de richting van de open zee. Onder de vrije
+   * richtingen wint die waarin de zeilen trekken: een vertrek pal in de wind
+   * begint met killende zeilen en anderhalve knoop. De meegegeven vertrekkoers
+   * `valkoers` geeft bij gelijke stand de doorslag.
    */
   koersOpenZee(x, y, typeId, valkoers = null) {
     const blik = 800;
     const stap = 25;
     const stappen = Math.ceil(blik / stap);
+    const hoogte = SCHIP_INDEX[typeId] ? SCHIP_INDEX[typeId].hoogte : 0.5;
     const vrijeLengte = (a) => {
       for (let s = 1; s <= stappen; s++) {
         const r = s * stap;
@@ -478,13 +480,16 @@ export class Wereld {
       }
       return blik;
     };
+    // Vrije doorgang weegt het zwaarst; de wind beslist tussen vrije richtingen.
+    const score = (a) =>
+      (vrijeLengte(a) / blik) * (0.5 + (0.5 * zeilEfficiëntie(a, this.windRichting, hoogte)) / 1.2);
     let beste = valkoers;
-    let besteLengte = valkoers == null ? -1 : vrijeLengte(valkoers);
+    let besteScore = valkoers == null ? -1 : score(valkoers);
     for (let i = 0; i < 36; i++) {
       const a = (i / 36) * TAU;
-      const lengte = vrijeLengte(a);
-      if (lengte > besteLengte) {
-        besteLengte = lengte;
+      const sc = score(a);
+      if (sc > besteScore + 1e-6) {
+        besteScore = sc;
         beste = a;
       }
     }

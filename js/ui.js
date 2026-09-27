@@ -47,6 +47,11 @@ export function toonScherm(opts) {
   wrap.appendChild(paneel);
   laag().appendChild(wrap);
 
+  const peilMeer = () =>
+    body.classList.toggle('meer-onder', body.scrollTop + body.clientHeight < body.scrollHeight - 4);
+  body.addEventListener('scroll', peilMeer, { passive: true });
+  window.addEventListener('resize', peilMeer);
+
   const scherm = {
     wrap,
     body,
@@ -55,6 +60,7 @@ export function toonScherm(opts) {
     // De knop die Escape indrukt, of null als dit scherm niet zomaar weg mag.
     escKnop: null,
     sluit() {
+      window.removeEventListener('resize', peilMeer);
       wrap.remove();
       stapel = stapel.filter((s) => s !== scherm);
       opts.opSluiten && opts.opSluiten();
@@ -82,6 +88,7 @@ export function toonScherm(opts) {
       if (!scherm.escKnop && lijst.length === 1 && !lijst[0].uit && lijst[0].soort !== 'gevaar') {
         scherm.escKnop = lijst[0];
       }
+      requestAnimationFrame(peilMeer);
     },
   };
 

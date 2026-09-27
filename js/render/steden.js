@@ -8,7 +8,7 @@ import { bandVoor, maakBakkerij, plaats } from '../sprite.js';
 import { transformSchaal, ZON_X, ZON_Y } from './hulpjes.js';
 import { LICHT_X, LICHT_Y } from './patronen.js';
 import { wereldSchaal } from './schepen.js';
-import { schemerFactor } from './zee.js';
+import { schemerFactor, nachtSterkte, tekenLichtGloed } from './zee.js';
 
 // --- Steden ---------------------------------------------------------------
 
@@ -571,7 +571,13 @@ function stadSprite(stad, dichtheid) {
  * het naamplaatje — dat laatste omdat het tégen de zoom in schaalt en dus per
  * definitie niet in een sprite past.
  */
-export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
+/**
+ * `deel`: 'alles', of los 'lijf' (gebouwen, mast, vlag) en 'bovenop' (ramen,
+ * lichtgloed, markering, naambordje). Het vaarscherm legt tussen die twee de
+ * nachtsluier: het lijf wordt donker, maar ramen en naam moeten erbovenuit
+ * blijven stralen en leesbaar zijn.
+ */
+export function tekenStad(ctx, stad, cam, tijd, gemarkeerd, deel = 'alles') {
   const natie = NATIES[stad.natie];
   // Dezelfde schaal als de schepen: een haven hoort groter te zijn dan de sloep
   // die eraan ligt, en dat blijft alleen kloppen als beide uit één formule komen.
@@ -579,49 +585,33 @@ export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
   const st = sierTijd(tijd);
   const { r, heeftFort, mx, my, mastTop } = stadMaten(stad);
 
+  const lijf = deel !== 'bovenop';
+  const bovenop = deel !== 'lijf';
+
   ctx.save();
   ctx.translate(stad.x, stad.y);
   ctx.scale(s, s);
 
-  plaats(ctx, stadSprite(stad, transformSchaal(ctx)));
+  if (lijf) plaats(ctx, stadSprite(stad, transformSchaal(ctx)));
 
   // Bij schemer gaan de ramen aan. Onder klaarlichte dag blijft de dekking op
   // nul, dus dan wordt er niets extra's getekend.
   const raamGloed = clamp((schemerFactor() - 0.12) / 0.25, 0, 1);
-  if (raamGloed > 0.02) {
+  if (bovenop && raamGloed > 0.02) {
+    // Eerst een warme gloed over de hele stad: van ver zie je een haven 's
+    // nachts aan zijn licht, niet aan zijn daken.
+    const nacht = nachtSterkte();
+    if (nacht > 0.02) tekenLichtGloed(ctx, 0, 0, r * 2.1, '#ffb862', 0.5 * nacht);
     ctx.save();
     ctx.globalAlpha = raamGloed;
     plaats(ctx, stadVensterSprite(stad, transformSchaal(ctx)));
     ctx.restore();
   }
 
-  // Mast en vlag in ongedraaide ruimte.
-  ctx.strokeStyle = '#3a2a18';
-  ctx.lineWidth = heeftFort ? 1.2 : 1;
-  ctx.beginPath();
-  ctx.moveTo(mx, my);
-  ctx.lineTo(mx, mastTop);
-  ctx.stroke();
-
-  const wapper = Math.sin(st * 4 + stad.id) * 1.6;
-  for (let i = 0; i < 3; i++) {
-    ctx.fillStyle = natie.vlag[i];
-    ctx.beginPath();
-    if (natie.vlagStaand) {
-      const x0 = mx + (i * 10) / 3;
-      const x1 = mx + ((i + 1) * 10) / 3;
-      ctx.moveTo(x0, mastTop);
-      ctx.lineTo(x1, mastTop + (wapper * (i + 1)) / 6);
-      ctx.lineTo(x1, mastTop + 7.2 + (wapper * (i + 1)) / 6);
-      ctx.lineTo(x0, mastTop + 7.2);
-    } else {
-      ctx.moveTo(mx, mastTop + i * 2.4);
-      ctx.lineTo(mx + 10, mastTop + i * 2.4 + (wapper * (i + 1)) / 3);
-      ctx.lineTo(mx + 10, mastTop + (i + 1) * 2.4 + (wapper * (i + 1)) / 3);
-      ctx.lineTo(mx, mastTop + (i + 1) * 2.4);
-    }
-    ctx.closePath();
-    ctx.fill();
+  if (lijf) tekenMastEnVlag(ctx, natie, heeftFort, mx, my, mastTop, st, stad.id);
+  if (!bovenop) {
+    ctx.restore();
+    return;
   }
 
   if (gemarkeerd) {
@@ -659,3 +649,33 @@ export function tekenStad(ctx, stad, cam, tijd, gemarkeerd) {
   ctx.restore();
 }
 
+/** Vlaggenmast met wapperende vlag, in de ongedraaide ruimte van de stad. */
+function tekenMastEnVlag(ctx, natie, heeftFort, mx, my, mastTop, st, id) {
+  ctx.strokeStyle = '#3a2a18';
+  ctx.lineWidth = heeftFort ? 1.2 : 1;
+  ctx.beginPath();
+  ctx.moveTo(mx, my);
+  ctx.lineTo(mx, mastTop);
+  ctx.stroke();
+
+  const wapper = Math.sin(st * 4 + id) * 1.6;
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = natie.vlag[i];
+    ctx.beginPath();
+    if (natie.vlagStaand) {
+      const x0 = mx + (i * 10) / 3;
+      const x1 = mx + ((i + 1) * 10) / 3;
+      ctx.moveTo(x0, mastTop);
+      ctx.lineTo(x1, mastTop + (wapper * (i + 1)) / 6);
+      ctx.lineTo(x1, mastTop + 7.2 + (wapper * (i + 1)) / 6);
+      ctx.lineTo(x0, mastTop + 7.2);
+    } else {
+      ctx.moveTo(mx, mastTop + i * 2.4);
+      ctx.lineTo(mx + 10, mastTop + i * 2.4 + (wapper * (i + 1)) / 3);
+      ctx.lineTo(mx + 10, mastTop + (i + 1) * 2.4 + (wapper * (i + 1)) / 3);
+      ctx.lineTo(mx, mastTop + (i + 1) * 2.4);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+}

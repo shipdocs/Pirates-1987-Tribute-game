@@ -532,7 +532,7 @@ export function maakZeeslag(vloot, opts) {
       R.tekenZee(c, cam, vw, vh, Game.tijd, {
         richting: storm.richting,
         kracht: storm.kracht,
-      });
+      }, { nachtApart: true });
 
       // Open diep water: op de vaarkaart legt de dieptekaart hier een
       // blauwgroene aanloop overheen, in de slag ontbrak die en stond de zee
@@ -551,7 +551,6 @@ export function maakZeeslag(vloot, opts) {
       if (!afgelopen) tekenVuurwaaier(c);
 
       for (const s of [vijand, mij]) tekenStrijder(c, s, wereld.windRichting, storm);
-      for (const p of deeltjes) if (R.deeltjeInDeLucht(p)) R.tekenDeeltje(c, p);
 
       // Kogels, met hun schaduw op het water zodat de boog leesbaar wordt.
       for (const k of kogels) {
@@ -587,6 +586,21 @@ export function maakZeeslag(vloot, opts) {
       }
 
       tekenMistrand(c);
+      // Nacht over het hele strijdtoneel; mondingsvuur, vonken en brand
+      // lichten daarna fel op in het donker, en elk schip voert zijn lantaarn.
+      R.tekenNachtSluier(c, vw, vh, Game.dpr);
+      const nacht = R.nachtSterkte();
+      if (nacht > 0.02) {
+        for (const s of [vijand, mij]) {
+          const [hl] = rompMaat(s.type);
+          const hx = s.x - Math.cos(s.koers) * hl * 0.9;
+          const hy = s.y - Math.sin(s.koers) * hl * 0.9;
+          R.tekenLichtGloed(c, hx, hy, 28, '#ffc46e', 0.45 * nacht);
+          R.tekenLichtGloed(c, hx, hy, 6, '#fff0c8', 0.9 * nacht);
+          if (s.brand > 0) R.tekenLichtGloed(c, s.x, s.y, 90 + s.brand * 40, '#ff8a30', 0.55 * nacht);
+        }
+      }
+      for (const p of deeltjes) if (R.deeltjeInDeLucht(p)) R.tekenDeeltje(c, p);
       c.restore();
 
       // Zeeleven en stormflair, net als op de overzichtskaart: meeuwen cirkelen

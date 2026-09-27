@@ -2,7 +2,7 @@
 // voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
 
 // Afgesplitst van render.js: zee-oppervlak, golfsprankel en dieptekleuring.
-import { TAU, clamp, sierTijd, sierRustig } from '../util.js';
+import { TAU, clamp, lerp, sierTijd, sierRustig } from '../util.js';
 import { WORLD_W, WORLD_H } from '../world.js';
 import { offscreen, plaats } from '../sprite.js';
 import { sprankelLagen, zorgVoorGolven, vulPatroon } from './patronen.js';
@@ -94,11 +94,14 @@ function mengKleur(hex, zwart) {
  * Tekent de open zee. `cam` = {x, y, zoom}, `vw/vh` = grootte van het beeld,
  * `wind` = {richting, kracht} zodat de deining met de wind meeloopt.
  */
-export function tekenZee(ctx, cam, vw, vh, t, wind) {
+export function tekenZee(ctx, cam, vw, vh, t, wind, opts = {}) {
   const schemer = schemerFactor();
   // Middernacht mag donker aanvoelen, maar niet zo zwart dat je geen water
-  // meer van land kunt onderscheiden — vandaar de kap op de menging.
-  const nachtDonker = Math.min(schemer, 0.78);
+  // meer van land kunt onderscheiden — vandaar de kap op de menging. Wie
+  // daarna `tekenNachtSluier` over de hele wereld legt (`nachtApart`), laat de
+  // zee hier op daglicht: anders werd alleen het diepe water donker en lagen
+  // banken, land en steden er om middernacht bij als op klaarlichte dag.
+  const nachtDonker = opts.nachtApart ? 0 : Math.min(schemer, 0.78);
   // Iets rijker en zachter dan een vlak marineblauw: de middentint trekt naar
   // een dromerig turkoois, zodat het licht ook op klaarlichte dag lijkt te
   // dragen in plaats van plat te staan.
@@ -145,7 +148,7 @@ export function tekenZee(ctx, cam, vw, vh, t, wind) {
   // Blauwige nevel: dooft nooit helemaal uit zolang het niet klaarlichte dag
   // is, en wint gestaag aan kracht tot diep in de nacht. Gaat óver het water
   // heen, anders kleurt hij alleen de lege ondergrond.
-  if (schemer > 0.05) {
+  if (schemer > 0.05 && !opts.nachtApart) {
     const nevel = ctx.createLinearGradient(0, 0, 0, vh);
     nevel.addColorStop(0, `rgba(36,34,68,${0.4 * schemer})`);
     nevel.addColorStop(1, 'rgba(10,30,52,0)');
@@ -178,6 +181,67 @@ export function tekenZee(ctx, cam, vw, vh, t, wind) {
  * lichtpartijen (zeildoek, schuim) blijven bijna ongemoeid. Volgt hetzelfde
  * korte piekje als de gloed in `tekenZee`, niet de volle nachtduisternis.
  */
+// --- Nacht ----------------------------------------------------------------
+
+/** Hoe zwaar de nacht op de wereld drukt (0..1); nul tot ver in de schemer. */
+export function nachtSterkte() {
+  return clamp((schemerFactor() - 0.28) / 0.62, 0, 1);
+}
+
+/**
+ * Maanlicht over de hele wereld in één keer: vermenigvuldigen met een koel
+ * blauw dooft zee, banken, land, steden en schepen gelijk, zodat hun
+ * onderlinge verhouding blijft staan. Tekent in schermruimte, ook als de
+ * aanroeper midden in een wereldtransform zit. Alles wat zelf licht geeft
+ * (ramen, lantaarns, vuur) hoort erna te komen.
+ */
+export function tekenNachtSluier(ctx, vw, vh, dpr = 1) {
+  const n = nachtSterkte();
+  if (n <= 0.01) return;
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.globalCompositeOperation = 'multiply';
+  const r = Math.round(lerp(255, 60, n)),
+    g = Math.round(lerp(255, 82, n)),
+    b = Math.round(lerp(255, 132, n));
+  ctx.fillStyle = `rgb(${r},${g},${b})`;
+  ctx.fillRect(0, 0, vw, vh);
+  ctx.globalCompositeOperation = 'source-over';
+  const nevel = ctx.createLinearGradient(0, 0, 0, vh);
+  nevel.addColorStop(0, `rgba(30,34,72,${0.22 * n})`);
+  nevel.addColorStop(1, 'rgba(10,24,48,0)');
+  ctx.fillStyle = nevel;
+  ctx.fillRect(0, 0, vw, vh);
+  ctx.restore();
+}
+
+const gloedCache = new Map();
+
+/** Een zachte, additieve lichtvlek: straatlicht, lantaarn of vuur in het donker. */
+export function tekenLichtGloed(ctx, x, y, r, kleur, sterkte = 1) {
+  if (sterkte <= 0.01 || r <= 0) return;
+  let spr = gloedCache.get(kleur);
+  if (!spr) {
+    const S = 64;
+    spr = offscreen(S, S);
+    const g = spr.getContext('2d');
+    const h = kleur.replace('#', '');
+    const rgb = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)).join(',');
+    const grad = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+    grad.addColorStop(0, `rgba(${rgb},0.9)`);
+    grad.addColorStop(0.3, `rgba(${rgb},0.42)`);
+    grad.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, S, S);
+    gloedCache.set(kleur, spr);
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = clamp(sterkte, 0, 1);
+  ctx.drawImage(spr, x - r, y - r, r * 2, r * 2);
+  ctx.restore();
+}
+
 export function tekenGoudenUur(ctx, vw, vh) {
   const goudenUur = goudenUurFactor();
   if (goudenUur <= 0.05) return;

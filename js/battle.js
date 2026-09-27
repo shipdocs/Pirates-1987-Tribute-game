@@ -529,16 +529,18 @@ export function maakZeeslag(vloot, opts) {
         vh = Game.hoogte;
       // Stormen beïnvloeden ook de slag: zwaarder zeegang, meer regen.
       const storm = wereld.stormWind ? wereld.stormWind(mij.x, mij.y) : { richting: wereld.windRichting, kracht: wereld.windKracht };
-      R.tekenZee(c, cam, vw, vh, Game.tijd, {
+      const opKaart = R.tekenZee(c, cam, vw, vh, Game.tijd, {
         richting: storm.richting,
         kracht: storm.kracht,
       }, { nachtApart: true });
 
-      // Open diep water: op de vaarkaart legt de dieptekaart hier een
-      // blauwgroene aanloop overheen, in de slag ontbrak die en stond de zee
-      // vaal en grauw.
-      c.fillStyle = 'rgba(27,95,128,0.34)';
-      c.fillRect(0, 0, vw, vh);
+      // Open diep water: op de vaarkaart legt de dieptekaart een blauwgroene
+      // aanloop over de tegelzee, in de slag ontbrak die en stond hij vaal en
+      // grauw. De shaderzee heeft zijn eigen kleur en krijgt geen waas.
+      if (!opKaart) {
+        c.fillStyle = 'rgba(27,95,128,0.34)';
+        c.fillRect(0, 0, vw, vh);
+      }
 
       c.save();
       c.translate(vw / 2 + schokX, vh / 2 + schokY);

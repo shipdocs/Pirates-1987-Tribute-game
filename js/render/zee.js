@@ -6,6 +6,8 @@ import { TAU, clamp, lerp, sierTijd, sierRustig } from '../util.js';
 import { WORLD_W, WORLD_H } from '../world.js';
 import { offscreen, plaats } from '../sprite.js';
 import { sprankelLagen, zorgVoorGolven, vulPatroon } from './patronen.js';
+import { tekenZeeGL } from './zeegl.js';
+import { transformSchaal } from './hulpjes.js';
 
 // --- Zee ------------------------------------------------------------------
 
@@ -102,48 +104,23 @@ export function tekenZee(ctx, cam, vw, vh, t, wind, opts = {}) {
   // zee hier op daglicht: anders werd alleen het diepe water donker en lagen
   // banken, land en steden er om middernacht bij als op klaarlichte dag.
   const nachtDonker = opts.nachtApart ? 0 : Math.min(schemer, 0.78);
-  // Iets rijker en zachter dan een vlak marineblauw: de middentint trekt naar
-  // een dromerig turkoois, zodat het licht ook op klaarlichte dag lijkt te
-  // dragen in plaats van plat te staan.
-  const g = ctx.createLinearGradient(0, 0, 0, vh);
-  g.addColorStop(0, mengKleur('#0d3f68', nachtDonker));
-  g.addColorStop(0.42, mengKleur('#1a6f94', nachtDonker * 0.8));
-  g.addColorStop(0.72, mengKleur('#155b84', nachtDonker * 0.72));
-  g.addColorStop(1, mengKleur('#0b3452', nachtDonker * 0.65));
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, vw, vh);
-
   const wr = wind ? wind.richting : 0;
   const wk = clamp(wind ? wind.kracht : 1, 0.25, 2);
   const st = sierTijd(t);
-  const zoom = cam.zoom || 1;
-  // Het water beweegt met de wereld mee (het ligt eronder, niet erachter), dus
-  // de patronen volgen de camera één-op-één; alleen de drift is van de wind.
-  const camX = cam.x * zoom,
-    camY = cam.y * zoom;
   const drift = zeeDriftBij(t, wr, wk);
 
-  // Deining (met de wolkenschaduw erin), golfslag, en — alleen als je er dicht
-  // genoeg op zit — rimpeling. Alle drie dezelfde tegel op een andere maat en
-  // snelheid: het oog ziet er drie afzonderlijke zeegangen in, en het scheelt
-  // twee tegelbouwen. De deining blijft bewust flauw: op die maat is één tegel
-  // bijna een halve schermbreedte, en een sterke laag zou zijn eigen herhaling
-  // verraden.
-  const golfLagen = zorgVoorGolven(ctx, wr);
-  for (let i = 0; i < golfLagen.length; i++) {
-    if (i === 2 && zoom <= 0.8) break; // uitgezoomd is rimpeling toch alleen ruis
-    const { patroon, maat, snel, alfa } = golfLagen[i];
-    vulPatroon(ctx, patroon, vw, vh, maat, -camX + drift.x * snel, -camY + drift.y * snel, alfa);
-  }
-
-  // Zonnevonken op de kruinen, ademend zodat het twinkelt in plaats van staat.
-  // Bij schemering doven ze uit: dan is er geen zon om in te vonken.
-  const helder = clamp(1 - schemer * 1.4, 0.15, 1);
-  for (let i = 0; i < sprankelLagen.length; i++) {
-    const { patroon, maat } = sprankelLagen[i];
-    const alfa = 0.24 * helder * (0.55 + 0.45 * Math.sin(st * 1.7));
-    vulPatroon(ctx, patroon, vw, vh, maat, -camX + drift.x * 21, -camY + drift.y * 21, alfa, 'lighter');
-  }
+  // Eerst de shaderzee; lukt die niet, dan de tegels hieronder.
+  const opKaart = tekenZeeGL(ctx, {
+    cam, vw, vh,
+    tijd: st,
+    richting: wr,
+    kracht: wk,
+    drift,
+    schemer,
+    donker: nachtDonker,
+    schaal: transformSchaal(ctx),
+  });
+  if (!opKaart) tekenTegelZee(ctx, cam, vw, vh, st, wr, wk, drift, schemer, nachtDonker);
 
   // Blauwige nevel: dooft nooit helemaal uit zolang het niet klaarlichte dag
   // is, en wint gestaag aan kracht tot diep in de nacht. Gaat óver het water
@@ -170,6 +147,7 @@ export function tekenZee(ctx, cam, vw, vh, t, wind, opts = {}) {
     ctx.fillStyle = gloed;
     ctx.fillRect(0, 0, vw, vh);
   }
+  return opKaart;
 }
 
 /**
@@ -181,6 +159,51 @@ export function tekenZee(ctx, cam, vw, vh, t, wind, opts = {}) {
  * lichtpartijen (zeildoek, schuim) blijven bijna ongemoeid. Volgt hetzelfde
  * korte piekje als de gloed in `tekenZee`, niet de volle nachtduisternis.
  */
+/**
+ * De oude tegelzee: een verloop met drie verschuivende golftegels en
+ * zonnevonken. Blijft als terugval voor browsers zonder WebGL.
+ */
+function tekenTegelZee(ctx, cam, vw, vh, st, wr, wk, drift, schemer, nachtDonker) {
+  // Iets rijker en zachter dan een vlak marineblauw: de middentint trekt naar
+  // een dromerig turkoois, zodat het licht ook op klaarlichte dag lijkt te
+  // dragen in plaats van plat te staan.
+  const g = ctx.createLinearGradient(0, 0, 0, vh);
+  g.addColorStop(0, mengKleur('#0d3f68', nachtDonker));
+  g.addColorStop(0.42, mengKleur('#1a6f94', nachtDonker * 0.8));
+  g.addColorStop(0.72, mengKleur('#155b84', nachtDonker * 0.72));
+  g.addColorStop(1, mengKleur('#0b3452', nachtDonker * 0.65));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, vw, vh);
+
+  const zoom = cam.zoom || 1;
+  // Het water beweegt met de wereld mee (het ligt eronder, niet erachter), dus
+  // de patronen volgen de camera één-op-één; alleen de drift is van de wind.
+  const camX = cam.x * zoom,
+    camY = cam.y * zoom;
+
+  // Deining (met de wolkenschaduw erin), golfslag, en — alleen als je er dicht
+  // genoeg op zit — rimpeling. Alle drie dezelfde tegel op een andere maat en
+  // snelheid: het oog ziet er drie afzonderlijke zeegangen in, en het scheelt
+  // twee tegelbouwen. De deining blijft bewust flauw: op die maat is één tegel
+  // bijna een halve schermbreedte, en een sterke laag zou zijn eigen herhaling
+  // verraden.
+  const golfLagen = zorgVoorGolven(ctx, wr);
+  for (let i = 0; i < golfLagen.length; i++) {
+    if (i === 2 && zoom <= 0.8) break; // uitgezoomd is rimpeling toch alleen ruis
+    const { patroon, maat, snel, alfa } = golfLagen[i];
+    vulPatroon(ctx, patroon, vw, vh, maat, -camX + drift.x * snel, -camY + drift.y * snel, alfa);
+  }
+
+  // Zonnevonken op de kruinen, ademend zodat het twinkelt in plaats van staat.
+  // Bij schemering doven ze uit: dan is er geen zon om in te vonken.
+  const helder = clamp(1 - schemer * 1.4, 0.15, 1);
+  for (let i = 0; i < sprankelLagen.length; i++) {
+    const { patroon, maat } = sprankelLagen[i];
+    const alfa = 0.24 * helder * (0.55 + 0.45 * Math.sin(st * 1.7));
+    vulPatroon(ctx, patroon, vw, vh, maat, -camX + drift.x * 21, -camY + drift.y * 21, alfa, 'lighter');
+  }
+}
+
 // --- Nacht ----------------------------------------------------------------
 
 /** Hoe zwaar de nacht op de wereld drukt (0..1); nul tot ver in de schemer. */

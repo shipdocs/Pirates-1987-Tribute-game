@@ -358,9 +358,17 @@ function toonErelijst() {
 
 // --- Kapitein maken -------------------------------------------------------
 
+// Een voorstel in het naamveld, al geselecteerd: wie typt overschrijft het,
+// wie meteen wil uitvaren hoeft niet eerst een naam te verzinnen voor de
+// startknop iets doet.
+const NAAMVOORSTELLEN = [
+  'Willem de Zwarte', 'Kees Stormvogel', 'Grietje van Hoorn', 'Pieter Zoutbaard',
+  'Joost Ravenzwaan', 'Lotte de Vos', 'Bram Kielhaler', 'Anna Loodsma',
+];
+
 function maakKapitein() {
   const keuze = {
-    naam: '',
+    naam: pick(Math.random, NAAMVOORSTELLEN),
     natie: 'engeland',
     talent: 'meesterschermer',
     moeilijkheid: 'bootsgezel',
@@ -461,7 +469,10 @@ function maakKapitein() {
   const startKnop = scherm.voet.querySelector('.knop-start');
   if (startKnop) startKnop.classList.add('knop-start');
   const invoer = scherm.body.querySelector('.naam-invoer');
-  if (invoer) invoer.focus();
+  if (invoer) {
+    invoer.focus();
+    invoer.select();
+  }
 }
 
 function begin(keuze) {

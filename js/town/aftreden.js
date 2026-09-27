@@ -61,9 +61,9 @@ export async function tredAf(stad) {
                 { tekst: 'Familie' },
                 {
                   tekst: s.familie && s.familie.gevonden
-                    ? `uw ${s.familie.rol} teruggehaald`
+                    ? `je ${s.familie.rol} teruggehaald`
                     : s.familie
-                      ? `uw ${s.familie.rol} nooit teruggezien`
+                      ? `je ${s.familie.rol} nooit teruggezien`
                       : '—',
                   klasse: 'rechts',
                 },

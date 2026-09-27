@@ -154,7 +154,7 @@ function hoofdmenu(stad, opVertrek) {
       ...(!s.familie?.gevonden && !s.familie?.spoor && s.familie?.zoekStad === stad.naam
         ? [
             {
-              label: `${UI.ikoon('familie')}Naar uw ${s.familie.rol} vragen`,
+              label: `${UI.ikoon('familie')}Naar je ${s.familie.rol} vragen`,
               actie: () => zoekFamilie(stad, sch),
             },
           ]

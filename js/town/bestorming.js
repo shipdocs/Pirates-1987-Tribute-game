@@ -165,7 +165,7 @@ async function voerBestorming(stad, opVertrek) {
     maakDuel({
       tegenstander: pick(rng, KAPITEIN_NAMEN),
       natie: stad.natie,
-      vaardigheid: clamp(0.3 + stad.grootte * 0.11, 0.2, 0.92),
+      vaardigheid: clamp(0.3 + stad.grootte * 0.11, 0.2, 0.85),
       voordeel: clamp(s.scheepsvolk / Math.max(10, garnizoen), 0.5, 2.2),
       // Je staat op het binnenplein van het fort, niet op een scheepsdek.
       achtergrond: 'fort',

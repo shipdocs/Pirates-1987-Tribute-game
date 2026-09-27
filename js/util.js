@@ -97,6 +97,11 @@ export function fmtGold(n) {
   return Math.round(n).toLocaleString('nl-NL');
 }
 
+/** Een getal met vaste decimalen en een Nederlandse komma: "6,4", niet "6.4". */
+export function fmtDec(n, decimalen = 1) {
+  return n.toLocaleString('nl-NL', { minimumFractionDigits: decimalen, maximumFractionDigits: decimalen });
+}
+
 const MAANDEN = [
   'januari', 'februari', 'maart', 'april', 'mei', 'juni',
   'juli', 'augustus', 'september', 'oktober', 'november', 'december',

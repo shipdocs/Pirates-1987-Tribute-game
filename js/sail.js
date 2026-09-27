@@ -3,7 +3,7 @@
 
 // Overzichtsscène: varen over de Caribische Zee.
 import {
-  clamp, lerp, normAngle, dist, TAU, fmtDate, fmtGold, compassName, pick, sierTijd,
+  clamp, lerp, normAngle, dist, TAU, fmtDate, fmtGold, fmtDec, compassName, pick, sierTijd,
 } from './util.js';
 import {
   WAREN, WAAR_INDEX, SCHIP_INDEX, scheepsAanduiding, MOEILIJKHEDEN,
@@ -1254,7 +1254,7 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
     ['anker', type.naam],
     ['goud', fmtGold(s.goud)],
     ['kompas', compassName(s.koers)],
-    ['wind', `${compassName(normAngle(lokaal.richting + Math.PI))}  ${(lokaal.kracht * 5).toFixed(1)}`],
+    ['wind', `${compassName(normAngle(lokaal.richting + Math.PI))}  ${fmtDec(lokaal.kracht * 5)}`],
     ['volk', `${s.scheepsvolk}`],
     ['proviand', `${schip.lading[WAAR_INDEX.proviand]}`],
   ];
@@ -1326,7 +1326,7 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
   R.hudBalk(c, 28, vh - 48, 172, 12, schip.zeilen, trim.kleur);
   c.textAlign = 'left';
   c.fillStyle = R.HUD.inkt;
-  c.fillText(`${(s.snelheid / 8).toFixed(1)} knopen`, 28, vh - 27);
+  c.fillText(`${fmtDec(s.snelheid / 8)} knopen`, 28, vh - 27);
   c.textAlign = 'right';
   c.fillStyle = R.HUD.inktZacht;
   c.fillText(windWoord(lokaal.kracht), 200, vh - 27);

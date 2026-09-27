@@ -16,6 +16,8 @@ import {
   geschutVerlies,
   strijdlust,
   geeftOp,
+  overgaveDrempel,
+  TREFFERS_ONTWAPENEN,
   ENTERAFSTAND,
   OVERGAVE_AFSTAND,
 } from '../js/gevechtsmodel.js';
@@ -99,4 +101,35 @@ test('strijdlust en geeftOp bepalen overgave', () => {
   };
   assert.equal(geeftOp(ontwapend, OVERGAVE_AFSTAND - 10), true, 'Ontwapend schip strijkt de vlag langszij');
   assert.equal(geeftOp(ontwapend, OVERGAVE_AFSTAND + 50), false, 'Ontwapend schip geeft niet op op grote afstand');
+});
+
+test('een koopvaarder strijkt eerder dan een oorlogsschip', () => {
+  assert.ok(overgaveDrempel('koopvaarder') > overgaveDrempel('fregat'));
+  // Zwaar gehavend: romp en geschut op veertig procent, volk intact.
+  const gehavend = {
+    romp: 54, maxRomp: 136,
+    scheepsvolk: 90, startScheepsvolk: 90,
+    geschut: 4, startGeschut: 10,
+  };
+  assert.equal(geeftOp(gehavend, 200, overgaveDrempel('koopvaarder')), true);
+  assert.equal(geeftOp(gehavend, 200, overgaveDrempel('fregat')), false);
+});
+
+test('de beginsloep beslist een gevecht met een koopvaarder in een redelijk aantal treffers', () => {
+  // Rondkogels: een deel slaat in de romp, de rest op het geschutsdek.
+  const kv = SCHIP_INDEX.koopvaarder;
+  const s = {
+    romp: kv.romp, maxRomp: kv.romp,
+    scheepsvolk: kv.scheepsvolk, startScheepsvolk: kv.scheepsvolk,
+    geschut: kv.geschut, startGeschut: kv.geschut,
+  };
+  let treffers = 0;
+  while (!geeftOp(s, 200, overgaveDrempel('koopvaarder')) && treffers < 500) {
+    treffers++;
+    if (treffers % 10 < 3) s.geschut = Math.max(0, s.geschut - geschutVerlies(s.startGeschut));
+    else s.romp -= schadePerTreffer(4);
+  }
+  assert.ok(treffers <= 60, `koopvaarder strijkt pas na ${treffers} treffers`);
+  assert.ok(treffers >= 20, `koopvaarder strijkt al na ${treffers} treffers`);
+  assert.ok(TREFFERS_ONTWAPENEN > 10);
 });

@@ -31,18 +31,27 @@ export function maakDuel(opts) {
   // een oude meester haalt het nog van een jonge onbenul.
   const fit = leeftijdFactor(speler);
 
-  const vaardigheid = clamp(opts.vaardigheid, 0.1, 0.95);
+  // Boven de 0,85 wordt het pareervenster korter dan een mens een van drie
+  // toetsen kan lezen en kiezen; daar houdt vaardigheid op en begint willekeur.
+  const vaardigheid = clamp(opts.vaardigheid, 0.1, 0.85);
   const windupTijd = (lerp(0.8, 0.38, vaardigheid) + schermer * 0.12) * (0.5 + 0.5 * fit);
   const pareerKans = clamp(lerp(0.22, 0.72, vaardigheid) - schermer * 0.12, 0.05, 0.85);
   const aanvalPauze = lerp(1.7, 0.8, vaardigheid);
 
-  let positie = 0; // -1 = speler in het nauw, +1 = tegenstander in het nauw
+  // Overmacht aan scheepsvolk: wie met veertig man een dek van tweehonderd
+  // opstormt, begint met zijn rug al tegen de reling en slaat minder hard door.
+  const voordeel = clamp(opts.voordeel || 1, 0.1, 3);
+  const overmachtKracht = clamp(Math.sqrt(voordeel), 0.45, 1.5);
+  let positie = clamp(Math.log2(voordeel) * 0.18, -0.45, 0.45); // -1 = speler in het nauw, +1 = tegenstander
   let fase = 'start';
   let faseT = 0;
   let vijandHoogte = MIDDEN;
   let spelerHoogte = MIDDEN;
   let volgendeAanval = 1.2;
   let uithoudingSpeler = 1;
+  // De tegenstander raakt ook buiten adem — van elke parade die hij moet
+  // maken. Aanvallen loont daardoor: een uitgeputte schermer pareert slecht.
+  let ademVijand = 1;
   let bericht = 'Verdedig je!';
   let berichtT = 0;
   let klaar = false;
@@ -50,8 +59,8 @@ export function maakDuel(opts) {
   let vonken = [];
   let tijd = 0;
 
-  // Overmacht aan scheepsvolk duwt langzaam in jouw voordeel.
-  const drift = clamp((opts.voordeel || 1) - 1, -0.5, 0.7) * 0.028;
+  // Overmacht aan scheepsvolk duwt gestaag, naar jou toe of van je af.
+  const drift = clamp(voordeel - 1, -0.85, 1.2) * 0.045;
 
   // Beeldopbouw: de schermers staan groot in beeld, vlak boven de onderrand.
   const schaalNu = () => clamp(Math.min(Game.breedte / 1000, Game.hoogte / 640), 0.75, 1.9) * 2;
@@ -135,10 +144,11 @@ export function maakDuel(opts) {
       }
 
       if (fase === 'riposte') {
-        // Vrije treffer.
+        // Vrije treffer, maar geen beslissende: een riposte zet hem een stap
+        // terug, een aanval die zijn adem heeft uitgeput wint het duel.
         audio.sfx.kling();
         spelerHoogte = h;
-        raakVijand(0.2 + schermer * 0.05);
+        raakVijand(0.13 + schermer * 0.04);
         zeg('Rake stoot!', '#9fe0a0');
         fase = 'herstelVijand';
         faseT = 0;
@@ -165,6 +175,7 @@ export function maakDuel(opts) {
       berichtT += dt;
       schud = Math.max(0, schud - dt);
       uithoudingSpeler = clamp(uithoudingSpeler + dt * 0.3 * fit, 0, 1);
+      ademVijand = clamp(ademVijand + dt * 0.16, 0, 1);
       positie = clamp(positie + drift * dt, -1.05, 1.05);
 
       for (let i = vonken.length - 1; i >= 0; i--) {
@@ -217,18 +228,23 @@ export function maakDuel(opts) {
 
         case 'spelerSlag':
           if (faseT > 0.28) {
-            if (Math.random() < pareerKans) {
+            // Een vermoeide tegenstander pareert slechter: zo breekt
+            // aanhoudende druk ook een geduldige verdediger.
+            if (Math.random() < pareerKans * (0.3 + 0.7 * ademVijand)) {
               audio.sfx.pareer();
+              ademVijand = clamp(ademVijand - 0.24, 0, 1);
               const bp2 = botsPunt(spelerHoogte);
               vonk(bp2.x + 20, bp2.y, '#cfe4ff');
-              zeg('Hij pareert en zet door!', '#e8998a');
-              fase = 'vijandWindup';
-              faseT = 0;
               vijandHoogte = Math.floor(Math.random() * 3);
+              // Wie net zelf uithaalde, heeft een tel meer nodig om te dekken.
+              zeg(`Hij pareert en zet door — ${HOOGTES[vijandHoogte]}!`, '#e8998a');
+              fase = 'vijandWindup';
+              faseT = -0.12;
             } else {
               audio.sfx.kling();
-              raakVijand(0.15 + schermer * 0.04);
-              zeg('Raak!', '#9fe0a0');
+              ademVijand = clamp(ademVijand - 0.1, 0, 1);
+              raakVijand(0.2 + schermer * 0.05);
+              zeg(ademVijand < 0.35 ? 'Raak! Hij hijgt…' : 'Raak!', '#9fe0a0');
               fase = 'herstelVijand';
               faseT = 0;
             }
@@ -313,7 +329,7 @@ export function maakDuel(opts) {
   };
 
   function raakSpeler() {
-    duw(0.16, 'speler');
+    duw(0.16 / overmachtKracht, 'speler');
     Game.speler.geest = clamp(Game.speler.geest - 0.4, 0, 100);
     fase = 'herstelSpeler';
     faseT = 0;
@@ -322,7 +338,7 @@ export function maakDuel(opts) {
   }
 
   function raakVijand(kracht) {
-    duw(kracht, 'vijand');
+    duw(kracht * overmachtKracht, 'vijand');
     const bp = botsPunt(spelerHoogte);
     vonk(bp.x + 30, bp.y + 10, '#ffd27a');
   }
@@ -925,7 +941,15 @@ export function maakDuel(opts) {
 
     // Naam boven het hoofd.
     c.save();
-    c.font = '600 14px Georgia, serif';
+    // Lange namen krimpen tot ze binnen de eigen helft blijven; anders liepen
+    // "Willem de Zwarte" en "Kapitein Vargas" over elkaar heen.
+    let px = 14;
+    c.font = `600 ${px}px Georgia, serif`;
+    const ruimte = 132 * S;
+    while (px > 9 && c.measureText(o.naam).width > ruimte) {
+      px--;
+      c.font = `600 ${px}px Georgia, serif`;
+    }
     c.textAlign = 'center';
     c.textBaseline = 'alphabetic';
     c.lineWidth = 3.5;
@@ -953,12 +977,17 @@ export function maakDuel(opts) {
     c.lineTo(bx + bw / 2, by + 24);
     c.stroke();
 
+    // Lichte letters met een donkere rand: donkere inkt verdween op de rode balk.
     c.font = '600 12px Georgia, serif';
     c.textBaseline = 'middle';
-    c.fillStyle = R.HUD.inkt;
+    c.lineWidth = 3;
+    c.strokeStyle = 'rgba(30,18,8,0.75)';
+    c.fillStyle = '#f6ecd4';
     c.textAlign = 'left';
+    c.strokeText(Game.speler.naam, bx + 10, by + 13);
     c.fillText(Game.speler.naam, bx + 10, by + 13);
     c.textAlign = 'right';
+    c.strokeText(opts.tegenstander, bx + bw - 10, by + 13);
     c.fillText(opts.tegenstander, bx + bw - 10, by + 13);
 
     // Melding.
@@ -984,6 +1013,14 @@ export function maakDuel(opts) {
     // Wie op leeftijd is, moet weten waaróm de adem korter is dan vroeger.
     c.fillText(fit < 0.95 ? `adem · ${Math.floor(Game.speler.leeftijd)} jaar` : 'adem', 28, vh - 45);
     R.hudBalk(c, 28, vh - 37, 164, 11, uithoudingSpeler, R.hudStand(uithoudingSpeler));
+
+    // Zijn adem, gespiegeld rechtsonder: hier zie je dat aanvallen hem sloopt.
+    R.hudPaneel(c, vw - 200, vh - 56, 180, 34, 6);
+    c.textAlign = 'right';
+    c.fillStyle = R.HUD.inktZacht;
+    c.fillText('zijn adem', vw - 28, vh - 45);
+    R.hudBalk(c, vw - 192, vh - 37, 164, 11, ademVijand, R.hudStand(ademVijand));
+    c.textAlign = 'left';
 
     // Bediening, op een strookje: het dek is licht en de letters vielen erin weg.
     c.font = '12px Georgia, serif';

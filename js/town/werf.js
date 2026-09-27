@@ -1,6 +1,6 @@
 // Afgesplitst van town.js: de scheepswerf — herstel, geschut, toerusting en handel in schepen.
-import { Game, nieuwSchip, ruimVrij } from '../game.js';
-import { SCHEPEN, SCHIP_INDEX, UPGRADES, metLidwoord } from '../data.js';
+import { Game, nieuwSchip, ruimVrij, vlootScheepsvolkMax } from '../game.js';
+import { SCHEPEN, SCHIP_INDEX, UPGRADES, WAAR_INDEX, metLidwoord } from '../data.js';
 import * as UI from '../ui.js';
 import * as audio from '../audio.js';
 import { clamp, fmtGold, el, makeRng } from '../util.js';
@@ -29,7 +29,7 @@ function werf(stad, ouder) {
       for (let i = 0; i < s.schepen.length; i++) {
         const sh = s.schepen[i];
         const t = SCHIP_INDEX[sh.type];
-        const rij = el('div', 'werf-rij');
+        const rij = el('div', 'werf-rij werf-rij-eigen');
         const kosten = herstelKosten(sh);
         const up = sh.upgrades || {};
         rij.innerHTML =
@@ -55,7 +55,9 @@ function werf(stad, ouder) {
 
         const kanonPrijs = 480;
         const kanon = el('button', 'mini', `+1 stuk geschut (${fmtGold(kanonPrijs)})`);
-        kanon.disabled = sh.geschut >= t.geschut || s.goud < kanonPrijs || (i === 0 && ruimVrij(sh) < 2);
+        // Elk stuk weegt twee eenheden ruim, op elk schip van de vloot.
+        kanon.disabled = sh.geschut >= t.geschut || s.goud < kanonPrijs || ruimVrij(sh) < 2;
+        if (sh.geschut < t.geschut && ruimVrij(sh) < 2) kanon.title = 'Geen plaats in het ruim: elk stuk weegt twee eenheden.';
         kanon.onclick = () => {
           s.goud -= kanonPrijs;
           sh.geschut++;
@@ -75,6 +77,11 @@ function werf(stad, ouder) {
           else label = upg.naam;
           const k = el('button', 'mini', `${label} (${fmtGold(prijs)})`);
           k.disabled = lvl >= upg.max || s.goud < prijs || (key === 'romp' && sh.romp < sh.maxRomp - 1);
+          if (key === 'romp' && lvl < upg.max && sh.romp < sh.maxRomp - 1) {
+            k.title = 'Eerst kalfateren: op een lekke romp zet de werf geen zwaardere spanten.';
+          } else if (lvl >= upg.max) {
+            k.title = 'Hier valt niets meer aan te verbeteren.';
+          }
           k.onclick = () => {
             s.goud -= prijs;
             up[key] = lvl + 1;
@@ -93,11 +100,35 @@ function werf(stad, ouder) {
 
         if (i > 0) {
           const verkoop = el('button', 'mini rood', `Van de hand doen (${fmtGold(scheepsWaarde(sh))})`);
-          verkoop.onclick = () => {
-            s.goud += scheepsWaarde(sh);
-            s.schepen.splice(i, 1);
+          verkoop.onclick = async () => {
+            const waarde = scheepsWaarde(sh);
+            const lading = sh.lading.reduce((a, b) => a + b, 0);
+            const past = Math.min(lading, Math.max(0, ruimVrij(s.schepen[0])));
+            const ja = await UI.vraag(
+              `${metLidwoord(sh.type, true)} verkopen?`,
+              `De werf biedt <b>${fmtGold(waarde)} goud</b>.` +
+                (lading > 0
+                  ? past >= lading
+                    ? ` De ${lading} eenheden lading gaan over naar je vlaggenschip.`
+                    : ` Van de ${lading} eenheden lading past er maar ${past} in je vlaggenschip; <b>de rest gaat verloren</b>.`
+                  : ''),
+              [
+                { label: 'Verkopen', waarde: true, soort: 'gevaar' },
+                { label: 'Houden', waarde: false, esc: true },
+              ]
+            );
+            if (!ja) return;
+            verhuisLading(sh, s.schepen[0]);
+            s.goud += waarde;
+            s.schepen.splice(s.schepen.indexOf(sh), 1);
+            // Minder kooien: wie geen hangmat meer heeft, monstert af.
+            const max = vlootScheepsvolkMax(s);
+            const weg = Math.max(0, s.scheepsvolk - max);
+            s.scheepsvolk -= weg;
             audio.sfx.munt();
-            sch._bericht = `${metLidwoord(sh.type, true)} is van de hand gedaan.`;
+            sch._bericht =
+              `${metLidwoord(sh.type, true)} is van de hand gedaan.` +
+              (weg > 0 ? ` ${weg} man monstert af: er is geen plaats meer voor ze.` : '');
             sch.ververs();
           };
           acties.appendChild(verkoop);
@@ -107,8 +138,13 @@ function werf(stad, ouder) {
             const oud = s.schepen[0];
             s.schepen[0] = sh;
             s.schepen[i] = oud;
-            // De lading verhuist mee voor zover het ruim het toelaat.
-            sch._bericht = `Je hijst je vlag op ${metLidwoord(sh.type)}.`;
+            // De lading verhuist mee voor zover het ruim het toelaat: koopman en
+            // rantsoen kijken alleen naar het vlaggenschip, en achtergebleven
+            // proviand liet je volk anders verhongeren met eten aan boord.
+            const over = verhuisLading(oud, sh);
+            sch._bericht =
+              `Je hijst je vlag op ${metLidwoord(sh.type)}.` +
+              (over > 0 ? ` ${over} eenheden lading passen niet en blijven op ${metLidwoord(oud.type)}.` : '');
             sch.ververs();
           };
           acties.appendChild(vlag);
@@ -125,7 +161,9 @@ function werf(stad, ouder) {
         const rij = el('div', 'werf-rij');
         rij.innerHTML =
           `<span class="werf-naam">${t.naam}</span>` +
-          `<span class="werf-stat">romp ${t.romp} · ${t.geschut} stukken · ruim ${t.ruim} · ${t.scheepsvolk} koppen</span>`;
+          `<span class="werf-stat">romp ${t.romp} · ${t.geschut} stukken · ` +
+          `<span title="Laadruimte als alle stukken aan boord zijn; elk stuk weegt twee eenheden.">laadruim ${t.ruim - t.geschut * 2}</span>` +
+          ` · ${t.scheepsvolk} koppen</span>`;
         const acties = el('div', 'werf-acties');
         const prijs = Math.round(t.prijs * (1.25 - stad.grootte * 0.04));
         const koop = el('button', 'mini', `Aanschaffen (${fmtGold(prijs)})`);
@@ -146,6 +184,21 @@ function werf(stad, ouder) {
     knoppen: (sch) => [{ label: 'Terug', esc: true, actie: () => { sch.sluit(); ouder.ververs(); } }],
   });
   return scherm;
+}
+
+/**
+ * Zet de lading van `van` over naar `naar` voor zover die ruimte heeft,
+ * proviand eerst. Geeft terug hoeveel er achterbleef.
+ */
+function verhuisLading(van, naar) {
+  const p = WAAR_INDEX.proviand;
+  const volgorde = [p, ...van.lading.map((_, i) => i).filter((i) => i !== p)];
+  for (const i of volgorde) {
+    const n = Math.min(van.lading[i], Math.max(0, ruimVrij(naar)));
+    van.lading[i] -= n;
+    naar.lading[i] += n;
+  }
+  return van.lading.reduce((a, b) => a + b, 0);
 }
 
 function herstelKosten(schip) {
@@ -178,4 +231,4 @@ function teKoop(stad) {
   return uit.sort((a, b) => a.prijs - b.prijs);
 }
 
-export { werf, herstelKosten, scheepsWaarde, teKoop };
+export { werf, herstelKosten, scheepsWaarde, teKoop, verhuisLading };

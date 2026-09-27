@@ -147,7 +147,9 @@ export function herlaadTijd(type, scheepsvolkDeel, konstabelBonus = 0) {
 
 /** Zwaarder geschut slaat harder in, maar lang niet evenredig met het aantal. */
 export function schadePerTreffer(schutterGeschut) {
-  return 0.85 + Math.sqrt(Math.max(0, schutterGeschut)) * 0.095;
+  // De voet is zwaar: met de oude 0,85 deed de beginsloep ruim twee minuten
+  // over een koopvaarder zonder dat er iets beslist was.
+  return 1.5 + Math.sqrt(Math.max(0, schutterGeschut)) * 0.13;
 }
 
 /** Welk deel van de rondkogeltreffers op het geschutsdek belandt in plaats van in de romp. */
@@ -160,7 +162,7 @@ export const KANS_GESCHUT = 0.3;
  * drie stukken aan een boord. Zonder die schaling zou een zwaar schip juist
  * makkelijker te ontwapenen zijn dan een licht, wat nergens op slaat.
  */
-export const TREFFERS_ONTWAPENEN = 34;
+export const TREFFERS_ONTWAPENEN = 22;
 
 /** Hoeveel stukken één treffer op het geschutsdek uitschakelt (mag gebroken zijn). */
 export function geschutVerlies(startGeschut) {
@@ -183,6 +185,19 @@ export function strijdlust(s) {
   const volk = clamp(s.scheepsvolk / Math.max(1, s.startScheepsvolk), 0, 1);
   const geschut = clamp(s.geschut / Math.max(1, s.startGeschut), 0, 1);
   return clamp(romp * 45 + volk * 30 + geschut * 25, 0, 100);
+}
+
+/**
+ * Koopvaardij is geen oorlogsvloot: haar volk vaart voor loon, niet voor de
+ * kroon, en strijkt de vlag zodra het er slecht voor staat. Zo was het ook in
+ * het origineel — een koopvaarder bevechten is kort, een fregat is werk.
+ */
+export const KOOPVAARDIJ = new Set(['koopvaarder', 'grote_koopvaarder', 'fluit', 'vrachtfluit', 'bark']);
+
+/** De strijdlust waaronder een schip van dit type de vlag strijkt. */
+export function overgaveDrempel(typeId, vijandKracht = 1) {
+  const basis = vijandKracht > 1.4 ? 16 : 22;
+  return KOOPVAARDIJ.has(typeId) ? basis + 38 : basis;
 }
 
 /** Binnen deze afstand is de vijand dichtbij genoeg om de vlag te strijken. */

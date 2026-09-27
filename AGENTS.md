@@ -43,6 +43,7 @@ This file provides guidance to agents when working with code in this repository.
 - **Particles share a draw function, not a behaviour.** `tekenRook` (`js/render/effecten.js`) serves both gun smoke and the foam in the wake. Smoke should billow, foam should not: the wake trail inherited the smoke growth factor and swelled to over one and a half ship lengths wide, standing behind the ship as a white smoke triangle. Hence `p.groei` and `p.dekking` per particle.
 - **Battle particles have a `soort`, and it decides the layer.** `tekenDeeltje` (`js/render/effecten.js`) draws `flits`, `plons`, `spat`, `vonk`, `splinter`, `vlam` or, without a soort, smoke via `tekenRook`. `deeltjeInDeLucht(p)` splits them: water and powder smoke go under the ships, flashes, sparks, splinters and flames over them. `p.demping` slows a particle per second; `MAX_DEELTJES` in `battle.js` caps the total.
 - **Lighting follows `speler.dag % 1`, not the wall clock**, and a new game starts at `dag: 0.28` (just after dawn) so the first view is not the darkest sea of the day. The harbour print (`havenPrent`) picks its day/dusk/night palette from the same `schemerFactor()`.
+- **Night is one multiply veil over the whole world, not a darker sea.** Scenes call `tekenZee(..., { nachtApart: true })`, draw the world, then `tekenNachtSluier()` (`js/render/zee.js`); only light sources come after it (`tekenLichtGloed`, town windows via `tekenStad(..., 'bovenop')`, flashes and flames). Darkening only the sea left shallows, land and towns in daylight at midnight.
 
 ## Measuring in the browser
 

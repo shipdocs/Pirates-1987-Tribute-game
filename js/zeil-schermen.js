@@ -2,7 +2,7 @@
 // voorbehouden. Proprietary — all rights reserved. Zie/see LICENSE.
 
 // DOM-schermen die tijdens het zeilen geopend kunnen worden.
-import { clamp, TAU, fmtDate, fmtGold, el } from './util.js';
+import { clamp, TAU, fmtDate, fmtGold, fmtDec, el } from './util.js';
 import { WAREN, SCHIP_INDEX, NATIES, RANGEN, LEGENDES, ITEMS } from './data.js';
 import { WORLD_W, WORLD_H } from './world.js';
 import {
@@ -159,8 +159,8 @@ export function toonScheepsstatus() {
           `<span>Romp</span><span>${Math.round(sh.romp)} / ${sh.maxRomp}</span>` +
           `<span>Geschut</span><span>${sh.geschut} / ${t.geschut}</span>` +
           `<span>Ruim</span><span>${ruimTotaal(sh)} / ${t.ruim}</span>` +
-          `<span>Vaart</span><span>${(t.snelheid / 8).toFixed(1)} knopen</span>` +
-          `<span>Wendbaarheid</span><span>${t.wend.toFixed(2)}</span>` +
+          `<span>Vaart</span><span>${fmtDec(t.snelheid / 8)} knopen</span>` +
+          `<span>Wendbaarheid</span><span>${fmtDec(t.wend, 2)}</span>` +
           `<span>Aan de wind</span><span>${Math.round(t.hoogte * 100)}%</span>` +
           (up.zeilen || up.roer || up.romp || up.weer
             ? `<span>Toerusting</span><span>zeil ${up.zeilen || 0} · ` +

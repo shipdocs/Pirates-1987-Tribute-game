@@ -13,6 +13,7 @@ function maakKnop(k) {
   const b = el('button', 'knop' + (k.soort ? ' knop-' + k.soort : ''));
   b.innerHTML = k.label;
   if (k.uit) b.disabled = true;
+  if (k.titel) b.title = k.titel;
   if (k.sleutel) {
     const s = el('span', 'knop-sleutel', k.sleutel);
     b.prepend(s);

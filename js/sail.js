@@ -3,7 +3,7 @@
 
 // Overzichtsscène: varen over de Caribische Zee.
 import {
-  clamp, lerp, normAngle, dist, TAU, fmtDate, fmtGold, compassName, pick, sierTijd,
+  clamp, lerp, normAngle, dist, TAU, fmtDate, fmtGold, fmtDec, compassName, pick, sierTijd,
 } from './util.js';
 import {
   WAREN, WAAR_INDEX, SCHIP_INDEX, scheepsAanduiding, MOEILIJKHEDEN,
@@ -461,7 +461,11 @@ export function maakZeilScene() {
       // De zee zelf volgt de lokale wind: binnen een stormcel kabbelt niets
       // meer, maar jaagt en schuimt het — zichtbaar zwaarder zeegang.
       const zeeWind = w.stormWind ? w.stormWind(s.x, s.y) : { richting: w.windRichting, kracht: w.windKracht };
-      R.tekenZee(c, cam, vw, vh, Game.tijd, { richting: zeeWind.richting, kracht: zeeWind.kracht });
+      R.tekenZee(
+        c, cam, vw, vh, Game.tijd,
+        { richting: zeeWind.richting, kracht: zeeWind.kracht },
+        { nachtApart: true }
+      );
 
       c.save();
       c.translate(vw / 2, vh / 2);
@@ -481,11 +485,14 @@ export function maakZeilScene() {
 
       for (const p of sporen) R.tekenRook(c, p);
 
-      for (const stad of w.steden) {
-        if (Math.abs(stad.x - cam.x) * cam.zoom > vw / 2 + 140) continue;
-        if (Math.abs(stad.y - cam.y) * cam.zoom > vh / 2 + 140) continue;
-        R.tekenStad(c, stad, cam, Game.tijd, dist(stad.ankerX, stad.ankerY, s.x, s.y) < 140);
-      }
+      const zichtbareSteden = w.steden.filter(
+        (stad) =>
+          Math.abs(stad.x - cam.x) * cam.zoom <= vw / 2 + 140 &&
+          Math.abs(stad.y - cam.y) * cam.zoom <= vh / 2 + 140
+      );
+      for (const stad of zichtbareSteden) R.tekenStad(c, stad, cam, Game.tijd, false, 'lijf');
+      // Lantaarns op de hek, pas getekend na de nachtsluier.
+      const lantaarns = [];
 
       // Eén schaal voor élk schip, het eigene incluis, en dezelfde die de steden
       // gebruiken. Omdat `tekenSchip` L × schaal × zoom aan schermpixels
@@ -503,6 +510,7 @@ export function maakZeilScene() {
         // met zeilen en al, dus op 120 marge zou hij aan de rand wegknippen.
         if (Math.abs(v.x - cam.x) * cam.zoom > vw / 2 + 180) continue;
         if (Math.abs(v.y - cam.y) * cam.zoom > vh / 2 + 180) continue;
+        lantaarns.push([v.x, v.y, v.koers, v.type]);
         R.tekenSchip(c, v.x, v.y, v.koers, v.type, v.natie, w.windRichting, {
           vaart: v.snelheid / 90,
           tijd: Game.tijd,
@@ -526,6 +534,7 @@ export function maakZeilScene() {
           bx = s.x - Math.cos(s.koers) * (i * 34 + stap * 16) - Math.sin(s.koers) * zijde;
           by = s.y - Math.sin(s.koers) * (i * 34 + stap * 16) + Math.cos(s.koers) * zijde;
         }
+        lantaarns.push([bx, by, s.koers, btype]);
         R.tekenSchip(c, bx, by, s.koers, btype, 'piraat', w.windRichting, {
           vaart: s.snelheid / 90,
           tijd: Game.tijd,
@@ -546,6 +555,23 @@ export function maakZeilScene() {
         rompFractie: schip.romp / schip.maxRomp,
         zeegang: zeeWind,
       });
+      lantaarns.push([s.x, s.y, s.koers, schip.type]);
+
+      // De nacht valt over alles tegelijk; wat zelf licht geeft komt erbovenop.
+      R.tekenNachtSluier(c, vw, vh, Game.dpr);
+      for (const stad of zichtbareSteden) {
+        R.tekenStad(c, stad, cam, Game.tijd, dist(stad.ankerX, stad.ankerY, s.x, s.y) < 140, 'bovenop');
+      }
+      const nacht = R.nachtSterkte();
+      if (nacht > 0.02) {
+        for (const [lx, ly, lk, lt] of lantaarns) {
+          const [L] = R.scheepMaat(lt);
+          const hx = lx - Math.cos(lk) * L * 0.46 * scheepSchaal;
+          const hy = ly - Math.sin(lk) * L * 0.46 * scheepSchaal;
+          R.tekenLichtGloed(c, hx, hy, 15 * scheepSchaal, '#ffc46e', 0.45 * nacht);
+          R.tekenLichtGloed(c, hx, hy, 3.5 * scheepSchaal, '#fff0c8', 0.9 * nacht);
+        }
+      }
 
       c.restore();
 
@@ -1254,7 +1280,7 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
     ['anker', type.naam],
     ['goud', fmtGold(s.goud)],
     ['kompas', compassName(s.koers)],
-    ['wind', `${compassName(normAngle(lokaal.richting + Math.PI))}  ${(lokaal.kracht * 5).toFixed(1)}`],
+    ['wind', `${compassName(normAngle(lokaal.richting + Math.PI))}  ${fmtDec(lokaal.kracht * 5)}`],
     ['volk', `${s.scheepsvolk}`],
     ['proviand', `${schip.lading[WAAR_INDEX.proviand]}`],
   ];
@@ -1326,7 +1352,7 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
   R.hudBalk(c, 28, vh - 48, 172, 12, schip.zeilen, trim.kleur);
   c.textAlign = 'left';
   c.fillStyle = R.HUD.inkt;
-  c.fillText(`${(s.snelheid / 8).toFixed(1)} knopen`, 28, vh - 27);
+  c.fillText(`${fmtDec(s.snelheid / 8)} knopen`, 28, vh - 27);
   c.textAlign = 'right';
   c.fillStyle = R.HUD.inktZacht;
   c.fillText(windWoord(lokaal.kracht), 200, vh - 27);

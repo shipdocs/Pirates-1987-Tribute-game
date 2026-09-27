@@ -18,9 +18,9 @@ import { maakDuel } from './duel.js';
 import { verstrijkDagen } from './anker.js';
 import {
   MUNITIE, KOGEL_SNELHEID, ENTERAFSTAND, KANS_GESCHUT, SCHROOT_KOPPEN, KETTING_TUIGAGE,
-  SCHOOTSVELD, salvoStukken, spreidingMetWind, schootsafstand, voorhoudpunt, salvoRichting,
+  SCHOOTSVELD, TRAVERSE, salvoStukken, spreidingMetWind, schootsafstand, voorhoudpunt, salvoRichting,
   inSchootsveld, raaktRomp, herlaadTijd, schadePerTreffer, strijdlust,
-  geschutVerlies, geeftOp,
+  geschutVerlies, geeftOp, overgaveDrempel,
 } from './gevechtsmodel.js';
 
 const ARENA_X = 1150;
@@ -387,6 +387,7 @@ export function maakZeeslag(vloot, opts) {
       stuurVijand(dt);
       beweeg(mij, dt);
       beweeg(vijand, dt);
+      houdRompenUitElkaar();
 
       // Kogels vliegen echt: ze raken wat ze onderweg tegenkomen, en anders
       // vallen ze aan het eind van hun dracht in zee.
@@ -501,8 +502,10 @@ export function maakZeeslag(vloot, opts) {
       }
 
       // Camera houdt beide schepen in beeld.
+      // Het midden van het beeld schuift wat omhoog: onderaan liggen de
+      // statusregel en de vuurbalk, en daar verdween je eigen romp onder.
       const mx = (mij.x + vijand.x) / 2,
-        my = (mij.y + vijand.y) / 2;
+        my = (mij.y + vijand.y) / 2 + 42 / cam.zoom;
       cam.x = lerp(cam.x, mx, clamp(dt * 2.2, 0, 1));
       cam.y = lerp(cam.y, my, clamp(dt * 2.2, 0, 1));
       const spreiding = dist(mij.x, mij.y, vijand.x, vijand.y);
@@ -511,7 +514,7 @@ export function maakZeeslag(vloot, opts) {
       // romp of tuig van je tegenstander moet mikken; de ondergrens gaat mee
       // omhoog omdat de hele arena maar 2300 bij 1640 groot is en je dus nooit
       // zó ver uit elkaar ligt dat er verder uitgezoomd hoeft te worden.
-      const gewenst = clamp(Math.min(Game.breedte, Game.hoogte * 1.5) / (spreiding + 300), 0.5, 1.7);
+      const gewenst = clamp(Math.min(Game.breedte, (Game.hoogte - 170) * 1.5) / (spreiding + 300), 0.5, 1.7);
       cam.zoom = lerp(cam.zoom, gewenst, clamp(dt * 1.5, 0, 1));
 
       // Vijandelijke geest: een lekke romp, gevallen kameraden en vooral
@@ -529,7 +532,7 @@ export function maakZeeslag(vloot, opts) {
       R.tekenZee(c, cam, vw, vh, Game.tijd, {
         richting: storm.richting,
         kracht: storm.kracht,
-      });
+      }, { nachtApart: true });
 
       // Open diep water: op de vaarkaart legt de dieptekaart hier een
       // blauwgroene aanloop overheen, in de slag ontbrak die en stond de zee
@@ -548,7 +551,6 @@ export function maakZeeslag(vloot, opts) {
       if (!afgelopen) tekenVuurwaaier(c);
 
       for (const s of [vijand, mij]) tekenStrijder(c, s, wereld.windRichting, storm);
-      for (const p of deeltjes) if (R.deeltjeInDeLucht(p)) R.tekenDeeltje(c, p);
 
       // Kogels, met hun schaduw op het water zodat de boog leesbaar wordt.
       for (const k of kogels) {
@@ -584,6 +586,21 @@ export function maakZeeslag(vloot, opts) {
       }
 
       tekenMistrand(c);
+      // Nacht over het hele strijdtoneel; mondingsvuur, vonken en brand
+      // lichten daarna fel op in het donker, en elk schip voert zijn lantaarn.
+      R.tekenNachtSluier(c, vw, vh, Game.dpr);
+      const nacht = R.nachtSterkte();
+      if (nacht > 0.02) {
+        for (const s of [vijand, mij]) {
+          const [hl] = rompMaat(s.type);
+          const hx = s.x - Math.cos(s.koers) * hl * 0.9;
+          const hy = s.y - Math.sin(s.koers) * hl * 0.9;
+          R.tekenLichtGloed(c, hx, hy, 28, '#ffc46e', 0.45 * nacht);
+          R.tekenLichtGloed(c, hx, hy, 6, '#fff0c8', 0.9 * nacht);
+          if (s.brand > 0) R.tekenLichtGloed(c, s.x, s.y, 90 + s.brand * 40, '#ff8a30', 0.55 * nacht);
+        }
+      }
+      for (const p of deeltjes) if (R.deeltjeInDeLucht(p)) R.tekenDeeltje(c, p);
       c.restore();
 
       // Zeeleven en stormflair, net als op de overzichtskaart: meeuwen cirkelen
@@ -626,7 +643,9 @@ export function maakZeeslag(vloot, opts) {
     c.save();
     for (const kant of [-1, 1]) {
       const midden = mij.koers + (kant * Math.PI) / 2;
-      const raak = veld.binnen && veld.kant === kant && binnenDracht;
+      // Goud alleen waar de stukken het doel echt kunnen volgen; daarbuiten
+      // mag je vuren, maar gaat het meeste langs.
+      const raak = veld.binnen && veld.kant === kant && binnenDracht && veld.dwars <= TRAVERSE;
       const g = c.createRadialGradient(mij.x, mij.y, hb, mij.x, mij.y, dracht);
       const kleur = raak ? '255,214,120' : '235,242,246';
       g.addColorStop(0, `rgba(${kleur},${raak ? 0.16 : 0.08})`);
@@ -635,6 +654,13 @@ export function maakZeeslag(vloot, opts) {
       c.beginPath();
       c.moveTo(mij.x, mij.y);
       c.arc(mij.x, mij.y, dracht, midden - SCHOOTSVELD, midden + SCHOOTSVELD);
+      c.closePath();
+      c.fill();
+      // De kern: zo ver draaien de affuiten mee. Hier valt een laag raak.
+      c.fillStyle = `rgba(${kleur},${raak ? 0.12 : 0.05})`;
+      c.beginPath();
+      c.moveTo(mij.x, mij.y);
+      c.arc(mij.x, mij.y, dracht, midden - TRAVERSE, midden + TRAVERSE);
       c.closePath();
       c.fill();
       // De dracht als rand, die met het herladen van links naar rechts vol loopt.
@@ -966,10 +992,12 @@ export function maakZeeslag(vloot, opts) {
     const ja = await UI.vraag(
       'Enteren!',
       `De dreggen liggen klaar. Jouw ${mij.scheepsvolk} man tegen hun ${vijand.scheepsvolk}. ` +
-        'Wie het eerst het dek van de kapitein bereikt, wint de dag.',
+        (mij.scheepsvolk < vijand.scheepsvolk * 0.5
+          ? '<b>Je bent zwaar in de minderheid</b> — aan dek sta je met je rug tegen de reling voor het eerste staal kruist. Dun ze eerst uit met schroot.'
+          : 'Wie het eerst het dek van de kapitein bereikt, wint de dag.'),
       [
         { label: 'Enter op!', waarde: true, soort: 'gevaar' },
-        { label: 'Nog even wachten', waarde: false },
+        { label: 'Nog even wachten', waarde: false, esc: true },
       ],
       { figuur: 'zeeman' }
     );
@@ -981,17 +1009,30 @@ export function maakZeeslag(vloot, opts) {
   }
 
   function startDuel() {
-    const overmacht = clamp(mij.scheepsvolk / Math.max(1, vijand.scheepsvolk), 0.4, 2.5);
+    // Geen bodem meer onder de overmacht: met 0,4 als ondergrens woog veertig
+    // man tegen tweehonderdvijftig even zwaar als veertig tegen honderd.
+    const overmacht = clamp(mij.scheepsvolk / Math.max(1, vijand.scheepsvolk), 0.1, 3);
     Game.zetScene(
       maakDuel({
         tegenstander: vloot.naam,
         natie: vloot.natie,
-        vaardigheid: clamp(0.45 + (SCHIP_INDEX[vloot.type].geschut / 60) - (overmacht - 1) * 0.18, 0.15, 0.95),
+        // De kapitein van een groter schip is een geharder zwaard, maar niet
+        // bovenmenselijk snel: het geschut telt nog maar half zo zwaar.
+        vaardigheid: clamp(0.4 + SCHIP_INDEX[vloot.type].geschut / 120, 0.15, 0.8),
         voordeel: overmacht,
         achtergrond: 'dek',
         terug(gewonnen) {
           Game.zetScene(scene);
           afgelopen = true;
+          // Het handgemeen aan dek kost levens, ook aan de winnende kant — en
+          // meer naarmate je in de minderheid was.
+          const verlies = Math.round(
+            Math.min(mij.scheepsvolk - 1, vijand.scheepsvolk * (gewonnen ? 0.12 : 0.25) * (0.7 + Math.random() * 0.6))
+          );
+          if (verlies > 0) {
+            mij.scheepsvolk -= verlies;
+            if (gewonnen) Game.melding(`${verlies} man gesneuveld bij het enteren.`, 'rood');
+          }
           if (gewonnen) beloonOverwinning('enteren');
           else nederlaag('Je bent teruggeslagen en zwaargewond aan boord gesleept.');
         },
@@ -1021,7 +1062,7 @@ export function maakZeeslag(vloot, opts) {
           : ''),
       [
         { label: 'Alle zeilen bijzetten!', waarde: 'weg' },
-        { label: 'Doorvechten', waarde: false, soort: 'gevaar' },
+        { label: 'Doorvechten', waarde: false, esc: true },
         ...(mij.scheepsvolk < mij.startScheepsvolk * 0.45 || mij.romp < mij.maxRomp * 0.35
           ? [{ label: 'De vlag strijken', waarde: 'strijk', soort: 'gevaar' }]
           : []),
@@ -1034,9 +1075,21 @@ export function maakZeeslag(vloot, opts) {
     if (ja === 'strijk') {
       // Proactieve overgave: zachter dan een nederlaag, maar je verliest je lading en wat roem.
       afgelopen = true;
+      // De buit uit het ruim gaat over; proviand laten ze je, anders is
+      // "met je schip laten gaan" een doodvonnis op zee.
+      const eigen = vlaggenschip(speler);
+      const proviand = WAREN.findIndex((w) => w.id === 'proviand');
+      let genomen = 0;
+      for (let i = 0; i < eigen.lading.length; i++) {
+        if (i === proviand) continue;
+        genomen += eigen.lading[i];
+        eigen.lading[i] = 0;
+      }
       await UI.vraag(
         'Je strijkt de vlag',
-        'Je geeft je over. De vijand neemt je lading en laat je met je schip gaan.',
+        genomen > 0
+          ? `Je geeft je over. De vijand neemt je lading — ${genomen} vaten en balen — en laat je met je schip en je proviand gaan.`
+          : 'Je geeft je over. Je ruim is leeg, dus ze nemen je wapens en je trots en laten je met je schip gaan.',
         [{ label: 'De dag overleefd', waarde: 'ok' }],
         { figuur: 'zeeman' }
       );
@@ -1056,10 +1109,75 @@ export function maakZeeslag(vloot, opts) {
       beëindig({ ontsnapt: true });
     } else {
       Game.melding('Ze zitten je op de hielen!', 'rood');
-      vijand.x = mij.x + Math.cos(mij.koers + Math.PI) * 140;
-      vijand.y = mij.y + Math.sin(mij.koers + Math.PI) * 140;
+      // Achter je, maar nooit in de branding: vroeger landde hij dicht onder
+      // de kust bijna altijd in de rotsen en lag hij daarna als een weerloos
+      // doel stil.
+      const plek = vrijePlekAchter(mij, vijand);
+      if (plek) {
+        vijand.x = plek[0];
+        vijand.y = plek[1];
+        vijand.koers = mij.koers;
+      }
       afgelopen = false;
     }
+  }
+
+  /**
+   * Twee rompen schuiven niet door elkaar heen. Langszij liggen mag — dat is
+   * enteren — maar een boeg die dwars door de ander vaart, liet beide schepen
+   * over elkaar heen getekend staan. Elk schip wordt benaderd als een rij van
+   * drie cirkels over zijn lengte; de dichtste twee duwen elkaar uiteen.
+   */
+  function houdRompenUitElkaar() {
+    const punten = (s) => {
+      const [hl, hb] = rompMaat(s.type);
+      return [-0.62, 0, 0.62].map((f) => [
+        s.x + Math.cos(s.koers) * hl * f,
+        s.y + Math.sin(s.koers) * hl * f,
+        hb * 0.95,
+      ]);
+    };
+    let diepst = 0;
+    let nx = 0,
+      ny = 0;
+    for (const [ax, ay, ar] of punten(mij)) {
+      for (const [bx, by, br] of punten(vijand)) {
+        const d = dist(ax, ay, bx, by);
+        const over = ar + br - d;
+        if (over > diepst && d > 0.001) {
+          diepst = over;
+          nx = (ax - bx) / d;
+          ny = (ay - by) / d;
+        }
+      }
+    }
+    if (diepst <= 0) return;
+    // Ieder de helft, en een klap op de vaart: een aanvaring kost snelheid.
+    for (const [s, teken] of [[mij, 1], [vijand, -1]]) {
+      const x = s.x + nx * teken * diepst * 0.5;
+      const y = s.y + ny * teken * diepst * 0.5;
+      const [hl] = rompMaat(s.type);
+      if (!raaktSlagTerrein(terrein, x, y, hl + 7)) {
+        s.x = x;
+        s.y = y;
+      }
+      s.snelheid *= 0.97;
+    }
+  }
+
+  /** Een vrij stuk water achter `voor` waar `achter` met zijn hele romp past. */
+  function vrijePlekAchter(voor, achter) {
+    const [hl] = rompMaat(achter.type);
+    for (const d of [140, 180, 110, 230]) {
+      for (const da of [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1]) {
+        const a = voor.koers + Math.PI + da;
+        const x = voor.x + Math.cos(a) * d;
+        const y = voor.y + Math.sin(a) * d;
+        if (Math.abs(x) > ARENA_X - 60 || Math.abs(y) > ARENA_Y - 60) continue;
+        if (!raaktSlagTerrein(terrein, x, y, hl + 7)) return [x, y];
+      }
+    }
+    return null;
   }
 
   // --- Afloop -------------------------------------------------------------
@@ -1091,7 +1209,7 @@ export function maakZeeslag(vloot, opts) {
     // Overgave: wil gebroken, óf geen stuk geschut meer over en jij ligt
     // langszij. Dat laatste is de beloning voor het stilleggen van zijn batterij.
     const afstand = dist(mij.x, mij.y, vijand.x, vijand.y);
-    if (geeftOp(vijand, afstand, vijandKracht > 1.4 ? 16 : 22)) {
+    if (geeftOp(vijand, afstand, overgaveDrempel(vijand.type, vijandKracht))) {
       afgelopen = true;
       strijkVlag();
       return;
@@ -1160,9 +1278,9 @@ export function maakZeeslag(vloot, opts) {
       speler.goud += kist;
       audio.sfx.fanfare();
       await UI.vraag(
-        `Uw ${rol} is terecht`,
+        `Je ${rol} is terecht`,
         `Achter een grendel in het ruim staan ze te knipperen tegen het licht. Tussen hen in ` +
-          `staat uw <b>${rol}</b>. Na al die jaren is de familie weer bij elkaar, en de hele ` +
+          `staat je <b>${rol}</b>. Na al die jaren is de familie weer bij elkaar, en de hele ` +
           `Caraïben zal het horen.<br><br>In de kajuit van ${legende.naam} staat bovendien een ` +
           `kist met <b>${fmtGold(kist)} goudstukken</b> — betaald voor mensen die hij nooit had mogen verkopen.`,
         [{ label: 'Ze aan dek brengen', waarde: 'ok' }],
@@ -1444,16 +1562,27 @@ export function maakZeeslag(vloot, opts) {
   }
 
   function beëindig(uitslag) {
-    // Bij vrijwillige overgave blijf je met je schip (en je scheepsvolk) zitten;
-    // alleen bij een echte nederlaag of een gewonnen gevecht wordt de schade
-    // opgeslagen. Ontsnappen zonder schade = ook geen wijzigingen.
+    // Schade is schade, ook als je wegkomt: wie ontsnapte, voer vroeger met
+    // een gave romp, al zijn volk en al zijn geschut de mist uit. Een
+    // nederlaag en een overwinning hebben hun eigen afrekening al gedaan.
     if (uitslag.overgegeven) {
+      slaSchadeOp();
       const eigen = vlaggenschip(speler);
       eigen.romp = clamp(mij.romp, 8, eigen.maxRomp);
-    } else if (!uitslag.verloren && !uitslag.gewonnen && !uitslag.ontsnapt) {
+    } else if (!uitslag.verloren && !uitslag.gewonnen) {
       slaSchadeOp();
     }
+    // Ook de tegenstander draagt zijn wonden mee naar een volgende ontmoeting.
+    if (!uitslag.vijandWeg) schrijfVijandTerug();
     opts.terug(uitslag);
+  }
+
+  /** De stand van de vijand terug naar zijn vloot op de kaart. */
+  function schrijfVijandTerug() {
+    vloot.romp = clamp(vijand.romp, 1, vijand.maxRomp);
+    vloot.geschut = Math.max(0, Math.round(vijand.geschut));
+    // Zijn scheepsvolk werd bij het begin met de moeilijkheid opgeschaald.
+    vloot.scheepsvolk = Math.max(1, Math.round(vijand.scheepsvolk / Math.sqrt(vijandKracht)));
   }
 
   // --- Tekenen ------------------------------------------------------------
@@ -1615,7 +1744,7 @@ export function maakZeeslag(vloot, opts) {
     const kanVuren = afstand <= dracht && veld.binnen;
     const regel =
       `afstand ${afstand} m · dracht ${dracht} m · ` +
-      (veld.binnen ? 'breedzij vrij' : 'geen schootsveld') +
+      (!veld.binnen ? 'geen schootsveld' : veld.dwars <= TRAVERSE ? 'breedzij vrij' : 'schuin — weinig raak') +
       ` · B = enteren (< ${ENTERAFSTAND} m) · 1-3 munitie · Esc = afbreken`;
     // Op een strookje perkament: als losse letters over de zee viel deze regel
     // weg tegen het schuim, en juist hier staat wat je moet weten om te vuren.

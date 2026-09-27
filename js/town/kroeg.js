@@ -39,7 +39,7 @@ function kroeg(stad, ouder) {
         { label: 'Een rondje geven (100 goud)', uit: s.goud < 100, actie: () => rondjeGeven(stad, sch) },
         { label: 'De buit verdelen', uit: s.goud <= 0, actie: () => { sch.sluit(); verdeelBuit(stad, ouder); } },
         { label: 'Rondkijken naar vreemd volk', actie: () => vreemdeling(stad, sch) },
-        { label: 'Terug', esc: true, actie: () => sch.sluit() },
+        { label: 'Terug', esc: true, actie: () => { sch.sluit(); ouder && ouder.ververs(); } },
       ];
     },
   });

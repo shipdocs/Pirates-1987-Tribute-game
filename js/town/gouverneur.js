@@ -34,7 +34,7 @@ function gouverneur(stad, ouder) {
       const verdiend = verdienstePunten(s, stad.natie);
       if (rel > -25) {
         knoppen.push({
-          label: `Om bevordering vragen (${Math.round(verdiend)} / ${volgende.drempel})`,
+          label: `Om bevordering vragen (${fmtGold(verdiend)} / ${fmtGold(volgende.drempel)})`,
           uit: verdiend < volgende.drempel || s.rang[stad.natie] >= RANGEN.length - 1,
           actie: () => bevordering(stad, sch),
         });

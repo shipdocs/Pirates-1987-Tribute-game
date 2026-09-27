@@ -151,7 +151,7 @@ function reflectieRegels(s) {
 
   regels.push(`Er liggen <b>${s.scheepsvolk}</b> koppen onder het dek`);
 
-  if (s.roem > 0) regels.push(`Uw naam luidt <b>${Math.round(s.roem)} roem</b> over de eilanden`);
+  if (s.roem > 0) regels.push(`Je naam luidt <b>${Math.round(s.roem)} roem</b> over de eilanden`);
   if ((s.schattenGevonden || 0) > 0) {
     regels.push(`Van de bodem kwamen <b>${s.schattenGevonden} kist${s.schattenGevonden > 1 ? 'en' : ''} schat</b>`);
   }
@@ -162,9 +162,9 @@ function reflectieRegels(s) {
     regels.push(`U veroverde <b>${s.veroverdeSteden} stad${s.veroverdeSteden > 1 ? 'en' : ''}</b>`);
   }
   if (s.familie) {
-    if (s.familie.gevonden) regels.push('Uw familie is weer bij u');
-    else if (s.familie.spoor) regels.push(`Het spoor van uw ${s.familie.rol} is getrokken`);
-    else regels.push(`Uw ${s.familie.rol} is nog altijd vermist`);
+    if (s.familie.gevonden) regels.push('Je familie is weer bij je');
+    else if (s.familie.spoor) regels.push(`Het spoor van je ${s.familie.rol} is getrokken`);
+    else regels.push(`Je ${s.familie.rol} is nog altijd vermist`);
   }
   regels.push(`Het is nu het jaar <b>${yearOf(s.dag)}</b>`);
 

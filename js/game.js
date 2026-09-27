@@ -469,7 +469,10 @@ export function maakSpeler(opties) {
     natie: opties.natie,
     talent: opties.talent,
     moeilijkheid: opties.moeilijkheid,
-    dag: 0,
+    // Uitvaren doe je bij het ochtendgloren, niet om middernacht: de zee- en
+    // hemelverlichting volgt de dagfractie, en het eerste wat een nieuwe
+    // kapitein zag was anders de donkerste zee van het hele etmaal.
+    dag: 0.28,
     startLeeftijd: 18,
     leeftijd: 18,
     goud: 600,

@@ -3,7 +3,7 @@
 
 // Zeeslag: laveren, de wind uitbuiten en de volle laag geven.
 import {
-  clamp, lerp, normAngle, dist, TAU, turnToward, fmtGold, makeRng, rnd, rndInt,
+  clamp, lerp, normAngle, dist, TAU, turnToward, fmtGold, makeRng, rnd, rndInt, sierRustig,
 } from './util.js';
 import {
   WAREN, SCHIP_INDEX, scheepsAanduiding, metLidwoord, MOEILIJKHEDEN, NATIES,
@@ -18,7 +18,7 @@ import { maakDuel } from './duel.js';
 import { verstrijkDagen } from './anker.js';
 import {
   MUNITIE, KOGEL_SNELHEID, ENTERAFSTAND, KANS_GESCHUT, SCHROOT_KOPPEN, KETTING_TUIGAGE,
-  salvoStukken, spreidingMetWind, schootsafstand, voorhoudpunt, salvoRichting,
+  SCHOOTSVELD, salvoStukken, spreidingMetWind, schootsafstand, voorhoudpunt, salvoRichting,
   inSchootsveld, raaktRomp, herlaadTijd, schadePerTreffer, strijdlust,
   geschutVerlies, geeftOp,
 } from './gevechtsmodel.js';
@@ -27,6 +27,9 @@ const ARENA_X = 1150;
 const ARENA_Y = 820;
 const KAART_NAAR_SLAG = 10;
 const MIN_STARTAFSTAND = 300;
+// Bovengrens aan losse deeltjes: twee linieschepen met brand aan boord mogen
+// het beeld niet laten haperen.
+const MAX_DEELTJES = 700;
 
 // De oude, veilige opstelling waarop het slagterrein is gebouwd. We gebruiken
 // hem alleen nog als lokale basis: de hele opstelling draait straks mee met de
@@ -321,6 +324,9 @@ export function maakZeeslag(vloot, opts) {
   draaiSlagTerrein(terrein, slagStart.draai);
   let kogels = [];
   let deeltjes = [];
+  let schok = 0;
+  let schokX = 0;
+  let schokY = 0;
   let munitie = 0;
   let tijd = 0;
   let afgelopen = false;
@@ -415,10 +421,11 @@ export function maakZeeslag(vloot, opts) {
           if (raakteTerrein) {
             audio.sfx.plons();
             spatDeeltjes(k.x, k.y, '#b6aa91', 5);
+            deeltjes.push({ x: k.x, y: k.y, t: 0, duur: 1, r: 7, kleur: '#bfb39a', vx: 0, vy: 0 });
           } else {
             treffer(k.doel, k);
             audio.sfx.treffer();
-            spatDeeltjes(k.x, k.y, '#ffb45a', 7);
+            inslagRomp(k);
           }
           kogels.splice(i, 1);
           continue;
@@ -429,7 +436,7 @@ export function maakZeeslag(vloot, opts) {
         k.afgelegd += lengte;
         if (k.afgelegd >= k.bereik) {
           audio.sfx.plons();
-          deeltjes.push({ x: k.x, y: k.y, t: 0, duur: 0.6, r: 4, kleur: '#cfe9f2', vx: 0, vy: 0 });
+          plons(k.x, k.y);
           kogels.splice(i, 1);
         }
       }
@@ -439,7 +446,22 @@ export function maakZeeslag(vloot, opts) {
         p.t += dt;
         p.x += (p.vx || 0) * dt;
         p.y += (p.vy || 0) * dt;
+        if (p.demping) {
+          const f = Math.exp(-p.demping * dt);
+          p.vx *= f;
+          p.vy *= f;
+        }
         if (p.t > p.duur) deeltjes.splice(i, 1);
+      }
+      if (deeltjes.length > MAX_DEELTJES) deeltjes.splice(0, deeltjes.length - MAX_DEELTJES);
+
+      // De schok van een treffer in je eigen romp dooft snel uit.
+      schok = Math.max(0, schok - dt * 3.2);
+      if (schok > 0 && !sierRustig()) {
+        schokX = (Math.random() - 0.5) * 14 * schok;
+        schokY = (Math.random() - 0.5) * 14 * schok;
+      } else {
+        schokX = schokY = 0;
       }
 
       mij.herlaad = Math.max(0, mij.herlaad - dt);
@@ -450,10 +472,29 @@ export function maakZeeslag(vloot, opts) {
         if (s.brand > 0) {
           s.romp -= s.brand * dt * 1.4;
           s.brand = Math.max(0, s.brand - dt * 0.12);
+          const [bl, bb] = rompMaat(s.type);
+          const opDek = () => {
+            const langs = (Math.random() - 0.5) * bl * 1.2;
+            const dwars = (Math.random() - 0.5) * bb * 0.9;
+            return [
+              s.x + Math.cos(s.koers) * langs - Math.sin(s.koers) * dwars,
+              s.y + Math.sin(s.koers) * langs + Math.cos(s.koers) * dwars,
+            ];
+          };
           if (Math.random() < dt * 8) {
+            const [rx, ry] = opDek();
+            const wr = wereld.windRichting;
             deeltjes.push({
-              x: s.x + (Math.random() - 0.5) * 20, y: s.y + (Math.random() - 0.5) * 12,
-              t: 0, duur: 1.1, r: 5, kleur: '#4a4a4a', vx: 0, vy: -18,
+              x: rx, y: ry, t: 0, duur: 1.8, r: 6, kleur: '#3d3833', dekking: 0.6,
+              vx: Math.cos(wr) * 22, vy: Math.sin(wr) * 22 - 6,
+            });
+          }
+          if (Math.random() < dt * (6 + s.brand * 14)) {
+            const [fx, fy] = opDek();
+            deeltjes.push({
+              soort: 'vlam', x: fx, y: fy, t: 0, duur: 0.45 + Math.random() * 0.4,
+              r: 5 + Math.random() * 5 + s.brand * 4, fase: Math.random() * TAU,
+              kleur: Math.random() < 0.5 ? '#ff7a24' : '#ffb03a',
             });
           }
         }
@@ -490,16 +531,24 @@ export function maakZeeslag(vloot, opts) {
         kracht: storm.kracht,
       });
 
+      // Open diep water: op de vaarkaart legt de dieptekaart hier een
+      // blauwgroene aanloop overheen, in de slag ontbrak die en stond de zee
+      // vaal en grauw.
+      c.fillStyle = 'rgba(27,95,128,0.34)';
+      c.fillRect(0, 0, vw, vh);
+
       c.save();
-      c.translate(vw / 2, vh / 2);
+      c.translate(vw / 2 + schokX, vh / 2 + schokY);
       c.scale(cam.zoom, cam.zoom);
       c.translate(-cam.x, -cam.y);
 
       tekenSlagTerrein(c, terrein);
       for (const s of [vijand, mij]) tekenKielzog(c, s);
-      for (const p of deeltjes) R.tekenRook(c, p);
+      for (const p of deeltjes) if (!R.deeltjeInDeLucht(p)) R.tekenDeeltje(c, p);
+      if (!afgelopen) tekenVuurwaaier(c);
 
       for (const s of [vijand, mij]) tekenStrijder(c, s, wereld.windRichting, storm);
+      for (const p of deeltjes) if (R.deeltjeInDeLucht(p)) R.tekenDeeltje(c, p);
 
       // Kogels, met hun schaduw op het water zodat de boog leesbaar wordt.
       for (const k of kogels) {
@@ -509,9 +558,28 @@ export function maakZeeslag(vloot, opts) {
         c.beginPath();
         c.ellipse(k.x + hoogte * 0.26, k.y + hoogte * 0.36, 2.4, 1.5, 0, 0, TAU);
         c.fill();
+        // Een kort vegend spoor achter de kogel: zo lees je de baan van een
+        // volle laag, niet alleen losse stipjes.
+        const sn = Math.hypot(k.vx, k.vy) || 1;
+        const sx = (k.vx / sn) * 14,
+          sy = (k.vy / sn) * 14;
+        const spoor = c.createLinearGradient(k.x - sx, k.y - hoogte - sy, k.x, k.y - hoogte);
+        spoor.addColorStop(0, 'rgba(230,236,240,0)');
+        spoor.addColorStop(1, 'rgba(230,236,240,0.45)');
+        c.strokeStyle = spoor;
+        c.lineWidth = 2.2;
+        c.lineCap = 'round';
+        c.beginPath();
+        c.moveTo(k.x - sx, k.y - hoogte - sy);
+        c.lineTo(k.x, k.y - hoogte);
+        c.stroke();
         c.fillStyle = '#1a1a1a';
         c.beginPath();
         c.arc(k.x, k.y - hoogte, 2.4, 0, TAU);
+        c.fill();
+        c.fillStyle = 'rgba(255,255,255,0.55)';
+        c.beginPath();
+        c.arc(k.x - 0.7, k.y - hoogte - 0.8, 0.9, 0, TAU);
         c.fill();
       }
 
@@ -541,6 +609,43 @@ export function maakZeeslag(vloot, opts) {
     // ander vaart, waar zijn kogels vallen, waar de rotsen liggen — en dan
     // werkt een scherpe plek rond je eigen romp tegen je in plaats van mee.
   };
+
+  /**
+   * Het schootsveld van beide boorden op het water: precies de hoek en de
+   * dracht waar `vuur()` op rekent. Het boord waarin de vijand ligt licht op,
+   * en de rand loopt vol naarmate de stukken herladen zijn — zo zie je in één
+   * blik of een laag nu raak kan zijn, in plaats van het in een regel onderaan
+   * te moeten lezen.
+   */
+  function tekenVuurwaaier(c) {
+    const dracht = bereikVan(mij, MUNITIE[munitie]);
+    const veld = inSchootsveld(mij, vijand);
+    const binnenDracht = dist(mij.x, mij.y, vijand.x, vijand.y) <= dracht;
+    const klaar = mij.herlaadVol ? clamp(1 - mij.herlaad / mij.herlaadVol, 0, 1) : 1;
+    const [, hb] = rompMaat(mij.type);
+    c.save();
+    for (const kant of [-1, 1]) {
+      const midden = mij.koers + (kant * Math.PI) / 2;
+      const raak = veld.binnen && veld.kant === kant && binnenDracht;
+      const g = c.createRadialGradient(mij.x, mij.y, hb, mij.x, mij.y, dracht);
+      const kleur = raak ? '255,214,120' : '235,242,246';
+      g.addColorStop(0, `rgba(${kleur},${raak ? 0.16 : 0.08})`);
+      g.addColorStop(1, `rgba(${kleur},${raak ? 0.04 : 0.02})`);
+      c.fillStyle = g;
+      c.beginPath();
+      c.moveTo(mij.x, mij.y);
+      c.arc(mij.x, mij.y, dracht, midden - SCHOOTSVELD, midden + SCHOOTSVELD);
+      c.closePath();
+      c.fill();
+      // De dracht als rand, die met het herladen van links naar rechts vol loopt.
+      c.lineWidth = 2 / cam.zoom;
+      c.strokeStyle = `rgba(${kleur},${raak ? 0.6 : 0.28})`;
+      c.beginPath();
+      c.arc(mij.x, mij.y, dracht, midden - SCHOOTSVELD, midden - SCHOOTSVELD + 2 * SCHOOTSVELD * klaar);
+      c.stroke();
+    }
+    c.restore();
+  }
 
   // --- Besturing ----------------------------------------------------------
 
@@ -724,11 +829,24 @@ export function maakZeeslag(vloot, opts) {
       const bx = schutter.x + Math.cos(schutter.koers) * langs + Math.cos(dwarsHoek) * hb;
       const by = schutter.y + Math.sin(schutter.koers) * langs + Math.sin(dwarsHoek) * hb;
 
+      // Mondingsvuur en een wolk kruitdamp die de wind meeneemt.
       deeltjes.push({
-        x: bx, y: by, t: 0, duur: 0.9, r: 6, kleur: '#dcd8cf',
-        vx: Math.cos(dwarsHoek) * 40,
-        vy: Math.sin(dwarsHoek) * 40,
+        soort: 'flits', x: bx, y: by, t: 0, duur: 0.22 + Math.random() * 0.08, r: 13,
+        hoek: dwarsHoek, kleur: '#ffa640',
       });
+      const wr = wereld.windRichting;
+      for (let w = 0; w < 2; w++) {
+        const uit = 30 + Math.random() * 40;
+        deeltjes.push({
+          x: bx + Math.cos(dwarsHoek) * (4 + w * 8),
+          y: by + Math.sin(dwarsHoek) * (4 + w * 8),
+          t: 0, duur: 2 + Math.random() * 1.4, r: 7 + Math.random() * 4,
+          kleur: w ? '#cfcac0' : '#eeebe4', dekking: 0.72,
+          vx: Math.cos(dwarsHoek) * uit + Math.cos(wr) * 14,
+          vy: Math.sin(dwarsHoek) * uit + Math.sin(wr) * 14,
+          demping: 1.4,
+        });
+      }
 
       // Waaier: dichtbij dekt hij het hele doel af, ver weg gaat het meeste
       // in zee. Meer stukken betekent een bredere waaier.
@@ -792,6 +910,47 @@ export function maakZeeslag(vloot, opts) {
         vx: Math.cos(a) * 60, vy: Math.sin(a) * 60,
       });
     }
+  }
+
+  /** Een kogel die in zee valt: kringen, een inzakkende kolom en druppels. */
+  function plons(x, y) {
+    deeltjes.push({ soort: 'plons', x, y, t: 0, duur: 1.1, r: 6 + Math.random() * 3 });
+    for (let i = 0; i < 6; i++) {
+      const a = Math.random() * TAU;
+      const v = 30 + Math.random() * 50;
+      deeltjes.push({
+        soort: 'spat', x, y, t: 0, duur: 0.45 + Math.random() * 0.3, r: 1.2 + Math.random(),
+        vx: Math.cos(a) * v, vy: Math.sin(a) * v, demping: 3,
+      });
+    }
+  }
+
+  /** Een kogel in de romp: een lichtflits, vonken en rondtollend hout. */
+  function inslagRomp(k) {
+    const hoek = Math.atan2(k.vy, k.vx);
+    deeltjes.push({ soort: 'flits', x: k.x, y: k.y, t: 0, duur: 0.22, r: 12, hoek, kleur: '#ffb45a' });
+    for (let i = 0; i < 6; i++) {
+      const a = hoek + (Math.random() - 0.5) * 1.8;
+      const v = 90 + Math.random() * 120;
+      deeltjes.push({
+        soort: 'vonk', x: k.x, y: k.y, t: 0, duur: 0.25 + Math.random() * 0.25, r: 1.6,
+        vx: Math.cos(a) * v, vy: Math.sin(a) * v, demping: 4,
+      });
+    }
+    // Hout alleen van een rompschot; kettingkogel scheurt zeil, schroot maait volk.
+    const n = k.soort.doel === 'romp' ? 7 : 3;
+    for (let i = 0; i < n; i++) {
+      const a = hoek + (Math.random() - 0.5) * 2.4;
+      const v = 40 + Math.random() * 90;
+      deeltjes.push({
+        soort: 'splinter', x: k.x, y: k.y, t: 0, duur: 0.7 + Math.random() * 0.6,
+        r: 1.8 + Math.random() * 2.2, rot: Math.random() * TAU, draai: (Math.random() - 0.5) * 18,
+        kleur: k.soort.doel === 'zeilen' ? '#e9e1cc' : Math.random() < 0.5 ? '#8a5a2e' : '#a9763f',
+        vx: Math.cos(a) * v, vy: Math.sin(a) * v, demping: 2.6,
+      });
+    }
+    deeltjes.push({ x: k.x, y: k.y, t: 0, duur: 1.2, r: 5, kleur: '#8f8778', dekking: 0.45, vx: 0, vy: 0 });
+    if (k.doel === mij) schok = Math.min(1, schok + 0.45);
   }
 
   // --- Enteren en vluchten ------------------------------------------------

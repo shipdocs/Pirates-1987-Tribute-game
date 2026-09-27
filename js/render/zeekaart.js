@@ -93,7 +93,7 @@ function tekenKaartRoos(ctx, x, y, r) {
  * drukst is. Wie geen plek meer heeft, houdt zijn stip; grote plaatsen gaan
  * voor, want die zoek je op.
  */
-function plaatsLabels(ctx, steden, sc, marge) {
+function plaatsLabels(ctx, steden, sc, marge, obstakels = []) {
   const uit = [];
   const gesorteerd = steden.slice().sort((a, b) => b.grootte - a.grootte);
   // De stippen zelf zijn óók obstakels: een naam die netjes tussen twee andere
@@ -102,18 +102,30 @@ function plaatsLabels(ctx, steden, sc, marge) {
     const r = 3 + stad.grootte * 0.6 + 1.5;
     return { x: stad.x * sc - r, y: stad.y * sc - r, w: r * 2, h: r * 2 };
   });
+  vakken.push(...obstakels);
   for (const stad of gesorteerd) {
     const x = stad.x * sc,
       y = stad.y * sc;
     const w = ctx.measureText(stad.naam).width;
     const h = 11;
     const r = 3 + stad.grootte * 0.6;
-    const opties = [
-      [x + r + 4, y - h / 2, 'left'],
-      [x - r - 4 - w, y - h / 2, 'left'],
-      [x - w / 2, y - r - 4 - h, 'left'],
-      [x - w / 2, y + r + 4, 'left'],
-    ];
+    // Eerst vlak naast de stip, dan op een verdere ring: de ster van het eigen
+    // schip ligt vlak na het uitvaren pal op de thuishaven en blokkeert dan
+    // elke nabije plek.
+    const opties = [];
+    for (const d of [4, 16]) {
+      opties.push(
+        [x + r + d, y - h / 2],
+        [x - r - d - w, y - h / 2],
+        [x - w / 2, y - r - d - h],
+        [x - w / 2, y + r + d],
+        // Schuin erboven of eronder: de uitwijkplekken als het drukker wordt.
+        [x + r + d - 2, y - r - d + 2 - h],
+        [x + r + d - 2, y + r + d - 2],
+        [x - r - d + 2 - w, y - r - d + 2 - h],
+        [x - r - d + 2 - w, y + r + d - 2]
+      );
+    }
     let gekozen = null;
     for (const [px, py] of opties) {
       if (px < 2 || py < 2 || px + w > marge.w - 2 || py + h > marge.h - 2) continue;
@@ -228,7 +240,14 @@ export function tekenZeekaart(ctx, wereld, W, H, opts = {}) {
   ctx.font = '600 10px Georgia, serif';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
-  for (const p of plaatsLabels(ctx, wereld.steden, sc, { w: W, h: H })) {
+  // De ster van het eigen schip houdt zijn plek vrij: vlak na het uitvaren
+  // staat hij pal naast de thuishaven en viel dan precies over diens naam.
+  const vrij = [];
+  if (opts.speler) {
+    const r = 13;
+    vrij.push({ x: opts.speler.x * sc - r, y: opts.speler.y * sc - r, w: r * 2, h: r * 2 });
+  }
+  for (const p of plaatsLabels(ctx, wereld.steden, sc, { w: W, h: H }, vrij)) {
     natieStip(ctx, p.x, p.y, p.stad.natie, p.r, 'rgba(58,42,24,0.85)');
     if (!p.label) continue;
     // Een lichte veeg onder de naam: op de arcering zou hij anders wegvallen.

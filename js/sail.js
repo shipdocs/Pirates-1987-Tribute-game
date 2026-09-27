@@ -1287,7 +1287,7 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
   if (storm && storm.nabij > 0.04) {
     const sh = storm.gevaar > 0.02;
     c.save();
-    R.hudPaneel(c, 16, vh - 172, 168, 54, 8);
+    R.hudPaneel(c, 16, vh - 172, 196, 54, 8);
     c.font = '600 11px Georgia, serif';
     c.textBaseline = 'middle';
     c.textAlign = 'left';
@@ -1295,11 +1295,11 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
     c.fillText('BUI', 28, vh - 154);
     c.textAlign = 'right';
     c.fillStyle = sh ? R.HUD.rood : R.HUD.inkt;
-    c.fillText(sh ? 'in de kern' : storm.rug > 0.35 ? 'rugwind' : 'buitenrand', 172, vh - 154);
+    c.fillText(sh ? 'in de kern' : storm.rug > 0.35 ? 'rugwind' : 'buitenrand', 200, vh - 154);
     // De belastingbalk. Hij loopt alleen op in de kern en zakt zodra je reeft
     // of eruit loopt, dus wat je ziet is precies wat er gaat gebeuren.
     const b = clamp(belasting || 0, 0, 1);
-    R.hudBalk(c, 28, vh - 142, 144, 10, b, b > 0.75 ? R.HUD.rood : b > 0.42 ? R.HUD.goud : R.HUD.groen);
+    R.hudBalk(c, 28, vh - 142, 172, 10, b, b > 0.75 ? R.HUD.rood : b > 0.42 ? R.HUD.goud : R.HUD.groen);
     c.textAlign = 'left';
     c.fillStyle = R.HUD.inktZacht;
     c.fillText(b > 0.42 ? 'want onder spanning' : 'want houdt het', 28, vh - 126);
@@ -1308,25 +1308,28 @@ function tekenHud(c, s, w, cam, miniKaart, storm, belasting) {
 
   // Zeilstand.
   c.save();
-  R.hudPaneel(c, 16, vh - 76, 168, 58, 8);
+  R.hudPaneel(c, 16, vh - 76, 196, 58, 8);
   c.font = '600 11px Georgia, serif';
   c.textBaseline = 'middle';
   c.fillStyle = R.HUD.inktZacht;
   c.textAlign = 'left';
-  c.fillText('ZEILVOERING', 28, vh - 58);
   // Hoe je ten opzichte van de wind ligt, in woord en kleur. Eén blik leert je
   // dat afvallen loont — daar is geen getal voor nodig.
   const trim = zeilWoord(s.koers, lokaal.richting);
+  // "pal voor de wind" en "de zeilen killen" passen niet naast het volle
+  // label; dan wijkt het label, want het woord is wat je moet lezen.
+  const past = c.measureText('ZEILVOERING').width + c.measureText(trim.woord).width + 12 <= 172;
+  c.fillText(past ? 'ZEILVOERING' : 'ZEIL', 28, vh - 58);
   c.textAlign = 'right';
   c.fillStyle = trim.kleur;
-  c.fillText(trim.woord, 172, vh - 58);
-  R.hudBalk(c, 28, vh - 48, 144, 12, schip.zeilen, trim.kleur);
+  c.fillText(trim.woord, 200, vh - 58);
+  R.hudBalk(c, 28, vh - 48, 172, 12, schip.zeilen, trim.kleur);
   c.textAlign = 'left';
   c.fillStyle = R.HUD.inkt;
   c.fillText(`${(s.snelheid / 8).toFixed(1)} knopen`, 28, vh - 27);
   c.textAlign = 'right';
   c.fillStyle = R.HUD.inktZacht;
-  c.fillText(windWoord(lokaal.kracht), 172, vh - 27);
+  c.fillText(windWoord(lokaal.kracht), 200, vh - 27);
   c.restore();
 
   // Minikaart in een messing lijst.
